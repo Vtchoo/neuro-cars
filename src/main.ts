@@ -1,6 +1,6 @@
 
 import p5 from 'p5';
-import { createTrackBuilder } from "./trackBuilder"
+import { createGrid, createTrackBuilder } from "./trackBuilder"
 import { newVector } from './Vector';
 //---------- SMART RACE 2 ----------
 
@@ -22,10 +22,6 @@ let showGrid = false // Shows grid when building the track
 let showMap = false // Shows collision map during runtime
 let showInputs = false
 const resolution = 3 // Get 1 out of [resolution] pixels to create the track collision map
-
-// Visual settings
-const buttonWidth = 60
-const buttonHeight = 50
 
 // Track building
 var direction: p5.Vector //of the starting track
@@ -106,9 +102,9 @@ class Game {
 	renderMap: p5.Graphics
 
 	constructor() {
-
-		const p5Instance = new p5((p: p5) => {
+		new p5((p: p5) => {
 			this.p = p;
+
 			p.preload = () => {
 				this.preload();
 			}
@@ -393,15 +389,15 @@ class Game {
 				phase = "rotateStart"
 				break
 			case "rotateStart":
-				direction = Math.atan2(this.p.mouseY - start.y, this.p.mouseX - start.x)
+				const direction = Math.atan2(this.p.mouseY - start.y, this.p.mouseX - start.x)
 				phase = "buildTrack"
 
 				currentDirection = direction
 				currentPosition = newVector(start.x + trackWidth * Math.cos(direction) / 2, start.y + trackWidth * Math.sin(direction) / 2)
 				this.p.circle(currentPosition.x, currentPosition.y, 5)
 
-				createTrackBuilder()
-				createGrid()
+				createGrid(this.grid, start, direction, trackWidth, this.p)
+				createTrackBuilder(this.p, currentPosition, currentDirection, trackWidth, this.renderTrack)
 
 				break
 		}

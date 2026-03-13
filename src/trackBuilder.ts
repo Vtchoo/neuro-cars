@@ -1,19 +1,30 @@
 // Creates the menu for building the track pieces (just like in Roller Coaster Tycoon)
 
-export function createTrackBuilder() {
+import p5 from "p5"
+import { newVector, Vector } from "./Vector"
 
+// Visual settings
+const buttonWidth = 60
+const buttonHeight = 50
 
+let currentPosition: Vector
+let currentDirection: number
 
-    buttons = new Array()
+export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirection: number, trackWidth: number, renderTrack: p5.Graphics) {
 
-    buttons[0] = createButton("Large Left")
-    buttons[1] = createButton("Large Right")
-    buttons[2] = createButton("Big Left")
-    buttons[3] = createButton("Big Right")
-    buttons[4] = createButton("Medium Left")
-    buttons[5] = createButton("Medium Right")
-    buttons[6] = createButton("Small Left")
-    buttons[7] = createButton("Small Right")
+    currentPosition = initialPosition
+    currentDirection = initialDirection
+
+    const buttons = new Array()
+
+    buttons[0] = p.createButton("Large Left")
+    buttons[1] = p.createButton("Large Right")
+    buttons[2] = p.createButton("Big Left")
+    buttons[3] = p.createButton("Big Right")
+    buttons[4] = p.createButton("Medium Left")
+    buttons[5] = p.createButton("Medium Right")
+    buttons[6] = p.createButton("Small Left")
+    buttons[7] = p.createButton("Small Right")
 
     for (let i = 0; i < 4; i++) {
         for (let j = 0; j < 2; j++) {
@@ -23,43 +34,43 @@ export function createTrackBuilder() {
 
             buttons[i * 2 + j].size(buttonWidth, buttonHeight)
             buttons[i * 2 + j].position(20 + (buttonWidth + 5) * j, 20 + (buttonHeight + 5) * i)
-            buttons[i * 2 + j].mousePressed(() => { buildTrack(6 - 2 * i, dir, trackWidth, currentDirection) })
+            buttons[i * 2 + j].mousePressed(() => { buildTrack(6 - 2 * i, dir, trackWidth, currentDirection, renderTrack, p) })
         }
     }
 
-    buttons[8] = createButton("1 unit Straight")
+    buttons[8] = p.createButton("1 unit Straight")
     buttons[8].size(2 * buttonWidth + 5, buttonHeight)
     buttons[8].position(20, 20 + 4 * (buttonHeight + 5))
-    buttons[8].mousePressed(() => { buildTrack(1, "straight", trackWidth, currentDirection) })
+    buttons[8].mousePressed(() => { buildTrack(1, "straight", trackWidth, currentDirection, renderTrack, p) })
 
-    buttons[9] = createButton("SQRT(2) units straight")
+    buttons[9] = p.createButton("SQRT(2) units straight")
     buttons[9].size(2 * buttonWidth + 5, buttonHeight)
     buttons[9].position(20, 20 + 5 * (buttonHeight + 5))
-    buttons[9].mousePressed(() => { buildTrack(Math.sqrt(2), "straight", trackWidth, currentDirection) })
+    buttons[9].mousePressed(() => { buildTrack(Math.sqrt(2), "straight", trackWidth, currentDirection, renderTrack, p) })
 
-    buttons[10] = createButton("Show Grid")
+    buttons[10] = p.createButton("Show Grid")
     buttons[10].size(2 * buttonWidth + 5, buttonHeight)
     buttons[10].position(20, 20 + 7 * (buttonHeight + 5))
     buttons[10].mousePressed(() => { showGrid = !showGrid })
 
-    buttons[11] = createButton("Reset")
+    buttons[11] = p.createButton("Reset")
     buttons[11].size(buttonWidth, buttonHeight)
-    buttons[11].position(20, canvas.height - buttonHeight - 20)
+    buttons[11].position(20, p.height - buttonHeight - 20)
     buttons[11].mousePressed(resetTrack)
 
-    buttons[12] = createButton("Done!")
+    buttons[12] = p.createButton("Done!")
     buttons[12].size(buttonWidth, buttonHeight)
-    buttons[12].position(20 + 1 * (buttonWidth + 5), canvas.height - buttonHeight - 20)
+    buttons[12].position(20 + 1 * (buttonWidth + 5), p.height - buttonHeight - 20)
     buttons[12].mousePressed(setTrack)
 }
 
 
-function buildTrack(radius, turn, trkWidth, currDir) {
+function buildTrack(radius: number, turn: string, trackWidth: number, currDir: number, renderTrack: p5.Graphics, p: p5) {
 
     renderTrack.push()
-    renderTrack.strokeCap(SQUARE)
+    renderTrack.strokeCap(p.SQUARE)
     renderTrack.noFill()
-    renderTrack.strokeWeight(trkWidth)
+    renderTrack.strokeWeight(trackWidth)
     renderTrack.stroke("black")
 
     var pos = newVector(currentPosition.x, currentPosition.y)
@@ -69,41 +80,41 @@ function buildTrack(radius, turn, trkWidth, currDir) {
 
     if (turn != "straight") {
 
-        var avgRadius = trkWidth * (1 + radius)
+        var avgRadius = trackWidth * (1 + radius)
         let angleStart
         let angleEnd
 
 
 
         if (turn == "left") {
-            angleStart = currDir + QUARTER_PI - .01
-            angleEnd = currDir + HALF_PI + .01
+            angleStart = currDir + Math.PI / 4 - .01
+            angleEnd = currDir + Math.PI / 2 + .01
 
-            advanceX = avgRadius * Math.cos(QUARTER_PI / 2) * Math.sin(QUARTER_PI / 2)
-            advanceY = avgRadius * Math.sin(QUARTER_PI / 2) * Math.sin(QUARTER_PI / 2)
+            advanceX = avgRadius * Math.cos(Math.PI / 4 / 2) * Math.sin(Math.PI / 4 / 2)
+            advanceY = avgRadius * Math.sin(Math.PI / 4 / 2) * Math.sin(Math.PI / 4 / 2)
 
             currentPosition.x += +advanceX * Math.cos(currentDirection) + advanceY * Math.sin(currentDirection)
             currentPosition.y += +advanceX * Math.sin(currentDirection) - advanceY * Math.cos(currentDirection)
-            currentDirection -= QUARTER_PI
+            currentDirection -= Math.PI / 4
 
         } else if (turn == "right") {
             avgRadius *= -1
-            angleStart = currDir - HALF_PI - .01
-            angleEnd = currDir - QUARTER_PI + .01
+            angleStart = currDir - Math.PI / 2 - .01
+            angleEnd = currDir - Math.PI / 4 + .01
 
-            advanceX = avgRadius * Math.cos(QUARTER_PI / 2) * Math.sin(QUARTER_PI / 2)
-            advanceY = avgRadius * Math.sin(QUARTER_PI / 2) * Math.sin(QUARTER_PI / 2)
+            advanceX = avgRadius * Math.cos(Math.PI / 4 / 2) * Math.sin(Math.PI / 4 / 2)
+            advanceY = avgRadius * Math.sin(Math.PI / 4 / 2) * Math.sin(Math.PI / 4 / 2)
 
             currentPosition.x += -advanceX * Math.cos(currentDirection) + advanceY * Math.sin(currentDirection)
             currentPosition.y += -advanceX * Math.sin(currentDirection) - advanceY * Math.cos(currentDirection)
-            currentDirection += QUARTER_PI
+            currentDirection += Math.PI / 4
         }
 
         renderTrack.arc(pos.x + Math.sin(currDir) * avgRadius / 2, pos.y - Math.cos(currDir) * avgRadius / 2, avgRadius, avgRadius, angleStart, angleEnd)
         renderTrack.strokeWeight(1)
         renderTrack.stroke("white")
-        renderTrack.arc(pos.x + Math.sin(currDir) * avgRadius / 2, pos.y - Math.cos(currDir) * avgRadius / 2, avgRadius - trkWidth, avgRadius - trkWidth, angleStart, angleEnd)
-        renderTrack.arc(pos.x + Math.sin(currDir) * avgRadius / 2, pos.y - Math.cos(currDir) * avgRadius / 2, avgRadius + trkWidth, avgRadius + trkWidth, angleStart, angleEnd)
+        renderTrack.arc(pos.x + Math.sin(currDir) * avgRadius / 2, pos.y - Math.cos(currDir) * avgRadius / 2, avgRadius - trackWidth, avgRadius - trackWidth, angleStart, angleEnd)
+        renderTrack.arc(pos.x + Math.sin(currDir) * avgRadius / 2, pos.y - Math.cos(currDir) * avgRadius / 2, avgRadius + trackWidth, avgRadius + trackWidth, angleStart, angleEnd)
 
     } else {
 
@@ -117,15 +128,15 @@ function buildTrack(radius, turn, trkWidth, currDir) {
         renderTrack.strokeWeight(1)
         renderTrack.stroke("white")
         renderTrack.line(
-            currentPosition.x - trkWidth * Math.sin(currDir) / 2,
-            currentPosition.y + trkWidth * Math.cos(currDir) / 2,
-            currentPosition.x + trackWidth * radius * Math.cos(currDir) - trkWidth * Math.sin(currDir) / 2,
-            currentPosition.y + trackWidth * radius * Math.sin(currDir) + trkWidth * Math.cos(currDir) / 2)
+            currentPosition.x - trackWidth * Math.sin(currDir) / 2,
+            currentPosition.y + trackWidth * Math.cos(currDir) / 2,
+            currentPosition.x + trackWidth * radius * Math.cos(currDir) - trackWidth * Math.sin(currDir) / 2,
+            currentPosition.y + trackWidth * radius * Math.sin(currDir) + trackWidth * Math.cos(currDir) / 2)
         renderTrack.line(
-            currentPosition.x + trkWidth * Math.sin(currDir) / 2,
-            currentPosition.y - trkWidth * Math.cos(currDir) / 2,
-            currentPosition.x + trackWidth * radius * Math.cos(currDir) + trkWidth * Math.sin(currDir) / 2,
-            currentPosition.y + trackWidth * radius * Math.sin(currDir) - trkWidth * Math.cos(currDir) / 2)
+            currentPosition.x + trackWidth * Math.sin(currDir) / 2,
+            currentPosition.y - trackWidth * Math.cos(currDir) / 2,
+            currentPosition.x + trackWidth * radius * Math.cos(currDir) + trackWidth * Math.sin(currDir) / 2,
+            currentPosition.y + trackWidth * radius * Math.sin(currDir) - trackWidth * Math.cos(currDir) / 2)
 
         currentPosition.x += advanceX
         currentPosition.y += advanceY
@@ -146,22 +157,22 @@ function resetTrack() {
     phase = "resetTrack"
 }
 
-function createGrid() {
+export function createGrid(grid: p5.Graphics, start: Vector, direction: number, trackWidth: number, p: p5) {
     var spacing = trackWidth
     var angle = direction
     var anchor = start
 
-    var offset = (canvas.width % spacing) / spacing
+    var offset = (grid.width % spacing) / spacing
 
-    for (let i = 0; i < 2 * canvas.width / spacing; i++) {
-        for (let j = 0; j < 2 * canvas.width / spacing; j++) {
+    for (let i = 0; i < 2 * grid.width / spacing; i++) {
+        for (let j = 0; j < 2 * grid.width / spacing; j++) {
             grid.push()
             grid.stroke("white")
             grid.noFill()
             grid.translate(anchor.x, anchor.y)
             grid.rotate(angle)
-            grid.rectMode(CENTER)
-            grid.square(-canvas.width + spacing * (i + offset), -canvas.width + spacing * (j + offset), spacing)
+            grid.rectMode(p.CENTER)
+            grid.square(-grid.width + spacing * (i + offset), -grid.width + spacing * (j + offset), spacing)
             grid.pop()
         }
     }

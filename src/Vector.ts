@@ -1,4 +1,4 @@
-class Vector {
+export class Vector {
     x: number
     y: number
 
@@ -14,6 +14,7 @@ class Vector {
     add(a: number, b: number) {
         this.x += a
         this.y += b
+        return this
     }
 
     mult(a: number) {
@@ -21,6 +22,7 @@ class Vector {
             this.x *= a
             this.y *= a
         }
+        return this
     }
 
     mag() {
