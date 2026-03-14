@@ -7,8 +7,8 @@ var carSprite
 var playerDrive = false
 
 // Defines the current state of the simulator (setStart is the first one)
-var phase = "generateTrack"
-//var phase = "setStart"
+// var phase = "generateTrack"
+var phase = "setStart"
 
 // Defines the width of the race track
 const trackWidth = 50
@@ -32,7 +32,7 @@ var currentDirection //of the next track segment
 // Simulation settings
 var ticks = 0
 var generation = 0
-var maxticks = 500
+var maxticks = 100
 var averageFrameRate
 var frameRecord = []
 var avgDeltaTime
@@ -45,13 +45,22 @@ var avgFitnessNormal = [0]
 var drawGraphs = false
 
 // Population settings
-var population = []
+const breedingMethod = "elite" // "normal" or "elite"
+let population = []
+
+// Normal method
 const individuals = 30
 const offspring = 3
 
+// Elite method settings
+let elite = []
+const eliteSize = 9
+// population size has to be eliteSize * (eliteSize - 1) / 2 for the breeding method to work properly
+// const populationSize = eliteSize * (eliteSize - 1) / 2
+
 // Neural net settings
-const nnLayers = 1
-const nnNeurons = 10
+const nnLayers = 2
+const nnNeurons = 5
 const nnInputs = 8
 const nnOutputs = 2
 const nnRange = 4
@@ -268,30 +277,56 @@ function draw(){
 		case "breeding":
 
 			// Sort the population by fitness
-			population.sort( function(a,b){ return b.NN.fitness - a.NN.fitness } )
+			population.sort(function (a, b) { return b.NN.fitness - a.NN.fitness })
 
 			// And stores data into the data logging arrays
 			maxFitness.push(population[0].NN.fitness)
 			var avgFitnessGen = 0
-			population.forEach( function(individual){
+			population.forEach(function (individual) {
 				avgFitnessGen += individual.NN.fitness
 			})
-			avgFitness.push( avgFitnessGen / population.length )
+			avgFitness.push(avgFitnessGen / population.length)
 
 			// Normalizes the fitnesses to show on a graph
 			var maxTotalFitness = 0
-			for (let i = 0; i < maxFitness.length; i++){
+			for (let i = 0; i < maxFitness.length; i++) {
 				maxTotalFitness = maxFitness[i] > maxTotalFitness ? maxFitness[i] : maxTotalFitness
 			}
-			for (let i = 0; i < maxFitness.length; i++){
+			for (let i = 0; i < maxFitness.length; i++) {
 				maxFitnessNormal[i] = maxFitness[i] / maxTotalFitness
 				avgFitnessNormal[i] = avgFitness[i] / maxTotalFitness
 			}
 
-			// Generates new neural net and replaces the worst individuals
-			for (let i = 0; i < offspring; i++){
-				population[individuals - 1 - i].NN = breed( population[2*i].NN , population[2*i+1].NN )
-				population[individuals - 1 - i].generation = generation+1
+			switch (breedingMethod) {
+				case "normal": {
+
+
+					// Generates new neural net and replaces the worst individuals
+					for (let i = 0; i < offspring; i++) {
+						population[individuals - 1 - i].NN = breed(population[2 * i].NN, population[2 * i + 1].NN)
+						population[individuals - 1 - i].generation = generation + 1
+					}
+					break
+				}
+					
+				case "elite": {
+					elite = [...elite, ...population].sort((a, b) => b.NN.fitness - a.NN.fitness).slice(0, eliteSize)
+					console.log("new elite:", elite.map(ind => ind.NN.fitness))
+
+					let newPopulation = []
+					for (let i = 0; i < eliteSize; i++) {
+						for (let j = i + 1; j < eliteSize; j++) {
+							const newCar = new car(start.x, start.y, direction)
+							newCar.NN = breed(elite[i].NN, elite[j].NN)
+							newCar.generation = generation + 1
+							newPopulation.push(newCar)
+						}
+					}
+
+					population = newPopulation
+					// console.log("new population:", population.map(ind => ind.NN.fitness))
+					break
+				}
 			}
 
 			// Resets every individual's car
