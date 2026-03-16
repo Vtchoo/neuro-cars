@@ -1,11 +1,13 @@
 
 import p5 from 'p5';
-import { createGrid, createTrackBuilder } from "./trackBuilder"
-import { newVector } from './Vector';
+import { createGrid, createTrackBuilder, setTrack } from "./trackBuilder"
+import { newVector, Vector } from './Vector';
+import Car from './Car';
+import { NeuralNet } from './NeuralNet';
 //---------- SMART RACE 2 ----------
 
 // Important objects
-let carSprite
+let carSprite: p5.Image
 
 // Will the player be allowed to drive a car?
 let playerDrive = false
@@ -24,10 +26,10 @@ let showInputs = false
 const resolution = 3 // Get 1 out of [resolution] pixels to create the track collision map
 
 // Track building
-var direction: p5.Vector //of the starting track
-var start: p5.Vector // starting position of the cars
-var currentPosition: p5.Vector //of the last section of the current track
-var currentDirection: p5.Vector //of the next track segment
+var direction: number //of the starting track
+var start: Vector // starting position of the cars
+var currentPosition: Vector //of the last section of the current track
+var currentDirection: number //of the next track segment
 
 // Simulation settings
 var ticks = 0
@@ -35,7 +37,7 @@ var generation = 0
 var maxticks = 500
 var averageFrameRate
 var frameRecord = []
-var avgDeltaTime
+var avgDeltaTime = 0.016807703080427727
 
 // Data logging and graphing
 var maxFitness = [0]
@@ -45,7 +47,7 @@ var avgFitnessNormal = [0]
 var drawGraphs = false
 
 // Population settings
-var population = []
+let population: Car[] = []
 const individuals = 30
 const offspring = 3
 
@@ -89,7 +91,10 @@ const nnActivation = "softsign"
 
 //     new p5(sketch);
 // }
-class Game {
+
+let player: Car
+
+export default class Game {
 
 	private p: p5
 
@@ -122,6 +127,11 @@ class Game {
 			}
 		});
 	}
+
+	setPhase(newPhase: string) {
+		phase = newPhase
+	}
+
 	// The simulation itself
 
 	preload() {
@@ -237,8 +247,8 @@ class Game {
 				this.renderTrack.pop()
 				this.p.image(this.renderTrack, 0, 0)
 
-				setTrack()
-				phase = "setup"
+				setTrack(this.renderTrack, this.trackMap, this.renderMap, this.p, resolution, this)
+				this.setPhase("setup")
 				break
 
 			case "buildTrack":
@@ -250,26 +260,31 @@ class Game {
 
 			case "setup":
 
-				for (let i = 0; i < individuals; i++) {
-					population[i] = new car(start.x, start.y, direction)
-				}
+				// for (let i = 0; i < individuals; i++) {
+				// 	population[i] = new Car(start.x, start.y, direction)
+				// }
+				population = Array.from({ length: individuals }, () => {
+					const car = new Car(start.x, start.y, direction)
+					console.log(car)
+					return car
+				})
 
-				player = new car(start.x, start.y, direction)
+				player = new Car(start.x, start.y, direction)
 
-				phase = "running"
+				this.setPhase("running")
 				break
 
 			case "running":
 
-				if (generation == 0) {
-					frameRecord.push(this.p.frameRate())
-					averageFrameRate = 0
-					for (let h = 0; h < frameRecord.length; h++) {
-						averageFrameRate += frameRecord[h]
-					}
-					averageFrameRate = averageFrameRate / frameRecord.length
-					avgDeltaTime = 1 / averageFrameRate
-				}
+				// if (generation == 0) {
+				// 	frameRecord.push(this.p.frameRate())
+				// 	averageFrameRate = 0
+				// 	for (let h = 0; h < frameRecord.length; h++) {
+				// 		averageFrameRate += frameRecord[h]
+				// 	}
+				// 	averageFrameRate = averageFrameRate / frameRecord.length
+				// 	avgDeltaTime = 1 / averageFrameRate
+				// }
 
 				// Shows the track
 				this.p.image(this.renderTrack, 0, 0)
@@ -278,18 +293,18 @@ class Game {
 				if (showMap == true) { this.p.image(this.renderMap, 0, 0) }
 
 				// Updates each individual
-				population.forEach(function (individual) {
-					individual.drive(individual.NN.output(individual.getInputs()))
-					individual.update()
-					individual.show()
-					individual.NN.addfitness(individual.speed)
+				population.forEach((individual) => {
+					individual.drive(individual.NN.output(individual.getInputs(this.trackMap, showInputs, this.p, resolution)))
+					individual.update(this.trackMap, resolution)
+					individual.show(this.p, carSprite)
+					individual.NN.addFitness(individual.speed)
 				})
 
 				// Allows the player to drive a car
 				if (playerDrive == true) {
 					getUserInput()
-					player.update()
-					player.show()
+					// player.update()
+					// player.show()
 				}
 
 				// Draws the graph data
@@ -351,7 +366,7 @@ class Game {
 
 				// Generates new neural net and replaces the worst individuals
 				for (let i = 0; i < offspring; i++) {
-					population[individuals - 1 - i].NN = breed(population[2 * i].NN, population[2 * i + 1].NN)
+					population[individuals - 1 - i].NN = NeuralNet.breed(population[2 * i].NN, population[2 * i + 1].NN)
 					population[individuals - 1 - i].generation = generation + 1
 				}
 
@@ -361,7 +376,7 @@ class Game {
 					individual.speed = 0
 					individual.direction = direction
 					individual.acceleration = 0
-					individual.NN.resetfitness()
+					individual.NN.resetFitness()
 				})
 
 				// Resets player's car
@@ -389,7 +404,7 @@ class Game {
 				phase = "rotateStart"
 				break
 			case "rotateStart":
-				const direction = Math.atan2(this.p.mouseY - start.y, this.p.mouseX - start.x)
+				direction = Math.atan2(this.p.mouseY - start.y, this.p.mouseX - start.x)
 				phase = "buildTrack"
 
 				currentDirection = direction
@@ -397,7 +412,7 @@ class Game {
 				this.p.circle(currentPosition.x, currentPosition.y, 5)
 
 				createGrid(this.grid, start, direction, trackWidth, this.p)
-				createTrackBuilder(this.p, currentPosition, currentDirection, trackWidth, this.renderTrack)
+				createTrackBuilder(this.p, currentPosition, currentDirection, trackWidth, this.renderTrack, this.trackMap, this.renderMap, resolution, this)
 
 				break
 		}

@@ -1,331 +1,101 @@
-// Modern Car Implementation for Smart Race
-// TypeScript class with proper typing and p5.js integration
+import p5 from "p5"
+import { NeuralNet } from "./NeuralNet"
+import { newVector, Vector } from "./Vector"
 
-import { NeuralNet, ActivationFunction } from './neuralNet';
-import p5 from 'p5';
+let avgDeltaTime = 0.016807703080427727 
 
-export interface CarConfig {
-    nnLayers?: number;
-    nnNeurons?: number;
-    nnInputs?: number;
-    nnOutputs?: number;
-    nnRange?: number;
-    nnMutationRate?: number;
-    nnActivation?: ActivationFunction;
-    maxSpeed?: number;
-    maxReverse?: number;
-    sensorRange?: number;
-}
+// Neural net settings
+const nnLayers = 1
+const nnNeurons = 10
+const nnInputs = 8
+const nnOutputs = 2
+const nnRange = 4
+const nnMutationRate = 0.01
+const nnActivation = "softsign"
 
-export interface RGB {
-    r: number;
-    g: number;
-    b: number;
-}
-
-export class Car {
-    public config: Required<CarConfig>;
-    public paintRGB: RGB;
-    public paint: string;
-
-    // Physics properties
-    public pos: p5.Vector;
-    public speed: number = 0;
-    public acceleration: number = 0;
-    public direction: number;
-    public maxSpeed: number;
-    public maxReverse: number;
-
-    // Sensor properties
-    public sensorCount: number = 7;
-    public sensorRange: number;
-    public sensorIncrements: number = 30;
-    public sensorDistances?: number[];
-
-    // Car dimensions
-    public width: number = 20;
-    public height: number = 10;
-
-    // Neural network brain
-    public brain: NeuralNet;
-
-    // Performance tracking
-    public generation: number = 0;
-    public isAlive: boolean = true;
-    public timeSurvived: number = 0;
-    public distanceTraveled: number = 0;
-    private lastPos: p5.Vector;
-
-    constructor(
-        startX: number,
-        startY: number,
-        startDir: number,
-        config: CarConfig = {},
-        p5Instance?: p5
-    ) {
-        // Configuration with defaults
-        this.config = {
-            nnLayers: config.nnLayers || 2,
-            nnNeurons: config.nnNeurons || 6,
-            nnInputs: config.nnInputs || 8,
-            nnOutputs: config.nnOutputs || 2,
-            nnRange: config.nnRange || 1,
-            nnMutationRate: config.nnMutationRate || 0.1,
-            nnActivation: config.nnActivation || "relu",
-            maxSpeed: config.maxSpeed || 5,
-            maxReverse: config.maxReverse || -2,
-            sensorRange: config.sensorRange || 120
-        };
-
-        // Car visual properties
-        this.paintRGB = {
-            r: Math.floor(Math.random() * 255),
-            g: Math.floor(Math.random() * 255),
-            b: Math.floor(Math.random() * 255)
-        };
-        this.paint = `rgb(${this.paintRGB.r},${this.paintRGB.g},${this.paintRGB.b})`;
-
-        // Physics properties
-        this.pos = p5Instance ?
-            p5Instance.createVector(startX, startY) :
-            { x: startX, y: startY } as p5.Vector;
-
-        this.direction = startDir;
-        this.maxSpeed = this.config.maxSpeed;
-        this.maxReverse = this.config.maxReverse;
-        this.sensorRange = this.config.sensorRange;
-
-        // Neural network brain
-        this.brain = new NeuralNet(
-            this.config.nnLayers,
-            this.config.nnNeurons,
-            this.config.nnInputs,
-            this.config.nnOutputs,
-            this.config.nnRange,
-            this.config.nnMutationRate,
-            this.config.nnActivation
-        );
-
-        // Initialize last position
-        this.lastPos = p5Instance ?
-            p5Instance.createVector(startX, startY) :
-            { x: startX, y: startY } as p5.Vector;
+export default class Car {
+    // Car paint (helps to keep track of individuals)
+    paintRGB = [Math.floor(Math.random() * 255), Math.floor(Math.random() * 255), Math.floor(Math.random() * 255)]
+    get paint() {
+        return "rgb(" + this.paintRGB[0] + "," + this.paintRGB[1] + "," + this.paintRGB[2] + ")"
     }
 
-    // Updates car physics and position
-    public update(deltaTime: number, trackMap: number[][], resolution: number, p5Instance: p5): void {
-        if (!this.isAlive) return;
+    // Car movement
+    pos: Vector
+    speed = 0
+    acceleration = 0
+    direction = 0
 
-        this.timeSurvived += deltaTime;
+    // The brain inside the car
+    NN = new NeuralNet(nnLayers, nnNeurons, nnInputs, nnOutputs, nnRange, nnMutationRate, nnActivation)
+    generation = 0
 
-        // Update speed with acceleration
-        this.speed += this.acceleration;
-        this.speed = p5Instance.constrain(this.speed, this.maxReverse, this.maxSpeed);
-
-        // Check collision with track boundaries
-        const gridX = Math.floor(this.pos.x / resolution);
-        const gridY = Math.floor(this.pos.y / resolution);
-
-        if (this.isOutOfBounds(gridX, gridY, trackMap)) {
-            this.isAlive = false;
-            this.speed = 0;
-            return;
-        }
-
-        // Update position
-        const normalizedDeltaTime = deltaTime / (1000 / 60); // Normalize to 60 FPS
-        this.pos.x += this.speed * Math.cos(this.direction) * normalizedDeltaTime;
-        this.pos.y += this.speed * Math.sin(this.direction) * normalizedDeltaTime;
-
-        // Track distance traveled for fitness
-        this.distanceTraveled += p5.Vector.dist(this.pos, this.lastPos);
-        this.lastPos = p5Instance.createVector(this.pos.x, this.pos.y);
+    constructor(startX: number, startY: number, startDir: number) {
+        this.pos = newVector(startX, startY)
+        this.direction = startDir
     }
 
-    // Check if car is out of bounds or hit wall
-    private isOutOfBounds(gridX: number, gridY: number, trackMap: number[][]): boolean {
-        if (gridX < 0 || gridY < 0 ||
-            gridX >= trackMap.length ||
-            gridY >= trackMap[0].length) {
-            return true;
-        }
-        return trackMap[gridX][gridY] === 0;
+    // Updates car position
+    update(trackMap: number[][], resolution: number) {
+        this.speed += this.acceleration
+        if (this.speed < -2) { this.speed = -2 }
+        if (trackMap[Math.floor(this.pos.x / resolution)][Math.floor(this.pos.y / resolution)] == 0) { this.speed = 0 }
+
+        this.pos.add(
+            this.speed * Math.cos(this.direction) * avgDeltaTime / (1 / 30),
+            this.speed * Math.sin(this.direction) * avgDeltaTime / (1 / 30))
     }
 
-    // Render car on canvas
-    public show(p5Instance: p5, carSprite?: p5.Image, showInputs: boolean = false): void {
-        if (!this.isAlive) return;
-
-        p5Instance.push();
-        p5Instance.translate(this.pos.x, this.pos.y);
-        p5Instance.rotate(this.direction);
-
-        if (carSprite) {
-            // Use sprite if provided
-            p5Instance.imageMode(p5Instance.CENTER);
-            p5Instance.tint(this.paintRGB.r, this.paintRGB.g, this.paintRGB.b);
-            p5Instance.image(carSprite, 0, 0, this.width, this.height);
-            p5Instance.noTint();
-        } else {
-            // Draw simple rectangle if no sprite
-            p5Instance.fill(this.paintRGB.r, this.paintRGB.g, this.paintRGB.b);
-            p5Instance.stroke(255);
-            p5Instance.rectMode(p5Instance.CENTER);
-            p5Instance.rect(0, 0, this.width, this.height);
-        }
-
-        p5Instance.pop();
-
-        // Draw sensor lines if enabled
-        if (showInputs) {
-            this.drawSensors(p5Instance);
-        }
+    // Renders car on canvas
+    show(p: p5, carSprite: p5.Image) {
+        p.push();
+        p.translate(this.pos.x, this.pos.y);
+        p.rotate(this.direction);
+        p.imageMode(p.CENTER)
+        carSprite.resize(20, 10)
+        p.tint(this.paint)
+        p.image(carSprite, 0, 0)
+        p.pop();
     }
 
-    // Draw sensor visualization
-    private drawSensors(p5Instance: p5): void {
-        if (!this.sensorDistances) return;
-
-        p5Instance.stroke(255, 100);
-        for (let i = 0; i < this.sensorCount; i++) {
-            const angle = this.direction + ((i - 3) / 10) * Math.PI;
-            const distance = this.sensorDistances[i];
-            const endX = this.pos.x + distance * Math.cos(angle);
-            const endY = this.pos.y + distance * Math.sin(angle);
-            p5Instance.line(this.pos.x, this.pos.y, endX, endY);
-        }
+    // Inputs for driving the car
+    drive(input: number[]) {
+        this.acceleration = (input[0] > 0 && this.speed >= 0) || this.speed < 0 ? input[0] * .05 : input[0] * .15
+        //this.acceleration = input[0] * .05
+        this.direction += input[1] * .05 * (1 - 1 / (1 + Math.abs(this.speed))) * Math.sign(this.speed) * avgDeltaTime / (1 / 30)
     }
 
-    // Control car movement based on neural network output
-    public drive(output: number[], deltaTime: number): void {
-        if (!this.isAlive) return;
+    // Gets sensors' data
+    getInputs(trackMap: number[][], showInputs: boolean, p: p5, resolution: number) {
+        var inputs = new Array(8).fill(0)
+        var increments = 30
 
-        const normalizedDeltaTime = deltaTime / (1000 / 60);
+        inputs[7] = this.speed
 
-        // Acceleration control
-        const throttleInput = output[0];
-        if ((throttleInput > 0 && this.speed >= 0) || this.speed < 0) {
-            this.acceleration = throttleInput * 0.05;
-        } else {
-            this.acceleration = throttleInput * 0.15;
-        }
+        for (let i = 0; i < 7; i++) {
 
-        // Steering control
-        const steerInput = output[1];
-        const steerSensitivity = 0.05;
-        const speedFactor = 1 - 1 / (1 + Math.abs(this.speed));
-        this.direction += steerInput * steerSensitivity * speedFactor * Math.sign(this.speed) * normalizedDeltaTime;
-    }
+            let angle = this.direction + ((i - 3) / 10) * Math.PI
 
-    // Get sensor data for neural network input
-    public getInputs(trackMap: number[][], resolution: number): number[] {
-        if (!this.isAlive) return new Array(this.config.nnInputs).fill(0);
+            for (let j = 0; j < increments; j++) {
+                var prevx = this.pos.x + (2 * Math.cos(((i - 3) / 10) * Math.PI)) * j * Math.cos(angle) * 4
+                var prevy = this.pos.y + (2 * Math.cos(((i - 3) / 10) * Math.PI)) * j * Math.sin(angle) * 4
 
-        const inputs = new Array(this.config.nnInputs).fill(0);
-        this.sensorDistances = new Array(this.sensorCount).fill(0);
+                var x = this.pos.x + (2 * Math.cos(((i - 3) / 10) * Math.PI)) * (j + 1) * Math.cos(angle) * 4
+                var y = this.pos.y + (2 * Math.cos(((i - 3) / 10) * Math.PI)) * (j + 1) * Math.sin(angle) * 4
 
-        // Include current speed as input
-        inputs[this.sensorCount] = this.speed / this.maxSpeed; // Normalized speed
+                const tile = trackMap[Math.floor(x / resolution)][Math.floor(y / resolution)]
+                if (tile == 0 || j == increments - 1) {
+                    x = prevx
+                    y = prevy
 
-        // Cast rays in different directions
-        for (let i = 0; i < this.sensorCount; i++) {
-            const angle = this.direction + ((i - 3) / 10) * Math.PI;
-            const distance = this.castRay(angle, trackMap, resolution);
-
-            inputs[i] = distance / this.sensorRange; // Normalized distance
-            this.sensorDistances[i] = distance;
-        }
-
-        return inputs;
-    }
-
-    // Cast a ray from car position to detect walls
-    private castRay(angle: number, trackMap: number[][], resolution: number, maxDistance: number = this.sensorRange): number {
-        const stepSize = 4;
-        let distance = 0;
-
-        while (distance < maxDistance) {
-            const x = this.pos.x + distance * Math.cos(angle);
-            const y = this.pos.y + distance * Math.sin(angle);
-
-            const gridX = Math.floor(x / resolution);
-            const gridY = Math.floor(y / resolution);
-
-            if (this.isOutOfBounds(gridX, gridY, trackMap)) {
-                return distance;
+                    inputs[i] = Math.sqrt(Math.pow(x - this.pos.x, 2) + Math.pow(y - this.pos.y, 2))
+                    if (showInputs) {
+                        p.stroke(255); p.line(this.pos.x, this.pos.y, x, y)
+                    }
+                    break
+                }
             }
-
-            distance += stepSize;
         }
-
-        return maxDistance;
+        return inputs
     }
-
-    // Think using neural network and control car
-    public think(trackMap: number[][], resolution: number, deltaTime: number): void {
-        if (!this.isAlive) return;
-
-        const inputs = this.getInputs(trackMap, resolution);
-        const outputs = this.brain.output(inputs);
-        this.drive(outputs, deltaTime);
-    }
-
-    // Calculate fitness based on performance
-    public calculateFitness(): number {
-        let fitness = 0;
-
-        // Reward survival time
-        fitness += this.timeSurvived * 0.1;
-
-        // Reward distance traveled
-        fitness += this.distanceTraveled * 0.5;
-
-        // Reward speed (but not too much to avoid just going fast and crashing)
-        fitness += Math.abs(this.speed) * 0.01;
-
-        this.brain.fitness = fitness;
-        return fitness;
-    }
-
-    // Reset car to starting position
-    public reset(startX: number, startY: number, startDir: number, p5Instance: p5): void {
-        this.pos = p5Instance.createVector(startX, startY);
-        this.speed = 0;
-        this.acceleration = 0;
-        this.direction = startDir;
-        this.isAlive = true;
-        this.timeSurvived = 0;
-        this.distanceTraveled = 0;
-        this.lastPos = p5Instance.createVector(startX, startY);
-        this.brain.resetFitness();
-    }
-
-    // Create a mutated copy of this car
-    public mutate(): void {
-        this.brain.mutate();
-    }
-
-    // Get a copy of this car for breeding
-    public copy(p5Instance: p5): Car {
-        const newCar = new Car(this.pos.x, this.pos.y, this.direction, this.config, p5Instance);
-        newCar.brain = this.brain.copy();
-        newCar.generation = this.generation;
-        return newCar;
-    }
-}
-
-// Utility function for breeding cars
-export function breedCars(
-    parent1: Car,
-    parent2: Car,
-    startX: number,
-    startY: number,
-    startDir: number,
-    config: CarConfig,
-    p5Instance: p5
-): Car {
-    const offspring = new Car(startX, startY, startDir, config, p5Instance);
-    offspring.brain = NeuralNet.breed(parent1.brain, parent2.brain);
-    offspring.generation = Math.max(parent1.generation, parent2.generation) + 1;
-    return offspring;
 }

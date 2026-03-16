@@ -2,6 +2,7 @@
 
 import p5 from "p5"
 import { newVector, Vector } from "./Vector"
+import Game from "./main"
 
 // Visual settings
 const buttonWidth = 60
@@ -10,12 +11,16 @@ const buttonHeight = 50
 let currentPosition: Vector
 let currentDirection: number
 
-export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirection: number, trackWidth: number, renderTrack: p5.Graphics) {
+let buttons: p5.Element[]
+
+let showGrid = false
+
+export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirection: number, trackWidth: number, renderTrack: p5.Graphics, trackMap: number[][], renderMap: p5.Graphics, resolution: number, game: Game) {
 
     currentPosition = initialPosition
     currentDirection = initialDirection
 
-    const buttons = new Array()
+    buttons = new Array()
 
     buttons[0] = p.createButton("Large Left")
     buttons[1] = p.createButton("Large Right")
@@ -61,7 +66,7 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
     buttons[12] = p.createButton("Done!")
     buttons[12].size(buttonWidth, buttonHeight)
     buttons[12].position(20 + 1 * (buttonWidth + 5), p.height - buttonHeight - 20)
-    buttons[12].mousePressed(setTrack)
+    buttons[12].mousePressed(() => setTrack(renderTrack, trackMap, renderMap, p, resolution, game))
 }
 
 
@@ -178,7 +183,7 @@ export function createGrid(grid: p5.Graphics, start: Vector, direction: number, 
     }
 }
 
-function setTrack() {
+export function setTrack(renderTrack: p5.Graphics, trackMap: number[][], renderMap: p5.Graphics, p: p5, resolution: number, game: Game) {
 
     // Removes the track builder
     if (typeof buttons != "undefined") {
@@ -194,10 +199,10 @@ function setTrack() {
     // Also creates a visual representation of the collision map
     renderMap.push()
 
-    for (let i = 0; i < Math.floor(canvas.width / resolution); i++) {
-        for (let j = 0; j < Math.floor(canvas.height / resolution); j++) {
+    for (let i = 0; i < Math.floor(renderMap.width / resolution); i++) {
+        for (let j = 0; j < Math.floor(renderMap.height / resolution); j++) {
 
-            if (renderTrack.pixels[4 * (j * canvas.width + i) * resolution + 1] > 20) {
+            if (renderTrack.pixels[4 * (j * renderMap.width + i) * resolution + 1] > 20) {
                 renderMap.fill("red")
                 trackMap[i][j] = 0
             } else {
@@ -210,25 +215,25 @@ function setTrack() {
     renderMap.pop()
 
     // Show additional buttons to control the visualization
-    exibInputs = createButton("Show Inputs")
+    const exibInputs = p.createButton("Show Inputs")
     exibInputs.size(buttonWidth, buttonHeight)
-    exibInputs.position(20, canvas.height - buttonHeight - 20)
+    exibInputs.position(20, p.height - buttonHeight - 20)
     exibInputs.mousePressed(() => { showInputs = !showInputs })
 
-    exibMap = createButton("Show Map")
+    const exibMap = p.createButton("Show Map")
     exibMap.size(buttonWidth, buttonHeight)
-    exibMap.position(20 + (buttonWidth + 5) * 1, canvas.height - buttonHeight - 20)
+    exibMap.position(20 + (buttonWidth + 5) * 1, p.height - buttonHeight - 20)
     exibMap.mousePressed(() => { showMap = !showMap })
 
-    incrTime = createButton("Increase simul. time")
+    const incrTime = p.createButton("Increase simul. time")
     incrTime.size(buttonWidth, buttonHeight)
-    incrTime.position(20 + (buttonWidth + 5) * 2, canvas.height - buttonHeight - 20)
+    incrTime.position(20 + (buttonWidth + 5) * 2, p.height - buttonHeight - 20)
     incrTime.mousePressed(() => { maxticks += 100 })
 
-    showGraph = createButton("Show graphs")
+    const showGraph = p.createButton("Show graphs")
     showGraph.size(buttonWidth, buttonHeight)
-    showGraph.position(20 + (buttonWidth + 5) * 3, canvas.height - buttonHeight - 20)
+    showGraph.position(20 + (buttonWidth + 5) * 3, p.height - buttonHeight - 20)
     showGraph.mousePressed(() => { drawGraphs = !drawGraphs })
 
-    phase = "setup"
+    game.setPhase("setup")
 }
