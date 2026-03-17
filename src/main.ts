@@ -107,8 +107,7 @@ export default class Game {
 	renderMap: p5.Graphics
 
 	constructor() {
-		new p5((p: p5) => {
-			this.p = p;
+		this.p = new p5((p: p5) => {
 
 			p.preload = () => {
 				this.preload();
