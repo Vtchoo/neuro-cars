@@ -4,6 +4,7 @@ import { createGrid, createTrackBuilder, setTrack } from "./trackBuilder"
 import { newVector, Vector } from './Vector';
 import Car from './Car';
 import { NeuralNet } from './NeuralNet';
+import Track from './Track';
 //---------- SMART RACE 2 ----------
 
 // Important objects
@@ -106,25 +107,27 @@ export default class Game {
 	trackMap: number[][]
 	renderMap: p5.Graphics
 
+	track = new Track()
+
 	constructor() {
 		this.p = new p5((p: p5) => {
 
 			p.preload = () => {
-				this.preload();
+				this.preload()
 			}
 
 			p.setup = () => {
-				this.setup();
+				this.setup()
 			}
 
 			p.draw = () => {
-				this.draw();
+				this.draw()
 			}
 
 			p.mouseClicked = () => {
-				this.mouseClicked();
+				this.mouseClicked()
 			}
-		});
+		})
 	}
 
 	setPhase(newPhase: string) {
@@ -134,9 +137,9 @@ export default class Game {
 	// The simulation itself
 
 	preload() {
-		//carSprite = loadImage("./images/car.png")
+		carSprite = this.p.loadImage("./images/car.png")
 		//carSprite = loadImage("car.png")
-		carSprite = this.p.loadImage("https://raw.githubusercontent.com/Vtchoo/smartRace2/master/images/car.png")
+		// carSprite = this.p.loadImage("https://raw.githubusercontent.com/Vtchoo/smartRace2/master/images/car.png")
 	}
 
 	setup() {
@@ -253,7 +256,8 @@ export default class Game {
 			case "buildTrack":
 
 				this.p.background("green")
-				this.p.image(this.renderTrack, 0, 0)
+				// this.p.image(this.renderTrack, 0, 0)
+				this.track.draw(this.p, this.p)
 				if (showGrid == true) { this.p.image(this.grid, 0, 0) }
 				break
 
@@ -400,6 +404,7 @@ export default class Game {
 				break
 			case "setStart":
 				start = newVector(this.p.mouseX, this.p.mouseY)
+				this.track.startingPoint = start
 				phase = "rotateStart"
 				break
 			case "rotateStart":
@@ -411,7 +416,7 @@ export default class Game {
 				this.p.circle(currentPosition.x, currentPosition.y, 5)
 
 				createGrid(this.grid, start, direction, trackWidth, this.p)
-				createTrackBuilder(this.p, currentPosition, currentDirection, trackWidth, this.renderTrack, this.trackMap, this.renderMap, resolution, this)
+				createTrackBuilder(this.p, currentPosition, currentDirection, trackWidth, this.renderTrack, this.trackMap, this.renderMap, resolution, this, this.track)
 
 				break
 		}

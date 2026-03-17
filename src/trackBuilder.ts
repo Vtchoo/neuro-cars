@@ -3,6 +3,7 @@
 import p5 from "p5"
 import { newVector, Vector } from "./Vector"
 import Game from "./main"
+import Track, { StraightPiece, TrackPieceType } from "./Track"
 
 // Visual settings
 const buttonWidth = 60
@@ -15,11 +16,20 @@ let buttons: p5.Element[]
 
 let showGrid = false
 
-export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirection: number, trackWidth: number, renderTrack: p5.Graphics, trackMap: number[][], renderMap: p5.Graphics, resolution: number, game: Game) {
+export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirection: number, trackWidth: number, renderTrack: p5.Graphics, trackMap: number[][], renderMap: p5.Graphics, resolution: number, game: Game, track: Track) {
 
     currentPosition = initialPosition
     currentDirection = initialDirection
 
+    const initialTrackPiece = {
+        type: TrackPieceType.Straight,
+        start: new Vector(currentPosition.x - trackWidth * Math.cos(currentDirection), currentPosition.y - trackWidth * Math.sin(currentDirection)),
+        end: new Vector(currentPosition.x, currentPosition.y),
+        width: trackWidth,
+    } as StraightPiece
+
+    track.addStraight(initialTrackPiece.start, initialTrackPiece.end, initialTrackPiece.width)
+    console.log(track.pieces)
     buttons = new Array()
 
     buttons[0] = p.createButton("Large Left")
@@ -46,12 +56,25 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
     buttons[8] = p.createButton("1 unit Straight")
     buttons[8].size(2 * buttonWidth + 5, buttonHeight)
     buttons[8].position(20, 20 + 4 * (buttonHeight + 5))
-    buttons[8].mousePressed(() => { buildTrack(1, "straight", trackWidth, currentDirection, renderTrack, p) })
+    // buttons[8].mousePressed(() => { buildTrack(1, "straight", trackWidth, currentDirection, renderTrack, p) })
+    buttons[8].mousePressed(() => {
+        track.appendStraight(trackWidth, trackWidth)
+    })
 
     buttons[9] = p.createButton("SQRT(2) units straight")
     buttons[9].size(2 * buttonWidth + 5, buttonHeight)
     buttons[9].position(20, 20 + 5 * (buttonHeight + 5))
-    buttons[9].mousePressed(() => { buildTrack(Math.sqrt(2), "straight", trackWidth, currentDirection, renderTrack, p) })
+    buttons[9].mousePressed(() => { track.appendStraight(Math.sqrt(2) * trackWidth, trackWidth) })
+
+    buttons[10] = p.createButton("Delete Last")
+    buttons[10].size(2 * buttonWidth + 5, buttonHeight)
+    buttons[10].position(20, 20 + 6 * (buttonHeight + 5))
+    buttons[10].mousePressed(() => {
+        if (track.pieces.length > 1) {
+            track.deleteLastPiece()
+        }
+    })
+
 
     buttons[10] = p.createButton("Show Grid")
     buttons[10].size(2 * buttonWidth + 5, buttonHeight)
@@ -71,7 +94,7 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
 
 
 function buildTrack(radius: number, turn: string, trackWidth: number, currDir: number, renderTrack: p5.Graphics, p: p5) {
-
+    return
     renderTrack.push()
     renderTrack.strokeCap(p.SQUARE)
     renderTrack.noFill()
