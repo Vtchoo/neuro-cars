@@ -49,7 +49,10 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
 
             buttons[i * 2 + j].size(buttonWidth, buttonHeight)
             buttons[i * 2 + j].position(20 + (buttonWidth + 5) * j, 20 + (buttonHeight + 5) * i)
-            buttons[i * 2 + j].mousePressed(() => { buildTrack(6 - 2 * i, dir, trackWidth, currentDirection, renderTrack, p) })
+            buttons[i * 2 + j].mousePressed(() => {
+                // buildTrack(6 - 2 * i, dir, trackWidth, currentDirection, renderTrack, p)
+                track.appendArc((6 - 2 * i) * trackWidth, Math.PI / 4, dir === "right", trackWidth)
+            })
         }
     }
 

@@ -42,6 +42,9 @@ export default class Track {
     pieces: TrackPiece[] = []
     startingPoint: Vector = new Vector(0, 0)
 
+    // debug
+    drawLastPieceVector: boolean = true
+
     /**
      * The analyticPieces array is used to store aggregated track pieces that can be used
      * for collision detection and other calculations that require a more continuous representation of the track.
@@ -127,27 +130,60 @@ export default class Track {
         })
     }
 
+    getLastPieceEndDirection(): number | null {
+        const lastPiece = this.pieces.length > 0 ? this.pieces[this.pieces.length - 1] : null
+        if (!lastPiece) {
+            return null
+        }
+
+        switch (lastPiece.type) {
+            case TrackPieceType.Straight:
+                return Math.atan2(lastPiece.end.y - lastPiece.start.y, lastPiece.end.x - lastPiece.start.x)
+            case TrackPieceType.Arc:
+                // For arcs, the direction at the end point is tangent to the circle at the end point
+                const radiusVector = new Vector(lastPiece.end.x - lastPiece.center.x, lastPiece.end.y - lastPiece.center.y)
+                const tangentVector = new Vector(-radiusVector.y, radiusVector.x) // rotate radius vector by 90 degrees to get tangent vector
+                if (!lastPiece.clockwise) {
+                    tangentVector.x *= -1
+                    tangentVector.y *= -1
+                }
+                return Math.atan2(tangentVector.y, tangentVector.x)
+            case TrackPieceType.Spline:
+                // For splines, we can approximate the direction at the end using the tangent at the end point
+                const dx = lastPiece.end.x - lastPiece.control2.x
+                const dy = lastPiece.end.y - lastPiece.control2.y
+                return Math.atan2(dy, dx)
+        }
+    }
+
     appendStraight(length: number, width: number) {
         const lastPieceEnd = this.getLastPieceEnd()
         if (!lastPieceEnd) {
             throw new Error("Cannot append straight piece to an empty track. Please add a starting piece first.")
         }
-        const lastPieceDirection = Math.atan2(lastPieceEnd.y - this.startingPoint.y, lastPieceEnd.x - this.startingPoint.x)
+        const lastPieceDirection = this.getLastPieceEndDirection()
+        if (lastPieceDirection === null) {
+            throw new Error("Cannot determine direction of the last piece. Please check the track pieces for consistency.")
+        }
         const newEnd = new Vector(lastPieceEnd.x + length * Math.cos(lastPieceDirection), lastPieceEnd.y + length * Math.sin(lastPieceDirection))
         this.addStraight(lastPieceEnd, newEnd, width)
     }
 
-    appendArc(radius: number, clockwise: boolean, width: number) {
+    appendArc(radius: number, angle: number, clockwise: boolean, width: number) {
         const lastPieceEnd = this.getLastPieceEnd()
         if (!lastPieceEnd) {
             throw new Error("Cannot append arc piece to an empty track. Please add a starting piece first.")
         }
-        const lastPieceDirection = Math.atan2(lastPieceEnd.y - this.startingPoint.y, lastPieceEnd.x - this.startingPoint.x)
-        const centerDirection = lastPieceDirection + (clockwise ? Math.PI / 2 : -Math.PI / 2)
-        const center = new Vector(lastPieceEnd.x + radius * Math.cos(centerDirection), lastPieceEnd.y + radius * Math.sin(centerDirection))
-        const newEndDirection = lastPieceDirection + (clockwise ? Math.PI / 2 : -Math.PI / 2)
-        const newEnd = new Vector(center.x + radius * Math.cos(newEndDirection), center.y + radius * Math.sin(newEndDirection))
-        this.addArc(lastPieceEnd, center, newEnd, clockwise, width)
+        const lastPieceDirection = this.getLastPieceEndDirection()
+        if (lastPieceDirection === null) {
+            throw new Error("Cannot determine direction of the last piece. Please check the track pieces for consistency.")
+        }
+
+        const startAngle = lastPieceDirection + (clockwise ? Math.PI / 2 : -Math.PI / 2)
+        const center = new Vector(lastPieceEnd.x + radius * Math.cos(startAngle), lastPieceEnd.y + radius * Math.sin(startAngle))
+        const endAngle = startAngle + (clockwise ? -angle : angle)
+        const end = new Vector(center.x + radius * Math.cos(endAngle - (clockwise ? Math.PI / 2 : -Math.PI / 2)), center.y + radius * Math.sin(endAngle - (clockwise ? Math.PI / 2 : -Math.PI / 2)))
+        this.addArc(lastPieceEnd, center, end, clockwise, width)
     }
 
     appendSpline(control1: Vector, control2: Vector, end: Vector, width: number) {
@@ -169,6 +205,7 @@ export default class Track {
             renderTrack.strokeWeight(piece.width)
             switch (piece.type) {
                 case TrackPieceType.Straight:
+                    renderTrack.push()
                     renderTrack.line(piece.start.x, piece.start.y, piece.end.x, piece.end.y)
                     renderTrack.strokeWeight(1)
                     renderTrack.stroke("white")
@@ -185,16 +222,22 @@ export default class Track {
                         piece.end.x + piece.width * Math.sin(dir) / 2,
                         piece.end.y - piece.width * Math.cos(dir) / 2
                     )
+                    renderTrack.pop()
                     break
                 case TrackPieceType.Arc:
                     const radius = Math.sqrt((piece.center.x - piece.start.x) ** 2 + (piece.center.y - piece.start.y) ** 2)
                     const angleStart = Math.atan2(piece.start.y - piece.center.y, piece.start.x - piece.center.x)
                     const angleEnd = Math.atan2(piece.end.y - piece.center.y, piece.end.x - piece.center.x)
-                    renderTrack.arc(piece.center.x, piece.center.y, radius * 2, radius * 2, angleStart, angleEnd, piece.clockwise ? "chord" : "open")
-                    renderTrack.strokeWeight(1)
-                    renderTrack.stroke("white")
-                    renderTrack.arc(piece.center.x, piece.center.y, (radius - piece.width) * 2, (radius - piece.width) * 2, angleStart, angleEnd, piece.clockwise ? "chord" : "open")
-                    renderTrack.arc(piece.center.x, piece.center.y, (radius + piece.width) * 2, (radius + piece.width) * 2, angleStart, angleEnd, piece.clockwise ? "chord" : "open")
+                    renderTrack.push()
+                    // in p5, arcs are alays drawn clockwise, so we need to swap the start and end angles if the piece is counterclockwise
+                    const actualAngleStart = piece.clockwise ? angleStart : angleEnd
+                    const actualAngleEnd = piece.clockwise ? angleEnd : angleStart
+                    renderTrack.arc(piece.center.x, piece.center.y, radius * 2, radius * 2, actualAngleStart, actualAngleEnd, "open")
+                    // renderTrack.strokeWeight(1)
+                    // renderTrack.stroke("white")
+                    // renderTrack.arc(piece.center.x, piece.center.y, (radius - piece.width) * 2, (radius - piece.width) * 2, angleStart, angleEnd, piece.clockwise ? "open" : "open")
+                    // renderTrack.arc(piece.center.x, piece.center.y, (radius + piece.width) * 2, (radius + piece.width) * 2, angleStart, angleEnd, piece.clockwise ? "open" : "open")
+                    renderTrack.pop()
                     break
                 case TrackPieceType.Spline:
                     renderTrack.stroke("white")
@@ -204,6 +247,27 @@ export default class Track {
                     renderTrack.strokeWeight(piece.width)
                     renderTrack.bezier(piece.start.x, piece.start.y, piece.control1.x, piece.control1.y, piece.control2.x, piece.control2.y, piece.end.x, piece.end.y)
                     break
+            }
+        }
+
+        if (this.drawLastPieceVector) {
+            const lastPieceEnd = this.getLastPieceEnd()
+            const lastPieceDirection = this.getLastPieceEndDirection()
+            if (lastPieceEnd && lastPieceDirection !== null) {
+                renderTrack.push()
+                renderTrack.stroke("red")
+                renderTrack.strokeWeight(2)
+                renderTrack.line(lastPieceEnd.x, lastPieceEnd.y, lastPieceEnd.x + 20 * Math.cos(lastPieceDirection), lastPieceEnd.y + 20 * Math.sin(lastPieceDirection))
+                renderTrack.pop()
+
+                // draw gizmo for the last piece end point
+                renderTrack.push()
+                renderTrack.strokeWeight(2)
+                renderTrack.stroke("blue")
+                renderTrack.line(lastPieceEnd.x, lastPieceEnd.y, lastPieceEnd.x + 10, lastPieceEnd.y)
+                renderTrack.stroke("yellow")
+                renderTrack.line(lastPieceEnd.x, lastPieceEnd.y, lastPieceEnd.x, lastPieceEnd.y + 10)
+                renderTrack.pop()
             }
         }
 
