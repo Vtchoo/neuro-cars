@@ -6,9 +6,9 @@ import * as TrackUtils from "./utils/track"
 
 
 export enum TrackPieceType {
-    Straight,
-    Arc,
-    Spline,
+    Straight = "Straight",
+    Arc = "Arc",
+    Spline = "Spline",
 }
 
 interface BaseTrackPiece {
@@ -52,6 +52,7 @@ export interface TrackOptions {
 export default class Track {
     pieces: TrackPiece[] = []
     startingPoint: Vector = new Vector(0, 0)
+    startingDirection: number = 0
 
     private trackMap: TrackMap | null = null
 
@@ -575,18 +576,19 @@ export default class Track {
                 x: this.startingPoint.x,
                 y: this.startingPoint.y
             },
+            startingDirection: this.startingDirection,
             pieces: this.pieces.map(piece => {
                 switch (piece.type) {
                     case TrackPieceType.Straight:
                         return {
-                            type: "Straight",
+                            type: TrackPieceType.Straight,
                             start: { x: piece.start.x, y: piece.start.y },
                             end: { x: piece.end.x, y: piece.end.y },
                             width: piece.width
                         };
                     case TrackPieceType.Arc:
                         return {
-                            type: "Arc",
+                            type: TrackPieceType.Arc,
                             start: { x: piece.start.x, y: piece.start.y },
                             center: { x: piece.center.x, y: piece.center.y },
                             end: { x: piece.end.x, y: piece.end.y },
@@ -595,7 +597,7 @@ export default class Track {
                         };
                     case TrackPieceType.Spline:
                         return {
-                            type: "Spline",
+                            type: TrackPieceType.Spline,
                             start: { x: piece.start.x, y: piece.start.y },
                             control1: { x: piece.control1.x, y: piece.control1.y },
                             control2: { x: piece.control2.x, y: piece.control2.y },
@@ -611,17 +613,17 @@ export default class Track {
     static fromData(data: any): Track {
         const track = new Track();
         track.startingPoint = new Vector(data.startingPoint.x, data.startingPoint.y);
-
+        track.startingDirection = data.startingDirection;
         for (const pieceData of data.pieces) {
             switch (pieceData.type) {
-                case "Straight":
+                case TrackPieceType.Straight:
                     track.addStraight(
                         new Vector(pieceData.start.x, pieceData.start.y),
                         new Vector(pieceData.end.x, pieceData.end.y),
                         pieceData.width
                     );
                     break;
-                case "Arc":
+                case TrackPieceType.Arc:
                     track.addArc(
                         new Vector(pieceData.start.x, pieceData.start.y),
                         new Vector(pieceData.center.x, pieceData.center.y),
@@ -630,7 +632,7 @@ export default class Track {
                         pieceData.width
                     );
                     break;
-                case "Spline":
+                case TrackPieceType.Spline:
                     track.addSpline(
                         new Vector(pieceData.start.x, pieceData.start.y),
                         new Vector(pieceData.control1.x, pieceData.control1.y),

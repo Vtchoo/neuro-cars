@@ -407,10 +407,12 @@ export default class Game {
 					individual.NN.resetFitness()
 				})
 
-				// Resets player's car
-				player.pos = newVector(start.x, start.y)
-				player.speed = 0
-				player.direction = direction
+				if (playerDrive) {
+					// Resets player's car
+					player.pos = newVector(start.x, start.y)
+					player.speed = 0
+					player.direction = direction
+				}
 
 				ticks = 0
 				generation++
@@ -437,6 +439,7 @@ export default class Game {
 			case "rotateStart":
 				direction = Math.atan2(this.p.mouseY - start.y, this.p.mouseX - start.x)
 				phase = "buildTrack"
+				this.track.startingDirection = direction
 
 				currentDirection = direction
 				currentPosition = newVector(start.x + trackWidth * Math.cos(direction) / 2, start.y + trackWidth * Math.sin(direction) / 2)
@@ -649,8 +652,8 @@ export default class Game {
 
 		// Update start position from track
 		start = this.track.startingPoint;
-		direction = 0; // Default direction, could be saved too if needed
-
+		direction = this.track.startingDirection;
+		
 		// Set phase to running
 		this.setPhase("running");
 	}
