@@ -298,7 +298,7 @@ export default class Game {
 				// Updates each individual
 				population.forEach((individual) => {
 					individual.drive(individual.NN.output(individual.getInputs(this.trackMap, showInputs, this.p, resolution)))
-					individual.update(this.trackMap, resolution)
+					individual.update(this.trackMap, resolution, this.track)
 					individual.show(this.p, carSprite)
 					individual.NN.addFitness(individual.speed)
 				})
@@ -447,4 +447,4 @@ export default class Game {
 	}
 }
 
-const game = new Game()
+window.game = new Game()

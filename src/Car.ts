@@ -1,6 +1,7 @@
 import p5 from "p5"
 import { NeuralNet } from "./NeuralNet"
 import { newVector, Vector } from "./Vector"
+import Track from "./Track"
 
 let avgDeltaTime = 0.016807703080427727 
 
@@ -36,10 +37,11 @@ export default class Car {
     }
 
     // Updates car position
-    update(trackMap: number[][], resolution: number) {
+    update(trackMap: number[][], resolution: number, track: Track) {
         this.speed += this.acceleration
         if (this.speed < -2) { this.speed = -2 }
-        if (trackMap[Math.floor(this.pos.x / resolution)][Math.floor(this.pos.y / resolution)] == 0) { this.speed = 0 }
+        // if (trackMap[Math.floor(this.pos.x / resolution)][Math.floor(this.pos.y / resolution)] == 0) { this.speed = 0 }
+        if (!track.isInsideTrack(this.pos.x, this.pos.y)) { this.speed = 0 }
 
         this.pos.add(
             this.speed * Math.cos(this.direction) * avgDeltaTime / (1 / 30),

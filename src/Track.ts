@@ -1,5 +1,6 @@
 import p5 from "p5"
 import { Vector } from "./Vector"
+import * as TrackUtils from "./utils/track"
 
 
 
@@ -38,12 +39,26 @@ export interface SplinePiece extends BaseTrackPiece {
 
 export type TrackPiece = StraightPiece | ArcPiece | SplinePiece
 
+interface TrackMap {
+    map: number[][]
+    offset: Vector
+}
+
+export interface TrackOptions {
+    boundQueryType: "analytic" | "map"
+}
+
 export default class Track {
     pieces: TrackPiece[] = []
     startingPoint: Vector = new Vector(0, 0)
 
+    private trackMap: TrackMap | null = null
+
     // debug
     drawLastPieceVector: boolean = true
+    drawTrackMapBounds: boolean = true
+
+    boundQueryType: "analytic" | "map" = "map"
 
     /**
      * The analyticPieces array is used to store aggregated track pieces that can be used
@@ -84,6 +99,7 @@ export default class Track {
                 width,
             })
         }
+        this.trackMap = null // invalidate track map since the track has changed
     }
 
     addArc(start: Vector, center: Vector, end: Vector, clockwise: boolean, width: number) {
@@ -117,6 +133,7 @@ export default class Track {
                 width,
             })
         }
+        this.trackMap = null // invalidate track map since the track has changed
     }
 
     addSpline(start: Vector, control1: Vector, control2: Vector, end: Vector, width: number) {
@@ -128,6 +145,8 @@ export default class Track {
             end,
             width,
         })
+
+        this.trackMap = null // invalidate track map since the track has changed
     }
 
     getLastPieceEndDirection(): number | null {
@@ -241,12 +260,14 @@ export default class Track {
                     renderTrack.pop()
                     break
                 case TrackPieceType.Spline:
+                    renderTrack.push()
                     renderTrack.stroke("white")
                     renderTrack.strokeWeight(piece.width + 2)
                     renderTrack.bezier(piece.start.x, piece.start.y, piece.control1.x, piece.control1.y, piece.control2.x, piece.control2.y, piece.end.x, piece.end.y)
                     renderTrack.stroke("black")
                     renderTrack.strokeWeight(piece.width)
                     renderTrack.bezier(piece.start.x, piece.start.y, piece.control1.x, piece.control1.y, piece.control2.x, piece.control2.y, piece.end.x, piece.end.y)
+                    renderTrack.pop()
                     break
             }
         }
@@ -272,7 +293,222 @@ export default class Track {
             }
         }
 
+        if (this.drawTrackMapBounds) {
+            if (!this.trackMap) {
+                this.trackMap = this.generateTrackMap(1)
+            }
+
+            renderTrack.push()
+            renderTrack.strokeWeight(1)
+            renderTrack.stroke("purple")
+            renderTrack.noFill()
+            renderTrack.rect(this.startingPoint.x + this.trackMap.offset.x, this.startingPoint.y + this.trackMap.offset.y, this.trackMap.map[0].length, this.trackMap.map.length)
+            renderTrack.pop()
+        }
+
+
         renderTrack.pop()
+    }
+
+    isInsideTrack(x: number, y: number): boolean {
+        switch (this.boundQueryType) {
+            case "analytic": {
+                if (this.analyticPieces.length === 0) {
+                    return false
+                }
+
+                const queryPoint = { x, y }
+
+                // Check distance to any track piece
+                for (const piece of this.analyticPieces) {
+                    const distance = this.getDistanceToPiece(piece, queryPoint)
+                    if (distance <= piece.width / 2) {
+                        return true
+                    }
+                }
+
+                return false
+            }
+            case "map":
+            default: {
+
+                if (!this.trackMap) {
+                    this.trackMap = this.generateTrackMap(1)
+                }
+
+                const col = Math.floor((x - this.startingPoint.x - this.trackMap.offset.x) / 1)
+                const row = Math.floor((y - this.startingPoint.y - this.trackMap.offset.y) / 1)
+
+                if (row < 0 || row >= this.trackMap.map.length || col < 0 || col >= this.trackMap.map[0].length) {
+                    return false
+                }
+                return this.trackMap.map[row][col] === 0
+            }
+        }
+    }
+
+    generateTrackMap(resolution: number = 1): TrackMap {
+        if (this.analyticPieces.length === 0) {
+            return { map: [[1]], offset: new Vector(0, 0) }
+        }
+
+        // Calculate bounding box of all track pieces
+        let minX = Infinity
+        let minY = Infinity
+        let maxX = -Infinity
+        let maxY = -Infinity
+
+        for (const piece of this.analyticPieces) {
+            const bounds = this.getPieceBounds(piece)
+            minX = Math.min(minX, bounds.minX)
+            minY = Math.min(minY, bounds.minY)
+            maxX = Math.max(maxX, bounds.maxX)
+            maxY = Math.max(maxY, bounds.maxY)
+        }
+
+        // Add padding to ensure track edges are captured
+        const maxTrackWidth = Math.max(...this.analyticPieces.map(p => p.width))
+        const padding = maxTrackWidth / 2 + resolution * 2
+        minX -= padding
+        minY -= padding
+        maxX += padding
+        maxY += padding
+
+        // Calculate matrix dimensions
+        const width = Math.ceil((maxX - minX) / resolution)
+        const height = Math.ceil((maxY - minY) / resolution)
+
+        // Ensure minimum size
+        const finalWidth = Math.max(width, 1)
+        const finalHeight = Math.max(height, 1)
+
+        // Create matrix (1 = grass/other, 0 = asphalt/track)
+        const map: number[][] = Array(finalHeight).fill(null).map(() => Array(finalWidth).fill(1))
+
+        // For each pixel, check if it's within track bounds
+        for (let row = 0; row < finalHeight; row++) {
+            for (let col = 0; col < finalWidth; col++) {
+                const worldX = minX + (col + 0.5) * resolution  // Sample at center of pixel
+                const worldY = minY + (row + 0.5) * resolution
+                const queryPoint = { x: worldX, y: worldY }
+
+                // Check distance to any track piece
+                let isOnTrack = false
+                for (const piece of this.analyticPieces) {
+                    const distance = this.getDistanceToPiece(piece, queryPoint)
+                    if (distance <= piece.width / 2) {
+                        isOnTrack = true
+                        break
+                    }
+                }
+
+                map[row][col] = isOnTrack ? 0 : 1
+            }
+        }
+
+        // Calculate offset from starting point
+        const offset = new Vector(minX - this.startingPoint.x, minY - this.startingPoint.y)
+
+        return { map, offset }
+    }
+
+
+    private getPieceBounds(piece: TrackPiece): { minX: number, minY: number, maxX: number, maxY: number } {
+        const halfWidth = piece.width / 2
+
+        switch (piece.type) {
+            case TrackPieceType.Straight: {
+                const minX = Math.min(piece.start.x, piece.end.x) - halfWidth
+                const maxX = Math.max(piece.start.x, piece.end.x) + halfWidth
+                const minY = Math.min(piece.start.y, piece.end.y) - halfWidth
+                const maxY = Math.max(piece.start.y, piece.end.y) + halfWidth
+                return { minX, minY, maxX, maxY }
+            }
+
+            case TrackPieceType.Arc: {
+                const radius = TrackUtils.length(TrackUtils.sub(piece.start, piece.center))
+                const centerX = piece.center.x
+                const centerY = piece.center.y
+
+                // For simplicity, use the full circle bounds
+                // A more precise implementation would calculate the actual arc bounds
+                const minX = centerX - radius - halfWidth
+                const maxX = centerX + radius + halfWidth
+                const minY = centerY - radius - halfWidth
+                const maxY = centerY + radius + halfWidth
+                return { minX, minY, maxX, maxY }
+            }
+
+            case TrackPieceType.Spline: {
+                // For splines, approximate bounds using control points
+                const xs = [piece.start.x, piece.control1.x, piece.control2.x, piece.end.x]
+                const ys = [piece.start.y, piece.control1.y, piece.control2.y, piece.end.y]
+
+                const minX = Math.min(...xs) - halfWidth
+                const maxX = Math.max(...xs) + halfWidth
+                const minY = Math.min(...ys) - halfWidth
+                const maxY = Math.max(...ys) + halfWidth
+                return { minX, minY, maxX, maxY }
+            }
+
+            default:
+                return { minX: 0, minY: 0, maxX: 0, maxY: 0 }
+        }
+    }
+
+    private getDistanceToPiece(piece: TrackPiece, point: TrackUtils.Vec2): number {
+        switch (piece.type) {
+            case TrackPieceType.Straight: {
+                const segment: TrackUtils.LineSegment = {
+                    kind: "line",
+                    start: { x: piece.start.x, y: piece.start.y },
+                    end: { x: piece.end.x, y: piece.end.y }
+                }
+                return TrackUtils.closestPointOnLineSegment(segment, point).distance
+            }
+
+            case TrackPieceType.Arc: {
+                const segment: TrackUtils.ArcSegment = {
+                    kind: "arc",
+                    start: { x: piece.start.x, y: piece.start.y },
+                    end: { x: piece.end.x, y: piece.end.y },
+                    center: { x: piece.center.x, y: piece.center.y }
+                }
+                return TrackUtils.closestPointOnArcSegment(segment, point).distance
+            }
+
+            case TrackPieceType.Spline: {
+                // For splines, we would need a closestPointOnBezier function
+                // For now, approximate by sampling points along the spline
+                let minDistance = Infinity
+                const samples = 20
+
+                for (let i = 0; i <= samples; i++) {
+                    const t = i / samples
+                    const splinePoint = this.evaluateBezier(piece, t)
+                    const distance = TrackUtils.length(TrackUtils.sub(point, splinePoint))
+                    minDistance = Math.min(minDistance, distance)
+                }
+
+                return minDistance
+            }
+
+            default:
+                return Infinity
+        }
+    }
+
+    private evaluateBezier(piece: SplinePiece, t: number): TrackUtils.Vec2 {
+        const t2 = t * t
+        const t3 = t2 * t
+        const mt = 1 - t
+        const mt2 = mt * mt
+        const mt3 = mt2 * mt
+
+        return {
+            x: mt3 * piece.start.x + 3 * mt2 * t * piece.control1.x + 3 * mt * t2 * piece.control2.x + t3 * piece.end.x,
+            y: mt3 * piece.start.y + 3 * mt2 * t * piece.control1.y + 3 * mt * t2 * piece.control2.y + t3 * piece.end.y
+        }
     }
 
     deleteLastPiece() {
