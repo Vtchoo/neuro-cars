@@ -137,6 +137,10 @@ export default class Game {
 			p.mouseDragged = () => {
 				this.mouseDragged()
 			}
+
+			p.keyPressed = () => {
+				this.keyPressed()
+			}
 		})
 	}
 
@@ -443,6 +447,29 @@ export default class Game {
 
 				break
 		}
+		this.p.pop()
+
+		// Draw UI overlay (not affected by camera transform)
+		this.drawUI()
+	}
+
+	private drawUI() {
+		// Controls help panel
+		this.p.fill(0, 0, 0, 150)
+		this.p.noStroke()
+		this.p.rect(10, 10, 250, 140)
+
+		this.p.fill(255)
+		this.p.textAlign(this.p.LEFT)
+		this.p.textSize(12)
+		this.p.text("Controls:", 20, 30)
+		this.p.text("F - Toggle follow best car", 20, 50)
+		this.p.text("S - Toggle sensor inputs", 20, 65)
+		this.p.text("M - Toggle track map", 20, 80)
+		this.p.text("G - Toggle graphs", 20, 95)
+		this.p.text("Ctrl+S - Save game", 20, 110)
+		this.p.text("Ctrl+L - Load game", 20, 125)
+		this.p.text(`Generation: ${generation}`, 20, 140)
 	}
 
 	private previousMouseX = 0
@@ -503,8 +530,19 @@ export default class Game {
 				break
 			case 's':
 			case 'S':
-				// Toggle show inputs
-				showInputs = !showInputs
+				// Check if Ctrl is held for save, otherwise toggle show inputs
+				if (this.p.keyIsDown(this.p.CONTROL)) {
+					this.saveGame();
+				} else {
+					showInputs = !showInputs;
+				}
+				break
+			case 'l':
+			case 'L':
+				// Load game (Ctrl+L)
+				// if (this.p.keyIsDown(this.p.CONTROL)) {
+				this.loadGame();
+				// }
 				break
 			case 'm':
 			case 'M':
@@ -517,6 +555,104 @@ export default class Game {
 				drawGraphs = !drawGraphs
 				break
 		}
+	}
+
+	// Save game functionality
+	saveGame() {
+		const saveData = {
+			version: "1.0",
+			timestamp: new Date().toISOString(),
+			track: this.track.exportData(),
+			game: {
+				generation: generation,
+				ticks: ticks,
+				maxTicks: maxticks
+			},
+			population: population.map(car => ({
+				NN: car.NN.exportData(),
+				generation: car.generation,
+				position: { x: car.pos.x, y: car.pos.y },
+				speed: car.speed,
+				direction: car.direction,
+				acceleration: car.acceleration,
+				paintRGB: car.paintRGB
+			}))
+		};
+
+		// Create and trigger download
+		const dataStr = JSON.stringify(saveData, null, 2);
+		const dataBlob = new Blob([dataStr], { type: 'application/json' });
+		const url = URL.createObjectURL(dataBlob);
+
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = `smartrace_save_gen${generation}_${Date.now()}.json`;
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+		URL.revokeObjectURL(url);
+
+		console.log(`Game saved! Generation: ${generation}`);
+	}
+
+	// Load game functionality
+	loadGame() {
+		const input = document.createElement('input');
+		input.type = 'file';
+		input.accept = '.json';
+		input.onchange = (event) => {
+			const file = (event.target as HTMLInputElement).files?.[0];
+			if (file) {
+				const reader = new FileReader();
+				reader.onload = (e) => {
+					try {
+						const saveData = JSON.parse(e.target?.result as string);
+						this.restoreGameState(saveData);
+						console.log(`Game loaded! Generation: ${generation}`);
+					} catch (error) {
+						console.error('Error loading save file:', error);
+						alert('Error loading save file. Please check the file format.');
+					}
+				};
+				reader.readAsText(file);
+			}
+		};
+		input.click();
+	}
+
+	private restoreGameState(saveData: any) {
+		// Restore track
+		this.track = Track.fromData(saveData.track);
+
+		// Regenerate track graphics
+		this.renderTrack.push();
+		this.renderTrack.fill("green");
+		this.renderTrack.rect(0, 0, this.p.width, this.p.height);
+		this.renderTrack.pop();
+		this.track.draw(this.p, this.renderTrack);
+
+		// Restore game state
+		generation = saveData.game.generation;
+		ticks = saveData.game.ticks;
+		maxticks = saveData.game.maxTicks;
+
+		// Restore population
+		population = saveData.population.map((carData: any) => {
+			const car = new Car(carData.position.x, carData.position.y, carData.direction);
+			car.NN = NeuralNet.fromData(carData.NN);
+			car.generation = carData.generation;
+			car.speed = carData.speed;
+			car.acceleration = carData.acceleration;
+			car.paintRGB = carData.paintRGB;
+			return car;
+		});
+
+		// Update start position from track
+		start = this.track.startingPoint;
+		direction = 0; // Default direction, could be saved too if needed
+
+		// Set phase to running
+		this.setPhase("running");
 	}
 }
 

@@ -567,6 +567,83 @@ export default class Track {
 
         this.trackMap = null // invalidate track map since the track has changed
     }
+
+    // Export track data for saving
+    exportData(): any {
+        return {
+            startingPoint: {
+                x: this.startingPoint.x,
+                y: this.startingPoint.y
+            },
+            pieces: this.pieces.map(piece => {
+                switch (piece.type) {
+                    case TrackPieceType.Straight:
+                        return {
+                            type: "Straight",
+                            start: { x: piece.start.x, y: piece.start.y },
+                            end: { x: piece.end.x, y: piece.end.y },
+                            width: piece.width
+                        };
+                    case TrackPieceType.Arc:
+                        return {
+                            type: "Arc",
+                            start: { x: piece.start.x, y: piece.start.y },
+                            center: { x: piece.center.x, y: piece.center.y },
+                            end: { x: piece.end.x, y: piece.end.y },
+                            clockwise: piece.clockwise,
+                            width: piece.width
+                        };
+                    case TrackPieceType.Spline:
+                        return {
+                            type: "Spline",
+                            start: { x: piece.start.x, y: piece.start.y },
+                            control1: { x: piece.control1.x, y: piece.control1.y },
+                            control2: { x: piece.control2.x, y: piece.control2.y },
+                            end: { x: piece.end.x, y: piece.end.y },
+                            width: piece.width
+                        };
+                }
+            })
+        };
+    }
+
+    // Import track data for loading
+    static fromData(data: any): Track {
+        const track = new Track();
+        track.startingPoint = new Vector(data.startingPoint.x, data.startingPoint.y);
+
+        for (const pieceData of data.pieces) {
+            switch (pieceData.type) {
+                case "Straight":
+                    track.addStraight(
+                        new Vector(pieceData.start.x, pieceData.start.y),
+                        new Vector(pieceData.end.x, pieceData.end.y),
+                        pieceData.width
+                    );
+                    break;
+                case "Arc":
+                    track.addArc(
+                        new Vector(pieceData.start.x, pieceData.start.y),
+                        new Vector(pieceData.center.x, pieceData.center.y),
+                        new Vector(pieceData.end.x, pieceData.end.y),
+                        pieceData.clockwise,
+                        pieceData.width
+                    );
+                    break;
+                case "Spline":
+                    track.addSpline(
+                        new Vector(pieceData.start.x, pieceData.start.y),
+                        new Vector(pieceData.control1.x, pieceData.control1.y),
+                        new Vector(pieceData.control2.x, pieceData.control2.y),
+                        new Vector(pieceData.end.x, pieceData.end.y),
+                        pieceData.width
+                    );
+                    break;
+            }
+        }
+
+        return track;
+    }
 }
 
 

@@ -147,6 +147,43 @@ export class NeuralNet {
         this.fitness = 0;
     }
 
+    // Export neural network data for saving
+    public exportData(): any {
+        return {
+            config: {
+                layers: this.layers,
+                neurons: this.neurons,
+                inputs: this.inputs,
+                outputs: this.outputs,
+                range: this.range,
+                mutationRate: this.mutationRate,
+                activation: this.activation
+            },
+            weights: this.weightMatrices,
+            biases: this.biasMatrices,
+            fitness: this.fitness
+        };
+    }
+
+    // Import neural network data for loading
+    public static fromData(data: any): NeuralNet {
+        const net = new NeuralNet(
+            data.config.layers,
+            data.config.neurons,
+            data.config.inputs,
+            data.config.outputs,
+            data.config.range,
+            data.config.mutationRate,
+            data.config.activation
+        );
+
+        net.weightMatrices = data.weights;
+        net.biasMatrices = data.biases;
+        net.fitness = data.fitness || 0;
+
+        return net;
+    }
+
     // Mutation function
     public mutate(): void {
         // Mutate weight matrices
