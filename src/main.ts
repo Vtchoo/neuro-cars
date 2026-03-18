@@ -111,6 +111,9 @@ export default class Game {
 
 	followBestCar = false
 
+	private readonly decisionsPerSecond = 10
+	private lastDecisionTime = 0
+
 	constructor() {
 		this.p = new p5((p: p5) => {
 
@@ -310,9 +313,18 @@ export default class Game {
 				// or the AI detection map
 				if (showMap == true) { this.p.image(this.renderMap, 0, 0) }
 
+				const currentTime = Date.now()
+				const shouldMakeDecision = currentTime - this.lastDecisionTime >= 1000 / this.decisionsPerSecond
+				if (shouldMakeDecision) {
+					this.lastDecisionTime = currentTime
+				}
+
 				// Updates each individual
 				population.forEach((individual) => {
-					individual.drive(individual.NN.output(individual.getInputs(this.trackMap, showInputs, this.p, resolution)))
+					// if (shouldMakeDecision) {
+					const inputs = individual.getInputs(this.trackMap, showInputs, this.p, resolution, this.track)
+					individual.drive(individual.NN.output(inputs))
+					// }
 					individual.update(this.trackMap, resolution, this.track)
 					individual.show(this.p, carSprite)
 					individual.NN.addFitness(individual.speed)
@@ -653,7 +665,7 @@ export default class Game {
 		// Update start position from track
 		start = this.track.startingPoint;
 		direction = this.track.startingDirection;
-		
+
 		// Set phase to running
 		this.setPhase("running");
 	}

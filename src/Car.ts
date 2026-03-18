@@ -68,7 +68,7 @@ export default class Car {
     }
 
     // Gets sensors' data
-    getInputs(trackMap: number[][], showInputs: boolean, p: p5, resolution: number) {
+    getInputs(trackMap: number[][], showInputs: boolean, p: p5, resolution: number, track: Track) {
         var inputs = new Array(8).fill(0)
         var increments = 30
 
@@ -85,8 +85,9 @@ export default class Car {
                 var x = this.pos.x + (2 * Math.cos(((i - 3) / 10) * Math.PI)) * (j + 1) * Math.cos(angle) * 4
                 var y = this.pos.y + (2 * Math.cos(((i - 3) / 10) * Math.PI)) * (j + 1) * Math.sin(angle) * 4
 
-                const tile = trackMap[Math.floor(x / resolution)][Math.floor(y / resolution)]
-                if (tile == 0 || j == increments - 1) {
+                // const tile = trackMap[Math.floor(x / resolution)][Math.floor(y / resolution)]
+                const isInsideTrack = track.isInsideTrack(x, y)
+                if (!isInsideTrack || j == increments - 1) {
                     x = prevx
                     y = prevy
 
