@@ -256,8 +256,8 @@ export default class Game {
 			case "buildTrack":
 
 				this.p.background("green")
-				// this.p.image(this.renderTrack, 0, 0)
-				this.track.draw(this.p, this.p)
+				this.track.draw(this.p, this.renderTrack)
+				this.p.image(this.renderTrack, 0, 0)
 				if (showGrid == true) { this.p.image(this.grid, 0, 0) }
 				break
 
