@@ -18,6 +18,7 @@ export type ArcSegment = {
     start: Vec2;
     end: Vec2;
     center: Vec2;
+    clockwise: boolean;
 };
 
 export type BezierSegment = {
@@ -155,12 +156,12 @@ export function closestPointOnArcSegment(seg: ArcSegment, q: Vec2): ClosestPoint
     const a1 = angleOf(ve);
     const aq = angleOf(vq);
 
-    // Choose minor arc direction
-    const ccwDelta = signedArcDelta(a0, a1, true);   // [0, 2π)
-    const cwDelta = signedArcDelta(a0, a1, false);   // (-2π, 0]
+    // // Choose minor arc direction
+    // const ccwDelta = signedArcDelta(a0, a1, true);   // [0, 2π)
+    // const cwDelta = signedArcDelta(a0, a1, false);   // (-2π, 0]
 
-    const useCCW = Math.abs(ccwDelta) <= Math.abs(cwDelta);
-    const totalDelta = useCCW ? ccwDelta : cwDelta;
+    const useCCW = seg.clockwise;
+    const totalDelta = signedArcDelta(a0, a1, useCCW);
 
     // Where does q lie along that directed arc?
     const qDelta = signedArcDelta(a0, aq, useCCW);

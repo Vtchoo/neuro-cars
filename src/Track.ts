@@ -42,6 +42,7 @@ export type TrackPiece = StraightPiece | ArcPiece | SplinePiece
 interface TrackMap {
     map: number[][]
     offset: Vector
+    resolution: number
 }
 
 export interface TrackOptions {
@@ -57,6 +58,7 @@ export default class Track {
     // debug
     drawLastPieceVector: boolean = true
     drawTrackMapBounds: boolean = true
+    drawTrackMapCells: boolean = false
 
     boundQueryType: "analytic" | "map" = "map"
 
@@ -295,14 +297,34 @@ export default class Track {
 
         if (this.drawTrackMapBounds) {
             if (!this.trackMap) {
-                this.trackMap = this.generateTrackMap(1)
+                this.trackMap = this.generateTrackMap(3)
             }
+            const resolution = this.trackMap.resolution
 
             renderTrack.push()
             renderTrack.strokeWeight(1)
             renderTrack.stroke("purple")
             renderTrack.noFill()
-            renderTrack.rect(this.startingPoint.x + this.trackMap.offset.x, this.startingPoint.y + this.trackMap.offset.y, this.trackMap.map[0].length, this.trackMap.map.length)
+            renderTrack.rect(this.startingPoint.x + this.trackMap.offset.x, this.startingPoint.y + this.trackMap.offset.y, this.trackMap.map[0].length * resolution, this.trackMap.map.length * resolution)
+
+            if (this.drawTrackMapCells) {
+                for (let row = 0; row < this.trackMap.map.length; row++) {
+                    for (let col = 0; col < this.trackMap.map[0].length; col++) {
+                        renderTrack.strokeWeight(1)
+                        if (this.trackMap.map[row][col] === 0) {
+                            renderTrack.stroke("gray")
+                            renderTrack.fill("white")
+                            // renderTrack.point(this.startingPoint.x + this.trackMap.offset.x + col * resolution + resolution / 2, this.startingPoint.y + this.trackMap.offset.y + row * resolution + resolution / 2)
+                            renderTrack.rect(this.startingPoint.x + this.trackMap.offset.x + col * resolution, this.startingPoint.y + this.trackMap.offset.y + row * resolution, resolution, resolution)
+                        } else {
+                            renderTrack.stroke("limegreen")
+                            renderTrack.fill("white")
+                            renderTrack.rect(this.startingPoint.x + this.trackMap.offset.x + col * resolution, this.startingPoint.y + this.trackMap.offset.y + row * resolution, resolution, resolution)
+                        }
+                    }
+                }
+            }
+
             renderTrack.pop()
         }
 
@@ -333,11 +355,11 @@ export default class Track {
             default: {
 
                 if (!this.trackMap) {
-                    this.trackMap = this.generateTrackMap(1)
+                    this.trackMap = this.generateTrackMap(3)
                 }
 
-                const col = Math.floor((x - this.startingPoint.x - this.trackMap.offset.x) / 1)
-                const row = Math.floor((y - this.startingPoint.y - this.trackMap.offset.y) / 1)
+                const col = Math.floor((x - this.startingPoint.x - this.trackMap.offset.x) / this.trackMap.resolution)
+                const row = Math.floor((y - this.startingPoint.y - this.trackMap.offset.y) / this.trackMap.resolution)
 
                 if (row < 0 || row >= this.trackMap.map.length || col < 0 || col >= this.trackMap.map[0].length) {
                     return false
@@ -349,7 +371,7 @@ export default class Track {
 
     generateTrackMap(resolution: number = 1): TrackMap {
         if (this.analyticPieces.length === 0) {
-            return { map: [[1]], offset: new Vector(0, 0) }
+            return { map: [[1]], offset: new Vector(0, 0), resolution }
         }
 
         // Calculate bounding box of all track pieces
@@ -409,7 +431,7 @@ export default class Track {
         // Calculate offset from starting point
         const offset = new Vector(minX - this.startingPoint.x, minY - this.startingPoint.y)
 
-        return { map, offset }
+        return { map, offset, resolution }
     }
 
 
@@ -472,7 +494,8 @@ export default class Track {
                     kind: "arc",
                     start: { x: piece.start.x, y: piece.start.y },
                     end: { x: piece.end.x, y: piece.end.y },
-                    center: { x: piece.center.x, y: piece.center.y }
+                    center: { x: piece.center.x, y: piece.center.y },
+                    clockwise: piece.clockwise,
                 }
                 return TrackUtils.closestPointOnArcSegment(segment, point).distance
             }
@@ -541,6 +564,8 @@ export default class Track {
             }
         }
         this.analyticPieces = newAnalyticPieces
+
+        this.trackMap = null // invalidate track map since the track has changed
     }
 }
 

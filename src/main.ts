@@ -127,6 +127,14 @@ export default class Game {
 			p.mouseClicked = () => {
 				this.mouseClicked()
 			}
+
+			p.mousePressed = () => {
+				this.mousePressed()
+			}
+
+			p.mouseDragged = () => {
+				this.mouseDragged()
+			}
 		})
 	}
 
@@ -161,7 +169,8 @@ export default class Game {
 	}
 
 	draw() {
-
+		this.p.push()
+		this.p.translate(this.cameraOffsetX, this.cameraOffsetY)
 		switch (phase) {
 			case "setStart":
 
@@ -394,6 +403,8 @@ export default class Game {
 				phase = "running"
 				break
 		}
+
+		this.p.pop()
 	}
 
 	mouseClicked() {
@@ -418,6 +429,30 @@ export default class Game {
 				createGrid(this.grid, start, direction, trackWidth, this.p)
 				createTrackBuilder(this.p, currentPosition, currentDirection, trackWidth, this.renderTrack, this.trackMap, this.renderMap, resolution, this, this.track)
 
+				break
+		}
+	}
+
+	private previousMouseX = 0
+	private previousMouseY = 0
+	private cameraOffsetX = 0
+	private cameraOffsetY = 0
+
+	mousePressed() {
+		this.previousMouseX = this.p.mouseX
+		this.previousMouseY = this.p.mouseY
+	}
+
+	mouseDragged() {
+		console.log("dragging")
+		switch (phase) {
+			case "buildTrack":
+			case "running":
+				// move camera around
+				this.cameraOffsetX += this.p.mouseX - this.previousMouseX
+				this.cameraOffsetY += this.p.mouseY - this.previousMouseY
+				this.previousMouseX = this.p.mouseX
+				this.previousMouseY = this.p.mouseY
 				break
 		}
 	}
