@@ -238,27 +238,6 @@ export function setTrack(renderTrack: p5.Graphics, trackMap: number[][], renderM
     // Hides the grid, if it is showing
     if (showGrid == true) { showGrid = false }
 
-    // Creates the collison map for the track
-    renderTrack.loadPixels()
-
-    // Also creates a visual representation of the collision map
-    renderMap.push()
-
-    for (let i = 0; i < Math.floor(renderMap.width / resolution); i++) {
-        for (let j = 0; j < Math.floor(renderMap.height / resolution); j++) {
-
-            if (renderTrack.pixels[4 * (j * renderMap.width + i) * resolution + 1] > 20) {
-                renderMap.fill("red")
-                trackMap[i][j] = 0
-            } else {
-                renderMap.fill("white")
-                trackMap[i][j] = 1
-            }
-            renderMap.rect(i * resolution, j * resolution, resolution, resolution)
-        }
-    }
-    renderMap.pop()
-
     // Show additional buttons to control the visualization
     const exibInputs = p.createButton("Show Inputs")
     exibInputs.size(buttonWidth, buttonHeight)

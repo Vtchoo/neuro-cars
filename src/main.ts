@@ -184,42 +184,43 @@ export default class Game {
 		switch (phase) {
 			case "setStart":
 
-				this.renderTrack.push();
-				this.renderTrack.fill("green")
-				this.renderTrack.rect(0, 0, this.p.width, this.p.height)
-				this.renderTrack.fill("black")
-				this.renderTrack.noStroke()
-				this.renderTrack.rect(this.p.mouseX - trackWidth / 2, this.p.mouseY - trackWidth / 2, trackWidth, trackWidth)
-				this.renderTrack.pop();
-				this.p.image(this.renderTrack, 0, 0)
+				this.p.push();
+				// this.p.fill("green")
+				// this.p.rect(0, 0, this.p.width, this.p.height)
+				this.p.fill("black")
+				this.p.noStroke()
+				this.p.rect(this.p.mouseX - trackWidth / 2, this.p.mouseY - trackWidth / 2, trackWidth, trackWidth)
+				this.p.pop();
+				// this.p.image(this.renderTrack, 0, 0)
 				break
 
 			case "rotateStart":
 
-				this.renderTrack.push()
-				this.renderTrack.fill("green")
-				this.renderTrack.rect(0, 0, this.p.width, this.p.height)
-				this.renderTrack.translate(start.x, start.y)
-				this.renderTrack.rotate(Math.atan2(this.p.mouseY - start.y, this.p.mouseX - start.x))
-				this.renderTrack.fill("black")
-				this.renderTrack.rect(-trackWidth / 2, -trackWidth / 2, trackWidth, trackWidth)
-				this.renderTrack.stroke("white")
-				this.renderTrack.line(-trackWidth / 2, -trackWidth / 2, trackWidth / 2, -trackWidth / 2)
-				this.renderTrack.line(-trackWidth / 2, +trackWidth / 2, trackWidth / 2, +trackWidth / 2)
-				this.renderTrack.pop()
-				this.p.image(this.renderTrack, 0, 0)
+				this.p.push()
+				// this.p.fill("green")
+				// this.p.rect(0, 0, this.p.width, this.p.height)
+				this.p.translate(start.x, start.y)
+				this.p.rotate(Math.atan2(this.p.mouseY - start.y, this.p.mouseX - start.x))
+				this.p.fill("black")
+				this.p.rect(-trackWidth / 2, -trackWidth / 2, trackWidth, trackWidth)
+				this.p.stroke("white")
+				this.p.line(-trackWidth / 2, -trackWidth / 2, trackWidth / 2, -trackWidth / 2)
+				this.p.line(-trackWidth / 2, +trackWidth / 2, trackWidth / 2, +trackWidth / 2)
+				this.p.pop()
+				// this.p.image(this.renderTrack, 0, 0)
 				break
 
 			case "buildTrack":
 
 				this.p.background("green")
-				this.track.draw(this.p, this.renderTrack)
-				this.p.image(this.renderTrack, 0, 0)
+				this.track.draw(this.p, this.p)
+				// this.p.image(this.renderTrack, 0, 0)
 				if (showGrid == true) { this.p.image(this.grid, 0, 0) }
 				break
 
 			case "setup":
 
+				this.track.draw(this.p, this.p)
 				// for (let i = 0; i < individuals; i++) {
 				// 	population[i] = new Car(start.x, start.y, direction)
 				// }
@@ -237,7 +238,8 @@ export default class Game {
 			case "running":
 
 				// Shows the track
-				this.p.image(this.renderTrack, 0, 0)
+				// this.p.image(this.renderTrack, 0, 0)
+				this.track.draw(this.p, this.p)
 
 				// or the AI detection map
 				if (showMap == true) { this.p.image(this.renderMap, 0, 0) }
@@ -289,18 +291,21 @@ export default class Game {
 			case "breeding":
 
 				// Shows the track
-				this.p.image(this.renderTrack, 0, 0)
-				
+				// this.p.image(this.renderTrack, 0, 0)
+				this.track.draw(this.p, this.p)
+
 				// Sort the population by fitness
 				population.sort(function (a, b) { return b.NN.fitness - a.NN.fitness })
 
 				// And stores data into the data logging arrays
 				maxFitness.push(population[0].NN.fitness)
-				var avgFitnessGen = 0
-				population.forEach(function (individual) {
-					avgFitnessGen += individual.NN.fitness
-				})
-				avgFitness.push(avgFitnessGen / population.length)
+				// var avgFitnessGen = 0
+				// population.forEach(function (individual) {
+				// 	avgFitnessGen += individual.NN.fitness
+				// })
+				// avgFitness.push(avgFitnessGen / population.length)
+				const avgFitnessGen = population.reduce((sum, individual) => sum + individual.NN.fitness, 0) / population.length
+				avgFitness.push(avgFitnessGen)
 
 				// Normalizes the fitnesses to show on a graph
 				var maxTotalFitness = 0
@@ -578,7 +583,7 @@ export default class Game {
 		this.renderTrack.fill("green");
 		this.renderTrack.rect(0, 0, this.p.width, this.p.height);
 		this.renderTrack.pop();
-		this.track.draw(this.p, this.renderTrack);
+		this.track.draw(this.p, this.p);
 
 		// Restore game state
 		generation = saveData.game.generation;

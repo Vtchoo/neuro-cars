@@ -216,7 +216,7 @@ export default class Track {
         this.addSpline(lastPieceEnd, control1, control2, end, width)
     }
 
-    draw(p: p5, renderTrack: p5.Graphics) {
+    draw(p: p5, renderTrack: p5) {
         renderTrack.background("green")
         renderTrack.push()
         renderTrack.strokeCap(p.SQUARE)
