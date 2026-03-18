@@ -178,6 +178,7 @@ export default class Game {
 	}
 
 	draw() {
+		this.p.background("green")
 		this.p.push()
 		this.p.translate(this.cameraOffsetX, this.cameraOffsetY)
 		switch (phase) {
@@ -209,68 +210,6 @@ export default class Game {
 				this.p.image(this.renderTrack, 0, 0)
 				break
 
-			case "generateTrack":
-
-				start = newVector(this.p.width / 2, this.p.height / 2)
-				direction = Math.PI
-
-				this.renderTrack.push()
-				this.renderTrack.fill("green")
-				this.renderTrack.rect(0, 0, this.p.width, this.p.height)
-
-				var a = .5 * this.p.width - trackWidth / 2
-				var b = .5 * this.p.height - trackWidth / 2
-
-				let startRadius = this.p.sqrt(this.p.noise(2 + this.p.cos(0), 2 + this.p.sin(0)))
-				start = newVector(
-					this.p.width / 2 + a * startRadius * this.p.cos(Math.PI / 2),
-					this.p.height / 2 + b * startRadius * this.p.sin(Math.PI / 2)
-				)
-
-				// Draws white line
-				for (let i = 0; i < 360; i++) {
-
-					let angle = i / 360 * Math.PI * 2
-					let nextAngle = (i + 1) / 360 * Math.PI * 2
-					let radius = this.p.sqrt(this.p.noise(2 + this.p.cos(angle), 2 + this.p.sin(angle)))
-					let nextRadius = this.p.sqrt(this.p.noise(2 + this.p.cos(nextAngle), 2 + this.p.sin(nextAngle)))
-
-					this.renderTrack.stroke("white")
-					this.renderTrack.strokeWeight(trackWidth + 2)
-					this.renderTrack.line(
-						this.p.width / 2 + a * radius * this.p.cos(angle + Math.PI / 2),
-						this.p.height / 2 + b * radius * this.p.sin(angle + Math.PI / 2),
-						this.p.width / 2 + a * nextRadius * this.p.cos(nextAngle + Math.PI / 2),
-						this.p.height / 2 + b * nextRadius * this.p.sin(nextAngle + Math.PI / 2)
-					)
-
-				}
-
-				// Draws asphalt
-				for (let i = 0; i < 360; i++) {
-
-					let angle = i / 360 * Math.PI * 2
-					let nextAngle = (i + 1) / 360 * Math.PI * 2
-					let radius = this.p.sqrt(this.p.noise(2 + this.p.cos(angle), 2 + this.p.sin(angle)))
-					let nextRadius = this.p.sqrt(this.p.noise(2 + this.p.cos(nextAngle), 2 + this.p.sin(nextAngle)))
-
-					this.renderTrack.stroke("black")
-					this.renderTrack.strokeWeight(trackWidth)
-					this.renderTrack.line(
-						this.p.width / 2 + a * radius * this.p.cos(angle + Math.PI / 2),
-						this.p.height / 2 + b * radius * this.p.sin(angle + Math.PI / 2),
-						this.p.width / 2 + a * nextRadius * this.p.cos(nextAngle + Math.PI / 2),
-						this.p.height / 2 + b * nextRadius * this.p.sin(nextAngle + Math.PI / 2)
-					)
-
-				}
-				this.renderTrack.pop()
-				this.p.image(this.renderTrack, 0, 0)
-
-				setTrack(this.renderTrack, this.trackMap, this.renderMap, this.p, resolution, this)
-				this.setPhase("setup")
-				break
-
 			case "buildTrack":
 
 				this.p.background("green")
@@ -296,16 +235,6 @@ export default class Game {
 				break
 
 			case "running":
-
-				// if (generation == 0) {
-				// 	frameRecord.push(this.p.frameRate())
-				// 	averageFrameRate = 0
-				// 	for (let h = 0; h < frameRecord.length; h++) {
-				// 		averageFrameRate += frameRecord[h]
-				// 	}
-				// 	averageFrameRate = averageFrameRate / frameRecord.length
-				// 	avgDeltaTime = 1 / averageFrameRate
-				// }
 
 				// Shows the track
 				this.p.image(this.renderTrack, 0, 0)
@@ -348,31 +277,7 @@ export default class Game {
 				}
 
 				// Draws the graph data
-				if (drawGraphs) {
-					if (maxFitness.length > 1) {
-						let maxWidth = this.p.width / 1.5
-						let interval = maxWidth / (maxFitness.length - 1)
-						let maxHeight = this.p.height / 3
-						for (let i = 0; i < maxFitness.length; i++) {
-							this.p.push()
-							this.p.stroke("blue")
-							this.p.line(
-								this.p.width - maxWidth + i * interval,
-								this.p.height - maxHeight * maxFitnessNormal[i],
-								this.p.width - maxWidth + (i + 1) * interval,
-								this.p.height - maxHeight * maxFitnessNormal[i + 1]
-							)
-							this.p.stroke("yellow")
-							this.p.line(
-								this.p.width - maxWidth + i * interval,
-								this.p.height - maxHeight * avgFitnessNormal[i],
-								this.p.width - maxWidth + (i + 1) * interval,
-								this.p.height - maxHeight * avgFitnessNormal[i + 1]
-							)
-							this.p.pop()
-						}
-					}
-				}
+
 
 
 				ticks++
@@ -383,6 +288,9 @@ export default class Game {
 				break
 			case "breeding":
 
+				// Shows the track
+				this.p.image(this.renderTrack, 0, 0)
+				
 				// Sort the population by fitness
 				population.sort(function (a, b) { return b.NN.fitness - a.NN.fitness })
 
@@ -435,6 +343,9 @@ export default class Game {
 		}
 
 		this.p.pop()
+
+		// Draw UI overlay (not affected by camera transform)
+		this.drawUI()
 	}
 
 	mouseClicked() {
@@ -462,10 +373,7 @@ export default class Game {
 
 				break
 		}
-		this.p.pop()
 
-		// Draw UI overlay (not affected by camera transform)
-		this.drawUI()
 	}
 
 	private drawUI() {
@@ -485,6 +393,32 @@ export default class Game {
 		this.p.text("Ctrl+S - Save game", 20, 110)
 		this.p.text("Ctrl+L - Load game", 20, 125)
 		this.p.text(`Generation: ${generation}`, 20, 140)
+
+		if (drawGraphs) {
+			if (maxFitness.length > 1) {
+				let maxWidth = this.p.width / 1.5
+				let interval = maxWidth / (maxFitness.length - 1)
+				let maxHeight = this.p.height / 3
+				for (let i = 0; i < maxFitness.length; i++) {
+					this.p.push()
+					this.p.stroke("blue")
+					this.p.line(
+						this.p.width - maxWidth + i * interval,
+						this.p.height - maxHeight * maxFitnessNormal[i],
+						this.p.width - maxWidth + (i + 1) * interval,
+						this.p.height - maxHeight * maxFitnessNormal[i + 1]
+					)
+					this.p.stroke("yellow")
+					this.p.line(
+						this.p.width - maxWidth + i * interval,
+						this.p.height - maxHeight * avgFitnessNormal[i],
+						this.p.width - maxWidth + (i + 1) * interval,
+						this.p.height - maxHeight * avgFitnessNormal[i + 1]
+					)
+					this.p.pop()
+				}
+			}
+		}
 	}
 
 	private previousMouseX = 0
