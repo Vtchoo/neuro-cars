@@ -109,6 +109,8 @@ export default class Game {
 
 	track = new Track()
 
+	followBestCar = false
+
 	constructor() {
 		this.p = new p5((p: p5) => {
 
@@ -312,9 +314,19 @@ export default class Game {
 					individual.NN.addFitness(individual.speed)
 				})
 
+				// Follow best car camera logic
+				if (this.followBestCar && population.length > 0 && !playerDrive) {
+					const bestCar = population[0] // Population is sorted during breeding, so [0] is the best
+					// Center camera on the best car
+					this.cameraOffsetX = this.p.width / 2 - bestCar.pos.x
+					this.cameraOffsetY = this.p.height / 2 - bestCar.pos.y
+				}
+
 				// Allows the player to drive a car
-				if (playerDrive == true) {
+				if (playerDrive) {
 					getUserInput()
+					this.cameraOffsetX = this.p.width / 2 - player.pos.x
+					this.cameraOffsetY = this.p.height / 2 - player.pos.y
 					// player.update()
 					// player.show()
 				}
@@ -480,6 +492,35 @@ export default class Game {
 		player.drive(playerinput)
 
 	}
+
+	keyPressed() {
+		switch (this.p.key) {
+			case 'f':
+			case 'F':
+				// Toggle follow best car
+				this.followBestCar = !this.followBestCar
+				console.log(`Follow best car: ${this.followBestCar ? 'ON' : 'OFF'}`)
+				break
+			case 's':
+			case 'S':
+				// Toggle show inputs
+				showInputs = !showInputs
+				break
+			case 'm':
+			case 'M':
+				// Toggle show map
+				showMap = !showMap
+				break
+			case 'g':
+			case 'G':
+				// Toggle show graphs
+				drawGraphs = !drawGraphs
+				break
+		}
+	}
 }
 
 window.game = new Game()
+window.letPlayerDrive = function (letPlayerDrive = true) {
+	playerDrive = letPlayerDrive
+}

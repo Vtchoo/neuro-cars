@@ -280,5 +280,10 @@ export function setTrack(renderTrack: p5.Graphics, trackMap: number[][], renderM
     showGraph.position(20 + (buttonWidth + 5) * 3, p.height - buttonHeight - 20)
     showGraph.mousePressed(() => { drawGraphs = !drawGraphs })
 
+    const followBest = p.createButton("Follow best car")
+    followBest.size(buttonWidth, buttonHeight)
+    followBest.position(20 + (buttonWidth + 5) * 4, p.height - buttonHeight - 20)
+    followBest.mousePressed(() => { game.followBestCar = !game.followBestCar })
+
     game.setPhase("setup")
 }
