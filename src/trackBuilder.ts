@@ -98,20 +98,20 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
     })
 
 
-    buttons[10] = p.createButton("Show Grid")
-    buttons[10].size(2 * buttonWidth + 5, buttonHeight)
-    buttons[10].position(20, 20 + 7 * (buttonHeight + 5))
-    buttons[10].mousePressed(() => { showGrid = !showGrid })
+    buttons[11] = p.createButton("Show Grid")
+    buttons[11].size(2 * buttonWidth + 5, buttonHeight)
+    buttons[11].position(20, 20 + 7 * (buttonHeight + 5))
+    buttons[11].mousePressed(() => { showGrid = !showGrid })
 
-    buttons[11] = p.createButton("Reset")
-    buttons[11].size(buttonWidth, buttonHeight)
-    buttons[11].position(20, p.height - buttonHeight - 20)
-    buttons[11].mousePressed(resetTrack)
-
-    buttons[12] = p.createButton("Done!")
+    buttons[12] = p.createButton("Reset")
     buttons[12].size(buttonWidth, buttonHeight)
-    buttons[12].position(20 + 1 * (buttonWidth + 5), p.height - buttonHeight - 20)
-    buttons[12].mousePressed(() => setTrack(renderTrack, trackMap, renderMap, p, resolution, game))
+    buttons[12].position(20, p.height - buttonHeight - 20)
+    buttons[12].mousePressed(resetTrack)
+
+    buttons[13] = p.createButton("Done!")
+    buttons[13].size(buttonWidth, buttonHeight)
+    buttons[13].position(20 + 1 * (buttonWidth + 5), p.height - buttonHeight - 20)
+    buttons[13].mousePressed(() => setTrack(renderTrack, trackMap, renderMap, p, resolution, game))
 }
 
 
