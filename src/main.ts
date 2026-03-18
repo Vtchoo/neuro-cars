@@ -21,7 +21,7 @@ let phase = "setStart"
 const trackWidth = 50
 
 // Graphic overlays
-let showGrid = false // Shows grid when building the track
+let showGrid = true // Shows grid when building the track
 let showMap = false // Shows collision map during runtime
 let showInputs = false
 const resolution = 3 // Get 1 out of [resolution] pixels to create the track collision map

@@ -228,15 +228,15 @@ export default class Track {
                     const radius = Math.sqrt((piece.center.x - piece.start.x) ** 2 + (piece.center.y - piece.start.y) ** 2)
                     const angleStart = Math.atan2(piece.start.y - piece.center.y, piece.start.x - piece.center.x)
                     const angleEnd = Math.atan2(piece.end.y - piece.center.y, piece.end.x - piece.center.x)
-                    renderTrack.push()
                     // in p5, arcs are alays drawn clockwise, so we need to swap the start and end angles if the piece is counterclockwise
                     const actualAngleStart = piece.clockwise ? angleStart : angleEnd
                     const actualAngleEnd = piece.clockwise ? angleEnd : angleStart
-                    renderTrack.arc(piece.center.x, piece.center.y, radius * 2, radius * 2, actualAngleStart, actualAngleEnd, "open")
-                    // renderTrack.strokeWeight(1)
-                    // renderTrack.stroke("white")
-                    // renderTrack.arc(piece.center.x, piece.center.y, (radius - piece.width) * 2, (radius - piece.width) * 2, angleStart, angleEnd, piece.clockwise ? "open" : "open")
-                    // renderTrack.arc(piece.center.x, piece.center.y, (radius + piece.width) * 2, (radius + piece.width) * 2, angleStart, angleEnd, piece.clockwise ? "open" : "open")
+                    renderTrack.push()
+                    renderTrack.arc(piece.center.x, piece.center.y, radius * 2, radius * 2, actualAngleStart, actualAngleEnd)
+                    renderTrack.strokeWeight(1)
+                    renderTrack.stroke("white")
+                    renderTrack.arc(piece.center.x, piece.center.y, (radius - piece.width / 2) * 2, (radius - piece.width / 2) * 2, actualAngleStart, actualAngleEnd, "open")
+                    renderTrack.arc(piece.center.x, piece.center.y, (radius + piece.width / 2) * 2, (radius + piece.width / 2) * 2, actualAngleStart, actualAngleEnd, "open")
                     renderTrack.pop()
                     break
                 case TrackPieceType.Spline:

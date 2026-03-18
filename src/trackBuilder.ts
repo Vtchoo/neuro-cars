@@ -14,7 +14,18 @@ let currentDirection: number
 
 let buttons: p5.Element[]
 
-let showGrid = false
+let showGrid = true
+
+const turnButtons = [
+    { label: 'Large Left', radius: 3.5, direction: 'left' },
+    { label: 'Large Right', radius: 3.5, direction: 'right' },
+    { label: 'Big Left', radius: 2.5, direction: 'left' },
+    { label: 'Big Right', radius: 2.5, direction: 'right' },
+    { label: 'Medium Left', radius: 1.5, direction: 'left' },
+    { label: 'Medium Right', radius: 1.5, direction: 'right' },
+    { label: 'Small Left', radius: 0.5, direction: 'left' },
+    { label: 'Small Right', radius: 0.5, direction: 'right' },
+]
 
 export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirection: number, trackWidth: number, renderTrack: p5.Graphics, trackMap: number[][], renderMap: p5.Graphics, resolution: number, game: Game, track: Track) {
 
@@ -44,14 +55,22 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
     for (let i = 0; i < 4; i++) {
         for (let j = 0; j < 2; j++) {
 
-            let dir
-            if (j == 0) { dir = "left" } else { dir = "right" }
+            // let dir
+            // if (j == 0) { dir = "left" } else { dir = "right" }
 
-            buttons[i * 2 + j].size(buttonWidth, buttonHeight)
-            buttons[i * 2 + j].position(20 + (buttonWidth + 5) * j, 20 + (buttonHeight + 5) * i)
-            buttons[i * 2 + j].mousePressed(() => {
-                // buildTrack(6 - 2 * i, dir, trackWidth, currentDirection, renderTrack, p)
-                track.appendArc((6 - 2 * i) * trackWidth, Math.PI / 4, dir === "right", trackWidth)
+            // buttons[i * 2 + j].size(buttonWidth, buttonHeight)
+            // buttons[i * 2 + j].position(20 + (buttonWidth + 5) * j, 20 + (buttonHeight + 5) * i)
+            // buttons[i * 2 + j].mousePressed(() => {
+            //     // buildTrack(6 - 2 * i, dir, trackWidth, currentDirection, renderTrack, p)
+            //     track.appendArc((6 - 2 * i) * trackWidth, Math.PI / 4, dir === "right", trackWidth)
+            // })
+
+            const button = buttons[i * 2 + j]
+            const turnInfo = turnButtons[i * 2 + j]
+            button.size(buttonWidth, buttonHeight)
+            button.position(20 + (buttonWidth + 5) * j, 20 + (buttonHeight + 5) * i)
+            button.mousePressed(() => {
+                track.appendArc(turnInfo.radius * trackWidth, Math.PI / 4, turnInfo.direction === "right", trackWidth)
             })
         }
     }
