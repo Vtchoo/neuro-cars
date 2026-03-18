@@ -1,83 +1,92 @@
-export type Vec2 = { x: number; y: number };
+import { Vector } from "@/Vector";
+
 
 export type ClosestPointResult = {
-    point: Vec2;
+    point: Vector;
+    tangent: Vector;      // normalized track-forward direction at closest point
     distance: number;
     distanceSq: number;
-    t: number; // segment-local parameter, usually in [0, 1]
+    t: number;          // local segment parameter [0,1]
 };
 
 export type LineSegment = {
     kind: "line";
-    start: Vec2;
-    end: Vec2;
+    start: Vector;
+    end: Vector;
 };
 
 export type ArcSegment = {
     kind: "arc";
-    start: Vec2;
-    end: Vec2;
-    center: Vec2;
+    start: Vector;
+    end: Vector;
+    center: Vector;
     clockwise: boolean;
 };
 
 export type BezierSegment = {
     kind: "bezier";
-    p0: Vec2;
-    p1: Vec2;
-    p2: Vec2;
-    p3: Vec2;
+    p0: Vector;
+    p1: Vector;
+    p2: Vector;
+    p3: Vector;
 };
 
-type TrackSegment = LineSegment | ArcSegment | BezierSegment;
+export type TrackSegment = LineSegment | ArcSegment | BezierSegment;
 
 type ClosestPointOnTrackResult = ClosestPointResult & {
     segmentIndex: number;
 };
 
-export function add(a: Vec2, b: Vec2): Vec2 {
-    return { x: a.x + b.x, y: a.y + b.y };
+type TrackQueryResult = ClosestPointResult & {
+    segmentIndex: number;
+    lateralOffset: number; // right positive, left negative
+    headingAngle: number;  // signed angle from track tangent to car heading, in [-PI, PI]
+};
+
+export function add(a: Vector, b: Vector): Vector {
+    return new Vector(a.x + b.x, a.y + b.y);
 }
 
-export function sub(a: Vec2, b: Vec2): Vec2 {
-    return { x: a.x - b.x, y: a.y - b.y };
+export function sub(a: Vector, b: Vector): Vector {
+    return new Vector(a.x - b.x, a.y - b.y);
 }
 
-export function mul(v: Vec2, s: number): Vec2 {
-    return { x: v.x * s, y: v.y * s };
+export function mul(v: Vector, s: number): Vector {
+    // return { x: v.x * s, y: v.y * s };
+    return new Vector(v.x * s, v.y * s);
 }
 
-export function dot(a: Vec2, b: Vec2): number {
+export function dot(a: Vector, b: Vector): number {
     return a.x * b.x + a.y * b.y;
 }
 
-export function cross(a: Vec2, b: Vec2): number {
+export function cross(a: Vector, b: Vector): number {
     return a.x * b.y - a.y * b.x;
 }
 
-export function lengthSq(v: Vec2): number {
+export function lengthSq(v: Vector): number {
     return dot(v, v);
 }
 
-export function length(v: Vec2): number {
+export function length(v: Vector): number {
     return Math.sqrt(lengthSq(v));
 }
 
-export function normalize(v: Vec2): Vec2 {
+export function normalize(v: Vector): Vector {
     const len = length(v);
-    if (len === 0) return { x: 0, y: 0 };
-    return { x: v.x / len, y: v.y / len };
+    if (len === 0) return new Vector(0, 0);
+    return new Vector(v.x / len, v.y / len);
 }
 
 export function clamp(v: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, v));
 }
 
-export function distanceSq(a: Vec2, b: Vec2): number {
+export function distanceSq(a: Vector, b: Vector): number {
     return lengthSq(sub(a, b));
 }
 
-export function angleOf(v: Vec2): number {
+export function angleOf(v: Vector): number {
     return Math.atan2(v.y, v.x);
 }
 
@@ -104,16 +113,18 @@ export function signedArcDelta(from: number, to: number, ccw: boolean): number {
     return d;
 }
 
-export function closestPointOnLineSegment(seg: LineSegment, q: Vec2): ClosestPointResult {
+export function closestPointOnLineSegment(seg: LineSegment, q: Vector): ClosestPointResult {
     const a = seg.start;
     const b = seg.end;
     const ab = sub(b, a);
     const abLenSq = lengthSq(ab);
 
-    if (abLenSq === 0) {
+    if (abLenSq < 1e-12) {
+        const tangent = new Vector(1, 0);
         const d2 = distanceSq(q, a);
         return {
             point: a,
+            tangent,
             distanceSq: d2,
             distance: Math.sqrt(d2),
             t: 0,
@@ -122,17 +133,19 @@ export function closestPointOnLineSegment(seg: LineSegment, q: Vec2): ClosestPoi
 
     const t = clamp(dot(sub(q, a), ab) / abLenSq, 0, 1);
     const point = add(a, mul(ab, t));
+    const tangent = normalize(ab);
     const d2 = distanceSq(q, point);
 
     return {
         point,
+        tangent,
         distanceSq: d2,
         distance: Math.sqrt(d2),
         t,
     };
 }
 
-export function closestPointOnArcSegment(seg: ArcSegment, q: Vec2): ClosestPointResult {
+export function closestPointOnArcSegment(seg: ArcSegment, q: Vector): ClosestPointResult {
     const { start, end, center } = seg;
 
     const vs = sub(start, center);
@@ -142,12 +155,11 @@ export function closestPointOnArcSegment(seg: ArcSegment, q: Vec2): ClosestPoint
     const rs = length(vs);
     const re = length(ve);
 
-    if (rs === 0 || re === 0) {
+    if (rs < 1e-12 || re < 1e-12) {
         throw new Error("Arc start/end must not coincide with center.");
     }
 
-    // Validate roughly same radius
-    const radius = (rs + re) * 0.5;
+    const radius = 0.5 * (rs + re);
     if (Math.abs(rs - re) > 1e-6 * Math.max(1, radius)) {
         throw new Error("Arc start and end are not on the same circle.");
     }
@@ -170,7 +182,7 @@ export function closestPointOnArcSegment(seg: ArcSegment, q: Vec2): ClosestPoint
             ? qDelta >= 0 && qDelta <= totalDelta
             : qDelta <= 0 && qDelta >= totalDelta;
 
-    let point: Vec2;
+    let point: Vector;
     let t: number;
 
     if (lengthSq(vq) === 0) {
@@ -201,12 +213,81 @@ export function closestPointOnArcSegment(seg: ArcSegment, q: Vec2): ClosestPoint
         }
     }
 
+    // Forward tangent follows arc direction.
+    const radial = normalize(sub(point, center));
+    const tangent = seg.clockwise
+        ? new Vector(radial.y, -radial.x)   // rotate radial by -90°
+        : new Vector(-radial.y, radial.x);  // rotate radial by +90°
+
     const d2 = distanceSq(q, point);
 
     return {
         point,
+        tangent: normalize(tangent),
         distanceSq: d2,
         distance: Math.sqrt(d2),
         t: clamp(t, 0, 1),
+    };
+}
+
+/**
+ * Right normal for a forward tangent.
+ * If tangent points forward, this points to track-right.
+ */
+function rightNormalFromTangent(tangent: Vector): Vector {
+    return new Vector(tangent.y, -tangent.x);
+}
+
+function carDirectionFromAngle(angle: number): Vector {
+    return new Vector(Math.cos(angle), Math.sin(angle));
+}
+
+function closestPointOnSegment(seg: TrackSegment, q: Vector): ClosestPointResult {
+    switch (seg.kind) {
+        case "line":
+            return closestPointOnLineSegment(seg, q);
+        case "arc":
+            return closestPointOnArcSegment(seg, q);
+        default:
+            throw new Error("Unsupported segment kind: " + (seg as any).kind);
+        // case "bezier":
+        //   return closestPointOnBezier(seg, q);
+    }
+}
+
+export function queryTrack(
+    track: TrackSegment[],
+    carPos: Vector,
+    carAngle: number
+): TrackQueryResult {
+    if (track.length === 0) {
+        throw new Error("Track must contain at least one segment.");
+    }
+
+    let best: (ClosestPointResult & { segmentIndex: number }) | null = null;
+
+    for (let i = 0; i < track.length; i++) {
+        const r = closestPointOnSegment(track[i], carPos);
+        if (!best || r.distanceSq < best.distanceSq) {
+            best = { ...r, segmentIndex: i };
+        }
+    }
+
+    const tangent = normalize(best!.tangent);
+    const delta = sub(carPos, best!.point);
+
+    // Right-positive lateral offset
+    const right = rightNormalFromTangent(tangent);
+    const lateralOffset = dot(delta, right);
+
+    // Signed heading angle from track tangent to car heading, in [-PI, PI]
+    const trackAngle = angleOf(tangent);
+    const headingAngle = wrapAngle(carAngle - trackAngle);
+
+    return {
+        ...best!,
+        tangent,
+        lateralOffset,
+        headingAngle,
     };
 }

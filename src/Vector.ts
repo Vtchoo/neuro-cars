@@ -36,6 +36,10 @@ export class Vector {
             this.y = this.y / length
         }
     }
+
+    static sub(a: Vector, b: Vector) {
+        return new Vector(a.x - b.x, a.y - b.y)
+    }
 }
 
 export function newVector(a: number, b: number) {
