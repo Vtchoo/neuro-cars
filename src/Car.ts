@@ -196,8 +196,10 @@ export default class Car {
             p.circle(point.x, point.y, 5)
         }
 
+        const normalizationFactor = 1 + maxLookaheadDistance
+
         const finalInputs = [
-            ...relativeLookAheadPoints.flatMap(point => [point.x, point.y]),
+            ...relativeLookAheadPoints.flatMap(point => [point.x / normalizationFactor, point.y / normalizationFactor]),
             this.speed,
             currentCarPositionInTrack.headingAngle,
             currentCarPositionInTrack.lateralOffset,
