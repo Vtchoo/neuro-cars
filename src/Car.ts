@@ -9,7 +9,7 @@ let avgDeltaTime = 0.016807703080427727
 // Neural net settings
 const nnLayers = 1
 const nnNeurons = 10
-const nnInputs = 8
+const nnInputs = 23
 const nnOutputs = 2
 const nnRange = 4
 const nnMutationRate = 0.01
@@ -24,7 +24,7 @@ export default class Car {
         return "rgb(" + this.paintRGB[0] + "," + this.paintRGB[1] + "," + this.paintRGB[2] + ")"
     }
 
-    private inputFormat: InputFormat = "raycast"
+    private inputFormat: InputFormat = "lookahead"
 
     // Car movement
     pos: Vector
@@ -74,8 +74,6 @@ export default class Car {
 
     // Gets sensors' data
     getInputs(trackMap: number[][], showInputs: boolean, p: p5, resolution: number, track: Track) {
-        this.getLookaheadInputs(showInputs, p, track)
-
         switch (this.inputFormat) {
             case "raycast":
                 return this.getRaycastInputs(showInputs, p, track)
@@ -184,11 +182,28 @@ export default class Car {
             lookAheadPoints.push(pointOnTrack)
         }
 
+        const relativeLookAheadPoints = lookAheadPoints.map(point => {
+            const relativePosition = Vector.sub(point, currentCarPositionInTrack.point)
+            // Rotate relative position to be relative to tangent
+            const tangent = currentCarPositionInTrack.tangent
+            const rotatedX = relativePosition.x * tangent.x + relativePosition.y * tangent.y
+            const rotatedY = -relativePosition.x * tangent.y + relativePosition.y * tangent.x
+            return new Vector(rotatedX, rotatedY)
+        })
+
         for (let i = 0; i < lookAheadPoints.length; i++) {
             const point = lookAheadPoints[i]
             p.circle(point.x, point.y, 5)
         }
 
+        const finalInputs = [
+            ...relativeLookAheadPoints.flatMap(point => [point.x, point.y]),
+            this.speed,
+            currentCarPositionInTrack.headingAngle,
+            currentCarPositionInTrack.lateralOffset,
+        ]
+
+        return finalInputs
     }
 }
 
