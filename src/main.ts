@@ -76,7 +76,7 @@ export default class Game {
 	// Graphic overlays
 	private showGrid = true // Shows grid when building the track
 	private showMap = false // Shows collision map during runtime
-	private showInputs = false
+	private showInputs: "none" | "all" | "best" = "none" // Shows the sensor inputs of the cars during runtime. "all" shows for all cars, "best" only for the best car, and "none" for none.
 	private drawGraphs = false
 	private resolution = 3 // Get 1 out of [resolution] pixels to create the track collision map
 
@@ -85,9 +85,6 @@ export default class Game {
 	}
 	setShowMap(show: boolean) {
 		this.showMap = show
-	}
-	setShowInputs(show: boolean) {
-		this.showInputs = show
 	}
 	setDrawGraphs(show: boolean) {
 		this.drawGraphs = show
@@ -100,7 +97,10 @@ export default class Game {
 		this.showMap = !this.showMap
 	}
 	toggleShowInputs() {
-		this.showInputs = !this.showInputs
+		const options = ["none", "all", "best"] as const
+		const currentIndex = options.indexOf(this.showInputs)
+		const nextIndex = (currentIndex + 1) % options.length
+		this.showInputs = options[nextIndex]
 	}
 	toggleDrawGraphs() {
 		this.drawGraphs = !this.drawGraphs
@@ -251,13 +251,26 @@ export default class Game {
 				// Updates each individual
 				this.population.forEach((individual) => {
 					// if (shouldMakeDecision) {
-					const inputs = individual.getInputs(this.trackMap, this.showInputs, this.p, this.resolution, this.track)
+					const inputs = individual.getInputs(this.trackMap, false, this.p, this.resolution, this.track)
 					individual.drive(individual.NN.output(inputs))
 					// }
 					individual.update(this.trackMap, this.resolution, this.track)
-					individual.show(this.p, carSprite)
 					individual.NN.addFitness(individual.speed > 0 ? individual.speed : 10 * individual.speed)
 				})
+
+				switch (this.showInputs) {
+					case "all":
+						this.population.forEach(car => car.showInputs(this.p))
+						break
+					case "best":
+						if (this.population.length > 0)
+							this.population[0].showInputs(this.p)
+						break
+				}
+				
+				for (const car of this.population) {
+					car.show(this.p, carSprite)
+				}
 
 				// Follow best car camera logic
 				if (this.followBestCar && this.population.length > 0 && !playerDrive) {

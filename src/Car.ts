@@ -25,7 +25,9 @@ export default class Car {
     }
 
     private inputFormat: InputFormat = "lookahead"
-
+    
+    generation = 0
+    
     // Car movement
     pos: Vector
     speed = 0
@@ -34,7 +36,9 @@ export default class Car {
 
     // The brain inside the car
     NN = new NeuralNet(nnLayers, nnNeurons, nnInputs, nnOutputs, nnRange, nnMutationRate, nnActivation)
-    generation = 0
+
+    lastCurrentCarPositionInTrack: Vector | null = null
+    lastLookAheadPoints: Vector[] | null = null
 
     constructor(startX: number, startY: number, startDir: number) {
         this.pos = newVector(startX, startY)
@@ -51,6 +55,18 @@ export default class Car {
         this.pos.add(
             this.speed * Math.cos(this.direction) * avgDeltaTime / (1 / 30),
             this.speed * Math.sin(this.direction) * avgDeltaTime / (1 / 30))
+    }
+
+    showInputs(p: p5) {
+        if (this.lastCurrentCarPositionInTrack)
+            p.circle(this.lastCurrentCarPositionInTrack.x, this.lastCurrentCarPositionInTrack.y, 5)
+
+        if (this.lastLookAheadPoints) {
+            for (let i = 0; i < this.lastLookAheadPoints.length; i++) {
+                const point = this.lastLookAheadPoints[i]
+                p.circle(point.x, point.y, 5)
+            }
+        }
     }
 
     // Renders car on canvas
@@ -125,7 +141,7 @@ export default class Car {
         const maxLookaheadDistance = singleFrameDistance * 60
 
         const currentCarPositionInTrack = queryTrack(track.analyticPieces.map(convertToTrackSegment), this.pos, this.direction)
-        p.circle(currentCarPositionInTrack.point.x, currentCarPositionInTrack.point.y, 5)
+        this.lastCurrentCarPositionInTrack = currentCarPositionInTrack.point
 
         const lookAheadPoints: Vector[] = []
         const distanceBetweenPoints = maxLookaheadDistance / totalqueryPoints
@@ -182,6 +198,8 @@ export default class Car {
             lookAheadPoints.push(pointOnTrack)
         }
 
+        this.lastLookAheadPoints = lookAheadPoints
+
         const relativeLookAheadPoints = lookAheadPoints.map(point => {
             const relativePosition = Vector.sub(point, currentCarPositionInTrack.point)
             // Rotate relative position to be relative to tangent
@@ -190,11 +208,6 @@ export default class Car {
             const rotatedY = -relativePosition.x * tangent.y + relativePosition.y * tangent.x
             return new Vector(rotatedX, rotatedY)
         })
-
-        for (let i = 0; i < lookAheadPoints.length; i++) {
-            const point = lookAheadPoints[i]
-            p.circle(point.x, point.y, 5)
-        }
 
         const normalizationFactor = 1 + maxLookaheadDistance
 
