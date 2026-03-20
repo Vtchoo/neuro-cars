@@ -178,6 +178,27 @@ export default class Track {
         }
     }
 
+    static getTrackPieceStartDirection(piece: TrackPiece): number {
+        switch (piece.type) {
+            case TrackPieceType.Straight:
+                return Math.atan2(piece.end.y - piece.start.y, piece.end.x - piece.start.x)
+            case TrackPieceType.Arc:
+                // For arcs, the direction at the start point is tangent to the circle at the start point
+                const radiusVector = new Vector(piece.start.x - piece.center.x, piece.start.y - piece.center.y)
+                const tangentVector = new Vector(-radiusVector.y, radiusVector.x) // rotate radius vector by 90 degrees to get tangent vector
+                if (!piece.clockwise) {
+                    tangentVector.x *= -1
+                    tangentVector.y *= -1
+                }
+                return Math.atan2(tangentVector.y, tangentVector.x)
+            case TrackPieceType.Spline:
+                // For splines, we can approximate the direction at the start using the tangent at the start point
+                const dx = piece.control1.x - piece.start.x
+                const dy = piece.control1.y - piece.start.y
+                return Math.atan2(dy, dx)
+        }
+    }
+
     appendStraight(length: number, width: number) {
         const lastPieceEnd = this.getLastPieceEnd()
         if (!lastPieceEnd) {

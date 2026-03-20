@@ -110,6 +110,12 @@ export default class Game {
 	generation = 0
 	maxTicks = 500
 
+	/**
+	 * Cycles through track's track pieces as starting points for the race, instead of always starting at the same point. This makes the AI more robust and able to handle different parts of the track.
+	 */
+	cycleStartPoint = false
+	startPointIndex = 0
+
 	incrementMaxTicks(increment: number) {
 		this.maxTicks += increment
 	}
@@ -250,7 +256,7 @@ export default class Game {
 					// }
 					individual.update(this.trackMap, this.resolution, this.track)
 					individual.show(this.p, carSprite)
-					individual.NN.addFitness(individual.speed)
+					individual.NN.addFitness(individual.speed > 0 ? individual.speed : 10 * individual.speed)
 				})
 
 				// Follow best car camera logic
@@ -318,11 +324,21 @@ export default class Game {
 					this.population[individuals - 1 - i].generation = this.generation + 1
 				}
 
+				let startingPoint = this.start
+				let startingDirection = this.direction
+				if (this.cycleStartPoint) {
+					// Cycles through track pieces as starting points for the next generation, instead of always starting at the same point. This makes the AI more robust and able to handle different parts of the track.
+					this.startPointIndex = (this.startPointIndex + 1) % this.track.pieces.length
+					const newStartPiece = this.track.pieces[this.startPointIndex]
+					startingPoint = newStartPiece.start
+					startingDirection = Track.getTrackPieceStartDirection(newStartPiece)
+				}
+
 				// Resets every individual's car
 				for (const individual of this.population) {
-					individual.pos = new Vector(this.start.x + (Math.random() - 0.5) * trackWidth / 2, this.start.y + (Math.random() - 0.5) * trackWidth / 2)
+					individual.pos = new Vector(startingPoint.x + (Math.random() - 0.5) * trackWidth / 2, startingPoint.y + (Math.random() - 0.5) * trackWidth / 2)
 					individual.speed = 0
-					individual.direction = this.direction
+					individual.direction = startingDirection
 					individual.acceleration = 0
 					individual.NN.resetFitness()
 				}
