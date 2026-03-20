@@ -113,7 +113,7 @@ export default class Game {
 	/**
 	 * Cycles through track's track pieces as starting points for the race, instead of always starting at the same point. This makes the AI more robust and able to handle different parts of the track.
 	 */
-	cycleStartPoint = false
+	cycleStartPoint = true
 	startPointIndex = 0
 
 	incrementMaxTicks(increment: number) {

@@ -161,7 +161,7 @@ export default class Car {
                         const finalAngle = (Math.atan2(segment.end.y - center.y, segment.end.x - center.x) + 2 * Math.PI) % (2 * Math.PI)
                         const startAngle = (Math.atan2(pointOnTrack.y - center.y, pointOnTrack.x - center.x) + 2 * Math.PI) % (2 * Math.PI)
 
-                        const availableAngleInCurrentSegment = finalAngle - startAngle
+                        const availableAngleInCurrentSegment = segment.clockwise ? finalAngle - startAngle : startAngle - finalAngle
                         const availableDistanceInCurrentSegment = Math.abs(availableAngleInCurrentSegment) * radius
 
                         if (remainingDistance <= availableDistanceInCurrentSegment) {
