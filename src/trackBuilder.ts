@@ -106,105 +106,62 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
     buttons[12] = p.createButton("Reset")
     buttons[12].size(buttonWidth, buttonHeight)
     buttons[12].position(20, p.height - buttonHeight - 20)
-    buttons[12].mousePressed(resetTrack)
+    buttons[12].mousePressed(() => resetTrack(game))
 
     buttons[13] = p.createButton("Done!")
     buttons[13].size(buttonWidth, buttonHeight)
     buttons[13].position(20 + 1 * (buttonWidth + 5), p.height - buttonHeight - 20)
     buttons[13].mousePressed(() => setTrack(renderTrack, trackMap, renderMap, p, resolution, game))
+
+    buttons[14] = p.createButton("Load Track")
+    buttons[14].size(buttonWidth, buttonHeight)
+    buttons[14].position(20 + 2 * (buttonWidth + 5), p.height - buttonHeight - 20)
+    buttons[14].mousePressed(() => loadTrackInEditor(p, game))
 }
 
-
-function buildTrack(radius: number, turn: string, trackWidth: number, currDir: number, renderTrack: p5.Graphics, p: p5) {
-    return
-    renderTrack.push()
-    renderTrack.strokeCap(p.SQUARE)
-    renderTrack.noFill()
-    renderTrack.strokeWeight(trackWidth)
-    renderTrack.stroke("black")
-
-    var pos = newVector(currentPosition.x, currentPosition.y)
-
-    var advanceX
-    var advanceY
-
-    if (turn != "straight") {
-
-        var avgRadius = trackWidth * (1 + radius)
-        let angleStart
-        let angleEnd
-
-
-
-        if (turn == "left") {
-            angleStart = currDir + Math.PI / 4 - .01
-            angleEnd = currDir + Math.PI / 2 + .01
-
-            advanceX = avgRadius * Math.cos(Math.PI / 4 / 2) * Math.sin(Math.PI / 4 / 2)
-            advanceY = avgRadius * Math.sin(Math.PI / 4 / 2) * Math.sin(Math.PI / 4 / 2)
-
-            currentPosition.x += +advanceX * Math.cos(currentDirection) + advanceY * Math.sin(currentDirection)
-            currentPosition.y += +advanceX * Math.sin(currentDirection) - advanceY * Math.cos(currentDirection)
-            currentDirection -= Math.PI / 4
-
-        } else if (turn == "right") {
-            avgRadius *= -1
-            angleStart = currDir - Math.PI / 2 - .01
-            angleEnd = currDir - Math.PI / 4 + .01
-
-            advanceX = avgRadius * Math.cos(Math.PI / 4 / 2) * Math.sin(Math.PI / 4 / 2)
-            advanceY = avgRadius * Math.sin(Math.PI / 4 / 2) * Math.sin(Math.PI / 4 / 2)
-
-            currentPosition.x += -advanceX * Math.cos(currentDirection) + advanceY * Math.sin(currentDirection)
-            currentPosition.y += -advanceX * Math.sin(currentDirection) - advanceY * Math.cos(currentDirection)
-            currentDirection += Math.PI / 4
-        }
-
-        renderTrack.arc(pos.x + Math.sin(currDir) * avgRadius / 2, pos.y - Math.cos(currDir) * avgRadius / 2, avgRadius, avgRadius, angleStart, angleEnd)
-        renderTrack.strokeWeight(1)
-        renderTrack.stroke("white")
-        renderTrack.arc(pos.x + Math.sin(currDir) * avgRadius / 2, pos.y - Math.cos(currDir) * avgRadius / 2, avgRadius - trackWidth, avgRadius - trackWidth, angleStart, angleEnd)
-        renderTrack.arc(pos.x + Math.sin(currDir) * avgRadius / 2, pos.y - Math.cos(currDir) * avgRadius / 2, avgRadius + trackWidth, avgRadius + trackWidth, angleStart, angleEnd)
-
-    } else {
-
-        advanceX = trackWidth * radius * Math.cos(currentDirection)
-        advanceY = trackWidth * radius * Math.sin(currentDirection)
-        renderTrack.line(currentPosition.x,
-            currentPosition.y,
-            currentPosition.x + advanceX * 1.01,
-            currentPosition.y + advanceY * 1.01)
-
-        renderTrack.strokeWeight(1)
-        renderTrack.stroke("white")
-        renderTrack.line(
-            currentPosition.x - trackWidth * Math.sin(currDir) / 2,
-            currentPosition.y + trackWidth * Math.cos(currDir) / 2,
-            currentPosition.x + trackWidth * radius * Math.cos(currDir) - trackWidth * Math.sin(currDir) / 2,
-            currentPosition.y + trackWidth * radius * Math.sin(currDir) + trackWidth * Math.cos(currDir) / 2)
-        renderTrack.line(
-            currentPosition.x + trackWidth * Math.sin(currDir) / 2,
-            currentPosition.y - trackWidth * Math.cos(currDir) / 2,
-            currentPosition.x + trackWidth * radius * Math.cos(currDir) + trackWidth * Math.sin(currDir) / 2,
-            currentPosition.y + trackWidth * radius * Math.sin(currDir) - trackWidth * Math.cos(currDir) / 2)
-
-        currentPosition.x += advanceX
-        currentPosition.y += advanceY
-    }
-
-    renderTrack.pop()
-    console.log("Track segment built")
+function resetTrack(game: Game) {
+    // Clear track pieces and reset to start
+    game.setPhase("resetTrack")
 }
 
-function resetTrack() {
-    // Resets the grid
-    for (let i = 0; i < canvas.width; i++) {
-        for (let j = 0; j < canvas.height; j++) {
-            grid.set(i, j, "rgba(0,0,0,0)")
+function loadTrackInEditor(p: p5, game: Game) {
+    // Create a file input element to load a track
+    const input = p.createFileInput((file: any) => {
+        if (file.type === 'application' && file.subtype === 'json' || file.name.endsWith('.json')) {
+            const fr = new FileReader()
+            fr.onload = (e) => {
+                try {
+                    const saveData = JSON.parse(e.target?.result as string)
+                    if (saveData.track && saveData.track.pieces) {
+                        // Load the track data into the current track
+                        const track = Track.fromData(saveData.track)
+                        console.log("Track loaded successfully")
+                        
+                        // Update the track in the game
+                        game.track = track
+                        game.start = track.startingPoint
+                        game.direction = track.startingDirection
+                        
+                        alert("Track loaded successfully!")
+                    } else {
+                        alert("Invalid save file - no track data found") 
+                    }
+                } catch (error) {
+                    console.error("Error loading track:", error)
+                    alert("Error loading track file")
+                }
+            }
+            fr.readAsText(file.file)
+        } else {
+            alert("Please select a JSON file")
         }
-    }
-    grid.updatePixels()
-    phase = "resetTrack"
+        
+        // Remove the file input after use
+        input.remove()
+    })
+    
+    // Trigger the file input
+    input.elt.click()
 }
 
 export function createGrid(grid: p5.Graphics, start: Vector, direction: number, trackWidth: number, p: p5) {
@@ -242,22 +199,22 @@ export function setTrack(renderTrack: p5.Graphics, trackMap: number[][], renderM
     const exibInputs = p.createButton("Show Inputs")
     exibInputs.size(buttonWidth, buttonHeight)
     exibInputs.position(20, p.height - buttonHeight - 20)
-    exibInputs.mousePressed(() => { showInputs = !showInputs })
+    exibInputs.mousePressed(() => game.toggleShowInputs())
 
     const exibMap = p.createButton("Show Map")
     exibMap.size(buttonWidth, buttonHeight)
     exibMap.position(20 + (buttonWidth + 5) * 1, p.height - buttonHeight - 20)
-    exibMap.mousePressed(() => { showMap = !showMap })
+    exibMap.mousePressed(() => game.toggleShowMap())
 
     const incrTime = p.createButton("Increase simul. time")
     incrTime.size(buttonWidth, buttonHeight)
     incrTime.position(20 + (buttonWidth + 5) * 2, p.height - buttonHeight - 20)
-    incrTime.mousePressed(() => { maxticks += 100 })
+    incrTime.mousePressed(() => game.incrementMaxTicks(100))
 
     const showGraph = p.createButton("Show graphs")
     showGraph.size(buttonWidth, buttonHeight)
     showGraph.position(20 + (buttonWidth + 5) * 3, p.height - buttonHeight - 20)
-    showGraph.mousePressed(() => { drawGraphs = !drawGraphs })
+    showGraph.mousePressed(() => game.toggleDrawGraphs())
 
     const followBest = p.createButton("Follow best car")
     followBest.size(buttonWidth, buttonHeight)

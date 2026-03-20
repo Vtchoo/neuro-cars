@@ -20,22 +20,8 @@ let phase = "setStart"
 // Defines the width of the race track
 const trackWidth = 50
 
-// Graphic overlays
-let showGrid = true // Shows grid when building the track
-let showMap = false // Shows collision map during runtime
-let showInputs = false
-const resolution = 3 // Get 1 out of [resolution] pixels to create the track collision map
-
-// Track building
-var direction: number //of the starting track
-var start: Vector // starting position of the cars
-var currentPosition: Vector //of the last section of the current track
-var currentDirection: number //of the next track segment
 
 // Simulation settings
-var ticks = 0
-var generation = 0
-var maxticks = 500
 var averageFrameRate
 var frameRecord = []
 var avgDeltaTime = 0.016807703080427727
@@ -45,12 +31,10 @@ var maxFitness = [0]
 var avgFitness = [0]
 var maxFitnessNormal = [0]
 var avgFitnessNormal = [0]
-var drawGraphs = false
 
 // Population settings
-let population: Car[] = []
 const individuals = 30
-const offspring = 3
+const offspring = 10
 
 // Neural net settings
 const nnLayers = 1
@@ -60,38 +44,6 @@ const nnOutputs = 2
 const nnRange = 4
 const nnMutationRate = 0.01
 const nnActivation = "softsign"
-
-
-// private initializeP5(): void {
-//     const sketch = (p: p5) => {
-//         this.p5Instance = p;
-
-//         p.setup = () => {
-//             const canvas = p.createCanvas(1200, 800);
-//             canvas.parent(document.body);
-//             p.background(10);
-
-//             this.generateTrack();
-//             this.initializePopulation();
-//         };
-
-//         p.draw = () => {
-//             this.update(p.deltaTime);
-//             this.render();
-//         };
-
-//         p.keyPressed = () => {
-//             if (p.key === ' ') {
-//                 this.toggleSimulation();
-//             }
-//             if (p.key === 's' || p.key === 'S') {
-//                 this.state.showInputs = !this.state.showInputs;
-//             }
-//         };
-//     };
-
-//     new p5(sketch);
-// }
 
 let player: Car
 
@@ -108,11 +60,59 @@ export default class Game {
 	renderMap: p5.Graphics
 
 	track = new Track()
+	population: Car[] = []
 
 	followBestCar = false
 
 	private readonly decisionsPerSecond = 10
 	private lastDecisionTime = 0
+
+	// Track building
+	direction: number //of the starting track
+	start: Vector // starting position of the cars
+	private currentPosition: Vector //of the last section of the current track
+	private currentDirection: number //of the next track segment
+
+	// Graphic overlays
+	private showGrid = true // Shows grid when building the track
+	private showMap = false // Shows collision map during runtime
+	private showInputs = false
+	private drawGraphs = false
+	private resolution = 3 // Get 1 out of [resolution] pixels to create the track collision map
+
+	setShowGrid(show: boolean) {
+		this.showGrid = show
+	}
+	setShowMap(show: boolean) {
+		this.showMap = show
+	}
+	setShowInputs(show: boolean) {
+		this.showInputs = show
+	}
+	setDrawGraphs(show: boolean) {
+		this.drawGraphs = show
+	}
+
+	toggleShowGrid() {
+		this.showGrid = !this.showGrid
+	}
+	toggleShowMap() {
+		this.showMap = !this.showMap
+	}
+	toggleShowInputs() {
+		this.showInputs = !this.showInputs
+	}
+	toggleDrawGraphs() {
+		this.drawGraphs = !this.drawGraphs
+	}
+
+	ticks = 0
+	generation = 0
+	maxTicks = 500
+
+	incrementMaxTicks(increment: number) {
+		this.maxTicks += increment
+	}
 
 	constructor() {
 		this.p = new p5((p: p5) => {
@@ -167,14 +167,6 @@ export default class Game {
 		this.renderCars = this.p.createGraphics(this.p.width, this.p.height)
 		this.grid = this.p.createGraphics(this.p.width, this.p.height)
 		this.p.background("green")
-
-		// Set a reduced resolution track map for the sensors of the cars
-		this.trackMap = new Array(Math.floor(this.p.width / resolution));
-		for (var i = 0; i < this.trackMap.length; i++) {
-			this.trackMap[i] = new Array(Math.floor(this.p.height / resolution));
-		}
-		this.renderMap = this.p.createGraphics(this.p.width, this.p.height)
-
 	}
 
 	draw() {
@@ -199,8 +191,8 @@ export default class Game {
 				this.p.push()
 				// this.p.fill("green")
 				// this.p.rect(0, 0, this.p.width, this.p.height)
-				this.p.translate(start.x, start.y)
-				this.p.rotate(Math.atan2(this.p.mouseY - start.y, this.p.mouseX - start.x))
+				this.p.translate(this.start.x, this.start.y)
+				this.p.rotate(Math.atan2(this.p.mouseY - this.start.y, this.p.mouseX - this.start.x))
 				this.p.fill("black")
 				this.p.rect(-trackWidth / 2, -trackWidth / 2, trackWidth, trackWidth)
 				this.p.stroke("white")
@@ -215,7 +207,7 @@ export default class Game {
 				this.p.background("green")
 				this.track.draw(this.p, this.p)
 				// this.p.image(this.renderTrack, 0, 0)
-				if (showGrid == true) { this.p.image(this.grid, 0, 0) }
+				if (this.showGrid == true) { this.p.image(this.grid, 0, 0) }
 				break
 
 			case "setup":
@@ -224,13 +216,13 @@ export default class Game {
 				// for (let i = 0; i < individuals; i++) {
 				// 	population[i] = new Car(start.x, start.y, direction)
 				// }
-				population = Array.from({ length: individuals }, () => {
-					const car = new Car(start.x, start.y, direction)
+				this.population = Array.from({ length: individuals }, () => {
+					const car = new Car(this.start.x, this.start.y, this.direction)
 					console.log(car)
 					return car
 				})
 
-				player = new Car(start.x, start.y, direction)
+				player = new Car(this.start.x, this.start.y, this.direction)
 
 				this.setPhase("running")
 				break
@@ -242,7 +234,7 @@ export default class Game {
 				this.track.draw(this.p, this.p)
 
 				// or the AI detection map
-				if (showMap == true) { this.p.image(this.renderMap, 0, 0) }
+				if (this.showMap == true) { this.p.image(this.renderMap, 0, 0) }
 
 				const currentTime = Date.now()
 				const shouldMakeDecision = currentTime - this.lastDecisionTime >= 1000 / this.decisionsPerSecond
@@ -251,19 +243,19 @@ export default class Game {
 				}
 
 				// Updates each individual
-				population.forEach((individual) => {
+				this.population.forEach((individual) => {
 					// if (shouldMakeDecision) {
-					const inputs = individual.getInputs(this.trackMap, showInputs, this.p, resolution, this.track)
+					const inputs = individual.getInputs(this.trackMap, this.showInputs, this.p, this.resolution, this.track)
 					individual.drive(individual.NN.output(inputs))
 					// }
-					individual.update(this.trackMap, resolution, this.track)
+					individual.update(this.trackMap, this.resolution, this.track)
 					individual.show(this.p, carSprite)
 					individual.NN.addFitness(individual.speed)
 				})
 
 				// Follow best car camera logic
-				if (this.followBestCar && population.length > 0 && !playerDrive) {
-					const bestCar = population[0] // Population is sorted during breeding, so [0] is the best
+				if (this.followBestCar && this.population.length > 0 && !playerDrive) {
+					const bestCar = this.population[0] // Population is sorted during breeding, so [0] is the best
 					// Center camera on the best car
 					this.cameraOffsetX = this.p.width / 2 - bestCar.pos.x
 					this.cameraOffsetY = this.p.height / 2 - bestCar.pos.y
@@ -271,7 +263,7 @@ export default class Game {
 
 				// Allows the player to drive a car
 				if (playerDrive) {
-					getUserInput()
+					// getUserInput()
 					this.cameraOffsetX = this.p.width / 2 - player.pos.x
 					this.cameraOffsetY = this.p.height / 2 - player.pos.y
 					// player.update()
@@ -280,10 +272,13 @@ export default class Game {
 
 				// Draws the graph data
 
+				const everyCarIsStopped = this.population.every(car => car.speed < 0.01)
+				if (everyCarIsStopped && this.ticks > 10) {
+					phase = "breeding"
+				}
 
-
-				ticks++
-				if (ticks >= maxticks) {
+				this.ticks++
+				if (this.ticks >= this.maxTicks) {
 					phase = "breeding"
 				}
 
@@ -295,16 +290,16 @@ export default class Game {
 				this.track.draw(this.p, this.p)
 
 				// Sort the population by fitness
-				population.sort(function (a, b) { return b.NN.fitness - a.NN.fitness })
+				this.population.sort(function (a, b) { return b.NN.fitness - a.NN.fitness })
 
 				// And stores data into the data logging arrays
-				maxFitness.push(population[0].NN.fitness)
+				maxFitness.push(this.population[0].NN.fitness)
 				// var avgFitnessGen = 0
-				// population.forEach(function (individual) {
+				// this.population.forEach(function (individual) {
 				// 	avgFitnessGen += individual.NN.fitness
 				// })
-				// avgFitness.push(avgFitnessGen / population.length)
-				const avgFitnessGen = population.reduce((sum, individual) => sum + individual.NN.fitness, 0) / population.length
+				// avgFitness.push(avgFitnessGen / this.population.length)
+				const avgFitnessGen = this.population.reduce((sum, individual) => sum + individual.NN.fitness, 0) / this.population.length
 				avgFitness.push(avgFitnessGen)
 
 				// Normalizes the fitnesses to show on a graph
@@ -319,29 +314,29 @@ export default class Game {
 
 				// Generates new neural net and replaces the worst individuals
 				for (let i = 0; i < offspring; i++) {
-					population[individuals - 1 - i].NN = NeuralNet.breed(population[2 * i].NN, population[2 * i + 1].NN)
-					population[individuals - 1 - i].generation = generation + 1
+					this.population[individuals - 1 - i].NN = NeuralNet.breed(this.population[2 * i].NN, this.population[2 * i + 1].NN)
+					this.population[individuals - 1 - i].generation = this.generation + 1
 				}
 
 				// Resets every individual's car
-				population.forEach(function (individual) {
-					individual.pos = newVector(start.x + Math.random(), start.y + Math.random())
+				for (const individual of this.population) {
+					individual.pos = new Vector(this.start.x + (Math.random() - 0.5) * trackWidth / 2, this.start.y + (Math.random() - 0.5) * trackWidth / 2)
 					individual.speed = 0
-					individual.direction = direction
+					individual.direction = this.direction
 					individual.acceleration = 0
 					individual.NN.resetFitness()
-				})
+				}
 
 				if (playerDrive) {
 					// Resets player's car
-					player.pos = newVector(start.x, start.y)
+					player.pos = new Vector(this.start.x, this.start.y)
 					player.speed = 0
-					player.direction = direction
+					player.direction = this.direction
 				}
 
-				ticks = 0
-				generation++
-				//console.log("Current generation: " + generation)
+				this.ticks = 0
+				this.generation++
+				//console.log("Current generation: " + this.generation)
 
 				phase = "running"
 				break
@@ -360,21 +355,21 @@ export default class Game {
 				phase = "setStart"
 				break
 			case "setStart":
-				start = newVector(this.p.mouseX, this.p.mouseY)
-				this.track.startingPoint = start
+				this.start = newVector(this.p.mouseX, this.p.mouseY)
+				this.track.startingPoint = this.start
 				phase = "rotateStart"
 				break
 			case "rotateStart":
-				direction = Math.atan2(this.p.mouseY - start.y, this.p.mouseX - start.x)
+				this.direction = Math.atan2(this.p.mouseY - this.start.y, this.p.mouseX - this.start.x)
 				phase = "buildTrack"
-				this.track.startingDirection = direction
+				this.track.startingDirection = this.direction
 
-				currentDirection = direction
-				currentPosition = newVector(start.x + trackWidth * Math.cos(direction) / 2, start.y + trackWidth * Math.sin(direction) / 2)
-				this.p.circle(currentPosition.x, currentPosition.y, 5)
+				this.currentDirection = this.direction
+				this.currentPosition = newVector(this.start.x + trackWidth * Math.cos(this.direction) / 2, this.start.y + trackWidth * Math.sin(this.direction) / 2)
+				this.p.circle(this.currentPosition.x, this.currentPosition.y, 5)
 
-				createGrid(this.grid, start, direction, trackWidth, this.p)
-				createTrackBuilder(this.p, currentPosition, currentDirection, trackWidth, this.renderTrack, this.trackMap, this.renderMap, resolution, this, this.track)
+				createGrid(this.grid, this.start, this.direction, trackWidth, this.p)
+				createTrackBuilder(this.p, this.currentPosition, this.currentDirection, trackWidth, this.renderTrack, this.trackMap, this.renderMap, this.resolution, this, this.track)
 
 				break
 		}
@@ -397,9 +392,9 @@ export default class Game {
 		this.p.text("G - Toggle graphs", 20, 95)
 		this.p.text("Ctrl+S - Save game", 20, 110)
 		this.p.text("Ctrl+L - Load game", 20, 125)
-		this.p.text(`Generation: ${generation}`, 20, 140)
+		this.p.text(`Generation: ${this.generation}`, 20, 140)
 
-		if (drawGraphs) {
+		if (this.drawGraphs) {
 			if (maxFitness.length > 1) {
 				let maxWidth = this.p.width / 1.5
 				let interval = maxWidth / (maxFitness.length - 1)
@@ -488,7 +483,7 @@ export default class Game {
 				if (this.p.keyIsDown(this.p.CONTROL)) {
 					this.saveGame();
 				} else {
-					showInputs = !showInputs;
+					this.showInputs = !this.showInputs;
 				}
 				break
 			case 'l':
@@ -501,12 +496,12 @@ export default class Game {
 			case 'm':
 			case 'M':
 				// Toggle show map
-				showMap = !showMap
+				this.showMap = !this.showMap
 				break
 			case 'g':
 			case 'G':
 				// Toggle show graphs
-				drawGraphs = !drawGraphs
+				this.drawGraphs = !this.drawGraphs
 				break
 		}
 	}
@@ -518,11 +513,11 @@ export default class Game {
 			timestamp: new Date().toISOString(),
 			track: this.track.exportData(),
 			game: {
-				generation: generation,
-				ticks: ticks,
-				maxTicks: maxticks
+				generation: this.generation,
+				ticks: this.ticks,
+				maxTicks: this.maxTicks
 			},
-			population: population.map(car => ({
+			population: this.population.map(car => ({
 				NN: car.NN.exportData(),
 				generation: car.generation,
 				position: { x: car.pos.x, y: car.pos.y },
@@ -540,13 +535,13 @@ export default class Game {
 
 		const link = document.createElement('a');
 		link.href = url;
-		link.download = `smartrace_save_gen${generation}_${Date.now()}.json`;
+		link.download = `smartrace_save_gen${this.generation}_${Date.now()}.json`;
 		document.body.appendChild(link);
 		link.click();
 		document.body.removeChild(link);
 		URL.revokeObjectURL(url);
 
-		console.log(`Game saved! Generation: ${generation}`);
+		console.log(`Game saved! Generation: ${this.generation}`);
 	}
 
 	// Load game functionality
@@ -562,7 +557,7 @@ export default class Game {
 					try {
 						const saveData = JSON.parse(e.target?.result as string);
 						this.restoreGameState(saveData);
-						console.log(`Game loaded! Generation: ${generation}`);
+						console.log(`Game loaded! Generation: ${this.generation}`);
 					} catch (error) {
 						console.error('Error loading save file:', error);
 						alert('Error loading save file. Please check the file format.');
@@ -586,12 +581,12 @@ export default class Game {
 		this.track.draw(this.p, this.p);
 
 		// Restore game state
-		generation = saveData.game.generation;
-		ticks = saveData.game.ticks;
-		maxticks = saveData.game.maxTicks;
+		this.generation = saveData.game.generation;
+		this.ticks = saveData.game.ticks;
+		this.maxTicks = saveData.game.maxTicks;
 
 		// Restore population
-		population = saveData.population.map((carData: any) => {
+		this.population = saveData.population.map((carData: any) => {
 			const car = new Car(carData.position.x, carData.position.y, carData.direction);
 			car.NN = NeuralNet.fromData(carData.NN);
 			car.generation = carData.generation;
@@ -602,8 +597,8 @@ export default class Game {
 		});
 
 		// Update start position from track
-		start = this.track.startingPoint;
-		direction = this.track.startingDirection;
+		this.start = this.track.startingPoint;
+		this.direction = this.track.startingDirection;
 
 		// Set phase to running
 		this.setPhase("running");
