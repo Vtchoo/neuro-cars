@@ -12,7 +12,7 @@ const nnLayers = 1
 const nnNeurons = 10
 // const nnInputs = 23
 const nnOutputs = 2
-const nnRange = 4
+const nnRange = 1.5
 const nnMutationRate = 0.01
 const nnActivation = "softsign"
 
