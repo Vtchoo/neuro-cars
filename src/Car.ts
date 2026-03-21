@@ -3,6 +3,7 @@ import { NeuralNet } from "./NeuralNet"
 import { newVector, Vector } from "./Vector"
 import Track, { TrackPiece, TrackPieceType } from "./Track"
 import { queryTrack, TrackSegment } from "./utils/track"
+import { convertHSLToRGB } from "./utils/colors"
 
 let avgDeltaTime = 0.016807703080427727
 
@@ -17,11 +18,22 @@ const nnActivation = "softsign"
 
 export type InputFormat = "raycast" | "lookahead"
 
+function getRandomColor() {
+    const h = Math.floor(Math.random() * 360)
+    return { h, s: 100, l: 50 }
+}
+
+interface RGB {
+    r: number
+    g: number
+    b: number
+}
+
 export default class Car {
     // Car paint (helps to keep track of individuals)
-    paintRGB = [Math.floor(Math.random() * 255), Math.floor(Math.random() * 255), Math.floor(Math.random() * 255)]
+    paintRGB: RGB
     get paint() {
-        return "rgb(" + this.paintRGB[0] + "," + this.paintRGB[1] + "," + this.paintRGB[2] + ")"
+        return "rgb(" + this.paintRGB.r + "," + this.paintRGB.g + "," + this.paintRGB.b + ")"
     }
 
     private inputFormat: InputFormat = "lookahead"
@@ -57,7 +69,10 @@ export default class Car {
         this.direction = startDir
 
         const inputs = this.getInputsCount()
-        this.neuralNet =  new NeuralNet(nnLayers, nnNeurons, inputs, nnOutputs, nnRange, nnMutationRate, nnActivation)
+        this.neuralNet = new NeuralNet(nnLayers, nnNeurons, inputs, nnOutputs, nnRange, nnMutationRate, nnActivation)
+        
+        const color = getRandomColor()
+        this.paintRGB = convertHSLToRGB(color.h, color.s, color.l)
     }
 
     // Updates car position
