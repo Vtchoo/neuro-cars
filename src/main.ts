@@ -304,11 +304,7 @@ export default class Game {
 
 				// And stores data into the data logging arrays
 				maxFitness.push(this.population[0].neuralNet.fitness)
-				// var avgFitnessGen = 0
-				// this.population.forEach(function (individual) {
-				// 	avgFitnessGen += individual.NN.fitness
-				// })
-				// avgFitness.push(avgFitnessGen / this.population.length)
+
 				const avgFitnessGen = this.population.reduce((sum, individual) => sum + individual.neuralNet.fitness, 0) / this.population.length
 				avgFitness.push(avgFitnessGen)
 
@@ -324,8 +320,10 @@ export default class Game {
 
 				// Generates new neural net and replaces the worst individuals
 				for (let i = 0; i < offspring; i++) {
-					this.population[individuals - 1 - i].neuralNet = NeuralNet.breed(this.population[2 * i].neuralNet, this.population[2 * i + 1].neuralNet)
-					this.population[individuals - 1 - i].generation = this.generation + 1
+					const newCar = new Car(this.start.x, this.start.y, this.direction)
+					newCar.neuralNet = NeuralNet.breed(this.population[2 * i].neuralNet, this.population[2 * i + 1].neuralNet)
+					newCar.generation = this.generation + 1
+					this.population[individuals - 1 - i] = newCar
 				}
 
 				let startingPoint = this.start
@@ -629,3 +627,5 @@ window.game = new Game()
 window.letPlayerDrive = function (letPlayerDrive = true) {
 	playerDrive = letPlayerDrive
 }
+
+// console.log('Large weights (>1.5):', game.population.reduce((sum, car) => { return sum + [...car.neuralNet.weightMatrices.flat().flat(), ...car.neuralNet.biasMatrices.flat().flat()].filter(w => Math.abs(w) > 1.5).length }, 0));
