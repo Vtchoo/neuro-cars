@@ -36,15 +36,6 @@ var avgFitnessNormal = [0]
 const individuals = 30
 const offspring = 10
 
-// Neural net settings
-const nnLayers = 1
-const nnNeurons = 10
-const nnInputs = 8
-const nnOutputs = 2
-const nnRange = 4
-const nnMutationRate = 0.01
-const nnActivation = "softsign"
-
 let player: Car
 
 export default class Game {
@@ -113,7 +104,7 @@ export default class Game {
 	/**
 	 * Cycles through track's track pieces as starting points for the race, instead of always starting at the same point. This makes the AI more robust and able to handle different parts of the track.
 	 */
-	cycleStartPoint = true
+	cycleStartPoint = false
 	startPointIndex = 0
 
 	incrementMaxTicks(increment: number) {
@@ -252,10 +243,10 @@ export default class Game {
 				this.population.forEach((individual) => {
 					// if (shouldMakeDecision) {
 					const inputs = individual.getInputs(this.trackMap, false, this.p, this.resolution, this.track)
-					individual.drive(individual.NN.output(inputs))
+					individual.drive(individual.neuralNet.output(inputs))
 					// }
 					individual.update(this.trackMap, this.resolution, this.track)
-					individual.NN.addFitness(individual.speed > 0 ? individual.speed : 10 * individual.speed)
+					individual.neuralNet.addFitness(individual.speed > 0 ? individual.speed : 10 * individual.speed)
 				})
 
 				switch (this.showInputs) {
@@ -309,16 +300,16 @@ export default class Game {
 				this.track.draw(this.p, this.p)
 
 				// Sort the population by fitness
-				this.population.sort(function (a, b) { return b.NN.fitness - a.NN.fitness })
+				this.population.sort(function (a, b) { return b.neuralNet.fitness - a.neuralNet.fitness })
 
 				// And stores data into the data logging arrays
-				maxFitness.push(this.population[0].NN.fitness)
+				maxFitness.push(this.population[0].neuralNet.fitness)
 				// var avgFitnessGen = 0
 				// this.population.forEach(function (individual) {
 				// 	avgFitnessGen += individual.NN.fitness
 				// })
 				// avgFitness.push(avgFitnessGen / this.population.length)
-				const avgFitnessGen = this.population.reduce((sum, individual) => sum + individual.NN.fitness, 0) / this.population.length
+				const avgFitnessGen = this.population.reduce((sum, individual) => sum + individual.neuralNet.fitness, 0) / this.population.length
 				avgFitness.push(avgFitnessGen)
 
 				// Normalizes the fitnesses to show on a graph
@@ -333,7 +324,7 @@ export default class Game {
 
 				// Generates new neural net and replaces the worst individuals
 				for (let i = 0; i < offspring; i++) {
-					this.population[individuals - 1 - i].NN = NeuralNet.breed(this.population[2 * i].NN, this.population[2 * i + 1].NN)
+					this.population[individuals - 1 - i].neuralNet = NeuralNet.breed(this.population[2 * i].neuralNet, this.population[2 * i + 1].neuralNet)
 					this.population[individuals - 1 - i].generation = this.generation + 1
 				}
 
@@ -353,7 +344,7 @@ export default class Game {
 					individual.speed = 0
 					individual.direction = startingDirection
 					individual.acceleration = 0
-					individual.NN.resetFitness()
+					individual.neuralNet.resetFitness()
 				}
 
 				if (playerDrive) {
@@ -547,7 +538,7 @@ export default class Game {
 				maxTicks: this.maxTicks
 			},
 			population: this.population.map(car => ({
-				NN: car.NN.exportData(),
+				NN: car.neuralNet.exportData(),
 				generation: car.generation,
 				position: { x: car.pos.x, y: car.pos.y },
 				speed: car.speed,
@@ -617,7 +608,7 @@ export default class Game {
 		// Restore population
 		this.population = saveData.population.map((carData: any) => {
 			const car = new Car(carData.position.x, carData.position.y, carData.direction);
-			car.NN = NeuralNet.fromData(carData.NN);
+			car.neuralNet = NeuralNet.fromData(carData.NN);
 			car.generation = carData.generation;
 			car.speed = carData.speed;
 			car.acceleration = carData.acceleration;

@@ -9,7 +9,7 @@ let avgDeltaTime = 0.016807703080427727
 // Neural net settings
 const nnLayers = 1
 const nnNeurons = 10
-const nnInputs = 23
+// const nnInputs = 23
 const nnOutputs = 2
 const nnRange = 4
 const nnMutationRate = 0.01
@@ -35,14 +35,29 @@ export default class Car {
     direction = 0
 
     // The brain inside the car
-    NN = new NeuralNet(nnLayers, nnNeurons, nnInputs, nnOutputs, nnRange, nnMutationRate, nnActivation)
+    neuralNet: NeuralNet
 
+    private totalRayCastRays = 7
+
+    private totalLookAheadPoints = 10
     lastCurrentCarPositionInTrack: Vector | null = null
     lastLookAheadPoints: Vector[] | null = null
+
+    private getInputsCount() {
+        switch (this.inputFormat) {
+            case "raycast":
+                return this.totalRayCastRays + 1 // +1 for speed
+            case "lookahead":
+                return this.totalLookAheadPoints * 2 + 3 // 3 for speed, heading angle and lateral offset
+        }
+    }
 
     constructor(startX: number, startY: number, startDir: number) {
         this.pos = newVector(startX, startY)
         this.direction = startDir
+
+        const inputs = this.getInputsCount()
+        this.neuralNet =  new NeuralNet(nnLayers, nnNeurons, inputs, nnOutputs, nnRange, nnMutationRate, nnActivation)
     }
 
     // Updates car position
@@ -94,18 +109,18 @@ export default class Car {
             case "raycast":
                 return this.getRaycastInputs(showInputs, p, track)
             case "lookahead":
-                return this.getLookaheadInputs(showInputs, p, track)
+                return this.getLookaheadInputs(track)
         }
 
     }
 
     private getRaycastInputs(showInputs: boolean, p: p5, track: Track) {
-        const inputs = new Array(8).fill(0)
+        const inputs = new Array(this.totalRayCastRays + 1).fill(0)
         const maxIncrements = 30
 
-        inputs[7] = this.speed
+        inputs[this.totalRayCastRays] = this.speed
 
-        for (let i = 0; i < 7; i++) {
+        for (let i = 0; i < this.totalRayCastRays; i++) {
 
             let angle = this.direction + ((i - 3) / 10) * Math.PI
 
@@ -133,15 +148,15 @@ export default class Car {
         return inputs
     }
 
-    private getLookaheadInputs(showInputs: boolean, p: p5, track: Track) {
+    private getLookaheadInputs(track: Track) {
         // in this mode, the car gets as input the points of the track that are in front of it, at a certain distance and angle from the car
 
-        const totalqueryPoints = 10
-        const singleFrameDistance = this.speed * avgDeltaTime / (1 / 30)
+        const totalqueryPoints = this.totalLookAheadPoints
+        const singleFrameDistance = this.speed * avgDeltaTime / (1 / 60)
         const maxLookaheadDistance = singleFrameDistance * 60
 
         const currentCarPositionInTrack = queryTrack(track.analyticPieces.map(convertToTrackSegment), this.pos, this.direction)
-        this.lastCurrentCarPositionInTrack = currentCarPositionInTrack.point
+        this.lastCurrentCarPositionInTrack = new Vector(currentCarPositionInTrack.point.x, currentCarPositionInTrack.point.y)
 
         const lookAheadPoints: Vector[] = []
         const distanceBetweenPoints = maxLookaheadDistance / totalqueryPoints

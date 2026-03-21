@@ -1,9 +1,6 @@
 import p5 from "p5"
 import { Vector } from "./Vector"
-import * as TrackUtils from "./utils/track"
-
-
-
+import { ArcSegment, closestPointOnArcSegment, closestPointOnLineSegment, length, LineSegment, sub, XY,  } from "./utils/track"
 
 export enum TrackPieceType {
     Straight = "Straight",
@@ -470,7 +467,7 @@ export default class Track {
             }
 
             case TrackPieceType.Arc: {
-                const radius = TrackUtils.length(TrackUtils.sub(piece.start, piece.center))
+                const radius = length(sub(piece.start, piece.center))
                 const centerX = piece.center.x
                 const centerY = piece.center.y
 
@@ -500,26 +497,26 @@ export default class Track {
         }
     }
 
-    private getDistanceToPiece(piece: TrackPiece, point: TrackUtils.Vec2): number {
+    private getDistanceToPiece(piece: TrackPiece, point: XY): number {
         switch (piece.type) {
             case TrackPieceType.Straight: {
-                const segment: TrackUtils.LineSegment = {
+                const segment: LineSegment = {
                     kind: "line",
                     start: { x: piece.start.x, y: piece.start.y },
                     end: { x: piece.end.x, y: piece.end.y }
                 }
-                return TrackUtils.closestPointOnLineSegment(segment, point).distance
+                return closestPointOnLineSegment(segment, point).distance
             }
 
             case TrackPieceType.Arc: {
-                const segment: TrackUtils.ArcSegment = {
+                const segment: ArcSegment = {
                     kind: "arc",
                     start: { x: piece.start.x, y: piece.start.y },
                     end: { x: piece.end.x, y: piece.end.y },
                     center: { x: piece.center.x, y: piece.center.y },
                     clockwise: piece.clockwise,
                 }
-                return TrackUtils.closestPointOnArcSegment(segment, point).distance
+                return closestPointOnArcSegment(segment, point).distance
             }
 
             case TrackPieceType.Spline: {
@@ -531,7 +528,7 @@ export default class Track {
                 for (let i = 0; i <= samples; i++) {
                     const t = i / samples
                     const splinePoint = this.evaluateBezier(piece, t)
-                    const distance = TrackUtils.length(TrackUtils.sub(point, splinePoint))
+                    const distance = length(sub(point, splinePoint))
                     minDistance = Math.min(minDistance, distance)
                 }
 
@@ -543,7 +540,7 @@ export default class Track {
         }
     }
 
-    private evaluateBezier(piece: SplinePiece, t: number): TrackUtils.Vec2 {
+    private evaluateBezier(piece: SplinePiece, t: number): XY {
         const t2 = t * t
         const t3 = t2 * t
         const mt = 1 - t
@@ -667,6 +664,4 @@ export default class Track {
 
         return track;
     }
-
-    function 
 }
