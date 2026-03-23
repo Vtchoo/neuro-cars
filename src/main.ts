@@ -4,7 +4,7 @@ import { createGrid, createTrackBuilder, setTrack } from "./trackBuilder"
 import { newVector, Vector } from './Vector';
 import Car from './Car';
 import { NeuralNet } from './NeuralNet';
-import Track from './Track';
+import Track, { TrackPieceType } from './Track';
 //---------- SMART RACE 2 ----------
 
 // Important objects
@@ -329,9 +329,18 @@ export default class Game {
 				let startingPoint = this.start
 				let startingDirection = this.direction
 				if (this.cycleStartPoint) {
-					// Cycles through track pieces as starting points for the next generation, instead of always starting at the same point. This makes the AI more robust and able to handle different parts of the track.
-					this.startPointIndex = (this.startPointIndex + 1) % this.track.pieces.length
-					const newStartPiece = this.track.pieces[this.startPointIndex]
+					let newStartPiece
+					while (!newStartPiece) {
+						this.startPointIndex = (this.startPointIndex + 1) % this.track.pieces.length
+						const startPieceCandidate = this.track.pieces[this.startPointIndex]
+						// if it's an arc and the radius is too small, skip it because the cars would just crash immediately and not learn anything
+						if (startPieceCandidate.type === TrackPieceType.Arc) {
+							const radius = Vector.sub(startPieceCandidate.center, startPieceCandidate.start).mag()
+							if (radius < trackWidth)
+								continue
+						}
+						newStartPiece = startPieceCandidate
+					}
 					startingPoint = newStartPiece.start
 					startingDirection = Track.getTrackPieceStartDirection(newStartPiece)
 				}
