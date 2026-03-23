@@ -104,7 +104,7 @@ export default class Game {
 	/**
 	 * Cycles through track's track pieces as starting points for the race, instead of always starting at the same point. This makes the AI more robust and able to handle different parts of the track.
 	 */
-	cycleStartPoint = false
+	cycleStartPoint = true
 	startPointIndex = 0
 
 	incrementMaxTicks(increment: number) {
@@ -246,7 +246,6 @@ export default class Game {
 					individual.drive(individual.neuralNet.output(inputs))
 					// }
 					individual.update(this.trackMap, this.resolution, this.track)
-					individual.neuralNet.addFitness(individual.speed > 0 ? individual.speed : 10 * individual.speed)
 				})
 
 				switch (this.showInputs) {
@@ -302,6 +301,11 @@ export default class Game {
 				// Sort the population by fitness
 				this.population.sort(function (a, b) { return b.neuralNet.fitness - a.neuralNet.fitness })
 
+				if (this.population[0].speed > 0.01) {
+					// add some extra frames cause the best car hasn't actually stopped but just got very slow, so we give it some extra time to see if it can get unstuck and keep going
+					this.maxTicks += 100
+				}
+
 				// And stores data into the data logging arrays
 				maxFitness.push(this.population[0].neuralNet.fitness)
 
@@ -320,9 +324,8 @@ export default class Game {
 
 				// Generates new neural net and replaces the worst individuals
 				for (let i = 0; i < offspring; i++) {
-					const newCar = new Car(this.start.x, this.start.y, this.direction)
+					const newCar = new Car(this.start.x, this.start.y, this.direction, this.generation + 1)
 					newCar.neuralNet = NeuralNet.breed(this.population[2 * i].neuralNet, this.population[2 * i + 1].neuralNet)
-					newCar.generation = this.generation + 1
 					this.population[individuals - 1 - i] = newCar
 				}
 
@@ -614,7 +617,7 @@ export default class Game {
 
 		// Restore population
 		this.population = saveData.population.map((carData: any) => {
-			const car = new Car(carData.position.x, carData.position.y, carData.direction);
+			const car = new Car(carData.position.x, carData.position.y, carData.direction, carData.generation);
 			car.neuralNet = NeuralNet.fromData(carData.NN);
 			car.generation = carData.generation;
 			car.speed = carData.speed;

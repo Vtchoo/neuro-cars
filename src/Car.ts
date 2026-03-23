@@ -37,9 +37,9 @@ export default class Car {
     }
 
     private inputFormat: InputFormat = "lookahead"
-    
+
     generation = 0
-    
+
     // Car movement
     pos: Vector
     speed = 0
@@ -64,14 +64,15 @@ export default class Car {
         }
     }
 
-    constructor(startX: number, startY: number, startDir: number) {
+    constructor(startX: number, startY: number, startDir: number, generation?: number) {
         this.pos = newVector(startX, startY)
         this.direction = startDir
+        this.generation = generation || 0
 
         const inputs = this.getInputsCount()
         this.neuralNet = new NeuralNet(nnLayers, nnNeurons, inputs, nnOutputs, nnRange, nnMutationRate, nnActivation)
-        
-        const color = getRandomColor()
+
+        const color = { h: this.generation % 360, s: 100, l: 50 } // getRandomColor()
         this.paintRGB = convertHSLToRGB(color.h, color.s, color.l)
     }
 
@@ -80,11 +81,17 @@ export default class Car {
         this.speed += this.acceleration
         if (this.speed < -2) { this.speed = -2 }
         // if (trackMap[Math.floor(this.pos.x / resolution)][Math.floor(this.pos.y / resolution)] == 0) { this.speed = 0 }
-        if (!track.isInsideTrack(this.pos.x, this.pos.y)) { this.speed = 0 }
+        if (!track.isInsideTrack(this.pos.x, this.pos.y)) {
+            this.speed = 0
+            // this.neuralNet.addFitness(-Math.abs(this.speed) * 10)
+        } else {
+            this.neuralNet.addFitness(this.speed > 0 ? this.speed : 10 * this.speed)
+        }
 
         this.pos.add(
             this.speed * Math.cos(this.direction) * avgDeltaTime / (1 / 30),
-            this.speed * Math.sin(this.direction) * avgDeltaTime / (1 / 30))
+            this.speed * Math.sin(this.direction) * avgDeltaTime / (1 / 30)
+        )
     }
 
     showInputs(p: p5) {
@@ -208,7 +215,7 @@ export default class Car {
                         const startAngle = (Math.atan2(pointOnTrack.y - center.y, pointOnTrack.x - center.x) + 2 * Math.PI) % (2 * Math.PI)
 
                         const availableAngleInCurrentSegment = segment.clockwise ? finalAngle - startAngle : startAngle - finalAngle
-                        const availableDistanceInCurrentSegment = Math.abs(availableAngleInCurrentSegment) * radius
+                        const availableDistanceInCurrentSegment = Math.abs((availableAngleInCurrentSegment + 2 * Math.PI) % (2 * Math.PI)) * radius
 
                         if (remainingDistance <= availableDistanceInCurrentSegment) {
                             const angleDirection = segment.clockwise ? 1 : -1

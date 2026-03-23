@@ -26,6 +26,8 @@ export class NeuralNet {
     private weightMatrices: number[][][];
     private biasMatrices: number[][][];
 
+    private useXavierInitialization: boolean = false; // Flag to toggle Xavier initialization
+
     constructor(layers: number, neurons: number, inputs: number, outputs: number, range: number, mutationRate: number, activation: ActivationFunction) {
         this.range = range;
         this.layers = layers;
@@ -43,31 +45,34 @@ export class NeuralNet {
         this.weightMatrices = [];
 
         // Input to first hidden layer
-        this.weightMatrices.push(this.createRandomMatrix(neurons, inputs, range));
+        this.weightMatrices.push(this.createRandomMatrix(neurons, inputs, inputs, neurons));
 
         // Hidden layer to hidden layer weights
         for (let i = 1; i < layers; i++) {
-            this.weightMatrices.push(this.createRandomMatrix(neurons, neurons, range));
+            this.weightMatrices.push(this.createRandomMatrix(neurons, neurons, neurons, neurons));
         }
 
         // Last hidden layer to output
-        this.weightMatrices.push(this.createRandomMatrix(outputs, neurons, range));
+        this.weightMatrices.push(this.createRandomMatrix(outputs, neurons, neurons, outputs));
 
         // Bias matrices
         this.biasMatrices = [];
         for (let i = 0; i < layers; i++) {
-            this.biasMatrices.push(this.createRandomMatrix(neurons, 1, range));
+            this.biasMatrices.push(this.createRandomMatrix(neurons, 1, neurons, 1));
         }
-        this.biasMatrices.push(this.createRandomMatrix(outputs, 1, range));
+        this.biasMatrices.push(this.createRandomMatrix(outputs, 1, neurons, 1));
     }
 
-    // Helper function to create random matrix
-    private createRandomMatrix(rows: number, cols: number, range: number): number[][] {
+    // Helper function to create random matrix with Xavier-style initialization for softsign
+    private createRandomMatrix(rows: number, cols: number, fanIn: number, fanOut: number): number[][] {
         const matrix: number[][] = [];
+        // Modified Xavier for softsign (gentler than tanh)
+        const limit = Math.sqrt(1.5 / (fanIn + fanOut));
+
         for (let i = 0; i < rows; i++) {
             matrix[i] = [];
             for (let j = 0; j < cols; j++) {
-                matrix[i][j] = (Math.random() - 0.5) * 2 * range;
+                matrix[i][j] = (Math.random() - 0.5) * 2 * limit;
             }
         }
         return matrix;
@@ -184,14 +189,53 @@ export class NeuralNet {
         return net;
     }
 
+    // Helper function to get the proper initialization limit for a given layer
+    private getInitializationLimit(layerIndex: number, isWeight: boolean = true): number {
+        if (!this.useXavierInitialization) {
+            return this.range;
+        }
+
+        let fanIn: number, fanOut: number;
+
+        if (isWeight) {
+            if (layerIndex === 0) {
+                // Input to first hidden layer
+                fanIn = this.inputs;
+                fanOut = this.neurons;
+            } else if (layerIndex === this.layers) {
+                // Last hidden layer to output
+                fanIn = this.neurons;
+                fanOut = this.outputs;
+            } else {
+                // Hidden layer to hidden layer
+                fanIn = this.neurons;
+                fanOut = this.neurons;
+            }
+        } else {
+            // For biases, fanOut is always 1
+            if (layerIndex === this.layers) {
+                // Output layer bias
+                fanIn = this.neurons;
+                fanOut = 1;
+            } else {
+                // Hidden layer bias
+                fanIn = this.neurons;
+                fanOut = 1;
+            }
+        }
+
+        return Math.sqrt(6 / (fanIn + fanOut));
+    }
+
     // Mutation function
     public mutate(): void {
         // Mutate weight matrices
         for (let m = 0; m < this.weightMatrices.length; m++) {
+            const limit = this.getInitializationLimit(m, true);
             for (let i = 0; i < this.weightMatrices[m].length; i++) {
                 for (let j = 0; j < this.weightMatrices[m][i].length; j++) {
                     if (Math.random() < this.mutationRate) {
-                        this.weightMatrices[m][i][j] = (Math.random() - 0.5) * 2 * this.range;
+                        this.weightMatrices[m][i][j] = (Math.random() - 0.5) * 2 * limit;
                     }
                 }
             }
@@ -199,10 +243,11 @@ export class NeuralNet {
 
         // Mutate bias matrices
         for (let m = 0; m < this.biasMatrices.length; m++) {
+            const limit = this.getInitializationLimit(m, false);
             for (let i = 0; i < this.biasMatrices[m].length; i++) {
                 for (let j = 0; j < this.biasMatrices[m][i].length; j++) {
                     if (Math.random() < this.mutationRate) {
-                        this.biasMatrices[m][i][j] = (Math.random() - 0.5) * 2 * this.range;
+                        this.biasMatrices[m][i][j] = (Math.random() - 0.5) * 2 * limit;
                     }
                 }
             }
@@ -257,6 +302,7 @@ export class NeuralNet {
 
         // Crossover for weight matrices
         for (let m = 0; m < offspring.weightMatrices.length; m++) {
+            const limit = offspring.getInitializationLimit(m, true);
             for (let i = 0; i < offspring.weightMatrices[m].length; i++) {
                 for (let j = 0; j < offspring.weightMatrices[m][i].length; j++) {
                     if (Math.random() > offspring.mutationRate) {
@@ -268,7 +314,7 @@ export class NeuralNet {
                         }
                     } else {
                         // Mutate
-                        offspring.weightMatrices[m][i][j] = (Math.random() - 0.5) * 2 * offspring.range;
+                        offspring.weightMatrices[m][i][j] = (Math.random() - 0.5) * 2 * limit;
                     }
                 }
             }
@@ -276,6 +322,7 @@ export class NeuralNet {
 
         // Crossover for bias matrices
         for (let m = 0; m < offspring.biasMatrices.length; m++) {
+            const limit = offspring.getInitializationLimit(m, false);
             for (let i = 0; i < offspring.biasMatrices[m].length; i++) {
                 for (let j = 0; j < offspring.biasMatrices[m][i].length; j++) {
                     if (Math.random() > offspring.mutationRate) {
@@ -287,7 +334,7 @@ export class NeuralNet {
                         }
                     } else {
                         // Mutate
-                        offspring.biasMatrices[m][i][j] = (Math.random() - 0.5) * 2 * offspring.range;
+                        offspring.biasMatrices[m][i][j] = (Math.random() - 0.5) * 2 * limit;
                     }
                 }
             }
