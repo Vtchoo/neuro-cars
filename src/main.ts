@@ -281,7 +281,7 @@ export default class Game {
 
 				// Draws the graph data
 
-				const everyCarIsStopped = this.population.every(car => car.speed < 0.01)
+				const everyCarIsStopped = this.population.every(car => car.speed < 0.1)
 				if (everyCarIsStopped && this.ticks > 10) {
 					phase = "breeding"
 				}
@@ -334,7 +334,7 @@ export default class Game {
 				if (this.cycleStartPoint) {
 					let newStartPiece
 					while (!newStartPiece) {
-						this.startPointIndex = (this.startPointIndex + 1) % this.track.pieces.length
+						this.startPointIndex = Math.floor(Math.random() * this.track.pieces.length)
 						const startPieceCandidate = this.track.pieces[this.startPointIndex]
 						// if it's an arc and the radius is too small, skip it because the cars would just crash immediately and not learn anything
 						if (startPieceCandidate.type === TrackPieceType.Arc) {

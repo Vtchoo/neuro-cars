@@ -8,9 +8,8 @@ import { convertHSLToRGB } from "./utils/colors"
 let avgDeltaTime = 0.016807703080427727
 
 // Neural net settings
-const nnLayers = 1
+const nnLayers = 2
 const nnNeurons = 10
-// const nnInputs = 23
 const nnOutputs = 2
 const nnRange = 1.5
 const nnMutationRate = 0.01

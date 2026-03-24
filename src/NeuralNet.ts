@@ -26,7 +26,7 @@ export class NeuralNet {
     private weightMatrices: number[][][];
     private biasMatrices: number[][][];
 
-    private useXavierInitialization: boolean = false; // Flag to toggle Xavier initialization
+    private useXavierInitialization: boolean = true; // Flag to toggle Xavier initialization
 
     constructor(layers: number, neurons: number, inputs: number, outputs: number, range: number, mutationRate: number, activation: ActivationFunction) {
         this.range = range;
