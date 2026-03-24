@@ -67,7 +67,7 @@ export class NeuralNet {
     private createRandomMatrix(rows: number, cols: number, fanIn: number, fanOut: number): number[][] {
         const matrix: number[][] = [];
         // Modified Xavier for softsign (gentler than tanh)
-        const limit = Math.sqrt(1.5 / (fanIn + fanOut));
+        const limit = Math.sqrt(6 / (fanIn + fanOut));
 
         for (let i = 0; i < rows; i++) {
             matrix[i] = [];
