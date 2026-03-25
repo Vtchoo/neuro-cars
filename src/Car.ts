@@ -35,7 +35,7 @@ export default class Car {
         return "rgb(" + this.paintRGB.r + "," + this.paintRGB.g + "," + this.paintRGB.b + ")"
     }
 
-    private inputFormat: InputFormat = "lookahead"
+    private inputFormat: InputFormat | InputFormat[] = "lookahead"
 
     generation = 0
 
@@ -49,17 +49,33 @@ export default class Car {
     neuralNet: NeuralNet
 
     private totalRayCastRays = 7
-
+    lastRayCastDistances: number[] | null = null
+    
     private totalLookAheadPoints = 10
     lastCurrentCarPositionInTrack: Vector | null = null
     lastLookAheadPoints: Vector[] | null = null
 
     private getInputsCount() {
-        switch (this.inputFormat) {
+        const fixedInputs = 1 // speed
+
+        if (Array.isArray(this.inputFormat)) {
+
+            const variableInputs = this.inputFormat.reduce((sum, format) => {
+                return sum + this.getInputsCountForFormat(format)
+            }, 0)
+
+            return fixedInputs + variableInputs
+        }
+
+        return fixedInputs + this.getInputsCountForFormat(this.inputFormat)
+    }
+
+    private getInputsCountForFormat(format: InputFormat) {
+        switch (format) {
             case "raycast":
-                return this.totalRayCastRays + 1 // +1 for speed
+                return this.totalRayCastRays
             case "lookahead":
-                return this.totalLookAheadPoints * 2 + 3 // 3 for speed, heading angle and lateral offset
+                return this.totalLookAheadPoints * 2 + 2 // 2 for heading angle and lateral offset
         }
     }
 
