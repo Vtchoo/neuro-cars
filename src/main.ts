@@ -36,7 +36,7 @@ var avgFitnessNormal = [0]
 const individuals = 100
 
 type BreedingMethod = 'pair' | 'elite' | 'clone'
-const breedingMethod: BreedingMethod = 'elite' // "pair" breeds the best with the second best, the third with the fourth, and so on. "random" breeds random individuals from the top 20% of the population.
+const breedingMethod: BreedingMethod = 'pair' // "pair" breeds the best with the second best, the third with the fourth, and so on. "random" breeds random individuals from the top 20% of the population.
 
 // pair
 const offspring = 20
