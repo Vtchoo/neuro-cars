@@ -33,8 +33,15 @@ var maxFitnessNormal = [0]
 var avgFitnessNormal = [0]
 
 // Population settings
-const individuals = 30
-const offspring = 10
+const individuals = 100
+
+type BreedingMethod = 'pair' | 'elite' | 'clone'
+const breedingMethod: BreedingMethod = 'elite' // "pair" breeds the best with the second best, the third with the fourth, and so on. "random" breeds random individuals from the top 20% of the population.
+
+// pair
+const offspring = 20
+// elite
+const eliteSize = 7
 
 let player: Car
 
@@ -281,7 +288,7 @@ export default class Game {
 
 				// Draws the graph data
 
-				const everyCarIsStopped = this.population.every(car => car.speed < 0.1)
+				const everyCarIsStopped = this.population.every(car => car.speed < 0.01)
 				if (everyCarIsStopped && this.ticks > 10) {
 					phase = "breeding"
 				}
@@ -324,11 +331,41 @@ export default class Game {
 				}
 
 				// Generates new neural net and replaces the worst individuals
-				for (let i = 0; i < offspring; i++) {
-					const newCar = new Car(this.start.x, this.start.y, this.direction, this.generation + 1)
-					newCar.neuralNet = NeuralNet.breed(this.population[2 * i].neuralNet, this.population[2 * i + 1].neuralNet)
-					this.population[individuals - 1 - i] = newCar
+				switch (breedingMethod) {
+					case 'pair': {
+						for (let i = 0; i < offspring; i++) {
+							const newCar = new Car(this.start.x, this.start.y, this.direction, this.generation + 1)
+							newCar.neuralNet = NeuralNet.breed(this.population[2 * i].neuralNet, this.population[2 * i + 1].neuralNet)
+							this.population[individuals - 1 - i] = newCar
+						}
+						break
+					}
+					case 'elite': {
+						const offspring: Car[] = []
+						for (let i = 0; i < eliteSize; i++) {
+							for (let j = i + 1; j < eliteSize; j++) {
+								const newCar = new Car(this.start.x, this.start.y, this.direction, this.generation + 1)
+								newCar.neuralNet = NeuralNet.breed(this.population[i].neuralNet, this.population[j].neuralNet)
+								offspring.push(newCar)
+							}
+						}
+						// replace the worst individuals with the offspring
+						for (let i = 0; i < offspring.length && i < individuals; i++) {
+							this.population[individuals - 1 - i] = offspring[i]
+						}
+						break
+					}
+					case 'clone': {
+						for (let i = 0; i < offspring; i++) {
+							const newCar = new Car(this.start.x, this.start.y, this.direction, this.generation + 1)
+							newCar.neuralNet = this.population[i].neuralNet.copy()
+							newCar.neuralNet.mutate()
+							this.population[individuals - 1 - i] = newCar
+						}
+						break
+					}
 				}
+						
 
 				let startingPoint = this.start
 				let startingDirection = this.direction

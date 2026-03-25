@@ -1,5 +1,5 @@
 import p5 from "p5"
-import { NeuralNet } from "./NeuralNet"
+import { ActivationFunction, NeuralNet } from "./NeuralNet"
 import { newVector, Vector } from "./Vector"
 import Track, { TrackPiece, TrackPieceType } from "./Track"
 import { queryTrack, TrackSegment } from "./utils/track"
@@ -8,12 +8,12 @@ import { convertHSLToRGB } from "./utils/colors"
 let avgDeltaTime = 0.016807703080427727
 
 // Neural net settings
-const nnLayers = 2
+const nnLayers = 1
 const nnNeurons = 10
 const nnOutputs = 2
 const nnRange = 1.5
 const nnMutationRate = 0.01
-const nnActivation = "softsign"
+const nnActivation: ActivationFunction = "softsign"
 
 export type InputFormat = "raycast" | "lookahead"
 
