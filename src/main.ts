@@ -18,7 +18,7 @@ let playerDrive = false
 let phase = "setStart"
 
 // Defines the width of the race track
-const trackWidth = 50
+const trackWidth = 120
 
 
 // Simulation settings

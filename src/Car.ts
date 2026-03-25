@@ -111,7 +111,7 @@ export default class Car {
         p.translate(this.pos.x, this.pos.y);
         p.rotate(this.direction);
         p.imageMode(p.CENTER)
-        carSprite.resize(20, 10)
+        carSprite.resize(40, 20)
         p.tint(this.paint)
         p.image(carSprite, 0, 0)
         p.pop();
@@ -174,7 +174,7 @@ export default class Car {
 
         const totalqueryPoints = this.totalLookAheadPoints
         const singleFrameDistance = this.speed * avgDeltaTime / (1 / 60)
-        const maxLookaheadDistance = singleFrameDistance * 60
+        const maxLookaheadDistance = singleFrameDistance * 120
 
         const currentCarPositionInTrack = queryTrack(track.analyticPieces.map(convertToTrackSegment), this.pos, this.direction)
         this.lastCurrentCarPositionInTrack = new Vector(currentCarPositionInTrack.point.x, currentCarPositionInTrack.point.y)
