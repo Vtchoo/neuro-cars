@@ -111,7 +111,7 @@ export default class Game {
 	/**
 	 * Cycles through track's track pieces as starting points for the race, instead of always starting at the same point. This makes the AI more robust and able to handle different parts of the track.
 	 */
-	cycleStartPoint = true
+	cycleStartPoint: 'off' | 'sequential' | 'random' = 'sequential'
 	startPointIndex = 0
 
 	incrementMaxTicks(increment: number) {
@@ -383,10 +383,14 @@ export default class Game {
 
 				let startingPoint = this.start
 				let startingDirection = this.direction
-				if (this.cycleStartPoint) {
+				if (this.cycleStartPoint !== 'off') {
 					let newStartPiece
 					while (!newStartPiece) {
-						this.startPointIndex = Math.floor(Math.random() * this.track.pieces.length)
+						if (this.cycleStartPoint === 'sequential') {
+							this.startPointIndex = (this.startPointIndex + 1) % this.track.pieces.length
+						} else if (this.cycleStartPoint === 'random') {
+							this.startPointIndex = Math.floor(Math.random() * this.track.pieces.length)
+						}
 						const startPieceCandidate = this.track.pieces[this.startPointIndex]
 						// if it's an arc and the radius is too small, skip it because the cars would just crash immediately and not learn anything
 						if (startPieceCandidate.type === TrackPieceType.Arc) {
