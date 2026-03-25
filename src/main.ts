@@ -141,6 +141,10 @@ export default class Game {
 				this.mousePressed()
 			}
 
+			p.mouseWheel = (event) => {
+				this.mouseWheel(event)
+			}
+
 			p.mouseDragged = () => {
 				this.mouseDragged()
 			}
@@ -176,6 +180,8 @@ export default class Game {
 	draw() {
 		this.p.background("green")
 		this.p.push()
+		this.p.translate(this.p.width / 2, this.p.height / 2)
+		this.p.scale(this.cameraZoom)
 		this.p.translate(this.cameraOffsetX, this.cameraOffsetY)
 		switch (phase) {
 			case "setStart":
@@ -185,7 +191,7 @@ export default class Game {
 				// this.p.rect(0, 0, this.p.width, this.p.height)
 				this.p.fill("black")
 				this.p.noStroke()
-				this.p.rect(this.p.mouseX - trackWidth / 2, this.p.mouseY - trackWidth / 2, trackWidth, trackWidth)
+				this.p.rect((this.p.mouseX - this.p.width / 2) / this.cameraZoom - trackWidth / 2, (this.p.mouseY - this.p.height / 2) / this.cameraZoom - trackWidth / 2, trackWidth, trackWidth)
 				this.p.pop();
 				// this.p.image(this.renderTrack, 0, 0)
 				break
@@ -196,7 +202,7 @@ export default class Game {
 				// this.p.fill("green")
 				// this.p.rect(0, 0, this.p.width, this.p.height)
 				this.p.translate(this.start.x, this.start.y)
-				this.p.rotate(Math.atan2(this.p.mouseY - this.start.y, this.p.mouseX - this.start.x))
+				this.p.rotate(Math.atan2((this.p.mouseY - this.p.height / 2) / this.cameraZoom - this.start.y, (this.p.mouseX - this.p.width / 2) / this.cameraZoom - this.start.x))
 				this.p.fill("black")
 				this.p.rect(-trackWidth / 2, -trackWidth / 2, trackWidth, trackWidth)
 				this.p.stroke("white")
@@ -264,7 +270,7 @@ export default class Game {
 							this.population[0].showInputs(this.p)
 						break
 				}
-				
+
 				for (const car of this.population) {
 					car.show(this.p, carSprite)
 				}
@@ -273,15 +279,15 @@ export default class Game {
 				if (this.followBestCar && this.population.length > 0 && !playerDrive) {
 					const bestCar = this.population[0] // Population is sorted during breeding, so [0] is the best
 					// Center camera on the best car
-					this.cameraOffsetX = this.p.width / 2 - bestCar.pos.x
-					this.cameraOffsetY = this.p.height / 2 - bestCar.pos.y
+					this.cameraOffsetX = -bestCar.pos.x
+					this.cameraOffsetY = -bestCar.pos.y
 				}
 
 				// Allows the player to drive a car
 				if (playerDrive) {
 					// getUserInput()
-					this.cameraOffsetX = this.p.width / 2 - player.pos.x
-					this.cameraOffsetY = this.p.height / 2 - player.pos.y
+					this.cameraOffsetX = -player.pos.x
+					this.cameraOffsetY = -player.pos.y
 					// player.update()
 					// player.show()
 				}
@@ -365,7 +371,7 @@ export default class Game {
 						break
 					}
 				}
-						
+
 
 				let startingPoint = this.start
 				let startingDirection = this.direction
@@ -423,12 +429,12 @@ export default class Game {
 				phase = "setStart"
 				break
 			case "setStart":
-				this.start = newVector(this.p.mouseX, this.p.mouseY)
+				this.start = newVector((this.p.mouseX - this.p.width / 2) / this.cameraZoom, (this.p.mouseY - this.p.height / 2) / this.cameraZoom)
 				this.track.startingPoint = this.start
 				phase = "rotateStart"
 				break
 			case "rotateStart":
-				this.direction = Math.atan2(this.p.mouseY - this.start.y, this.p.mouseX - this.start.x)
+				this.direction = Math.atan2((this.p.mouseY - this.p.height / 2) / this.cameraZoom - this.start.y, (this.p.mouseX - this.p.width / 2) / this.cameraZoom - this.start.x)
 				phase = "buildTrack"
 				this.track.startingDirection = this.direction
 
@@ -493,6 +499,7 @@ export default class Game {
 	private previousMouseY = 0
 	private cameraOffsetX = 0
 	private cameraOffsetY = 0
+	private cameraZoom = 1
 
 	mousePressed() {
 		this.previousMouseX = this.p.mouseX
@@ -505,12 +512,18 @@ export default class Game {
 			case "buildTrack":
 			case "running":
 				// move camera around
-				this.cameraOffsetX += this.p.mouseX - this.previousMouseX
-				this.cameraOffsetY += this.p.mouseY - this.previousMouseY
+				this.cameraOffsetX += (this.p.mouseX - this.previousMouseX) / this.cameraZoom
+				this.cameraOffsetY += (this.p.mouseY - this.previousMouseY) / this.cameraZoom
 				this.previousMouseX = this.p.mouseX
 				this.previousMouseY = this.p.mouseY
 				break
 		}
+	}
+
+	mouseWheel(event: any) {
+		// Zoom in/out
+		this.cameraZoom += event.delta * -0.001;
+		this.cameraZoom = Math.min(Math.max(this.cameraZoom, 0.1), 5);
 	}
 
 	getUserInput() {
