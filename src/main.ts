@@ -106,7 +106,7 @@ export default class Game {
 
 	ticks = 0
 	generation = 0
-	maxTicks = 500
+	maxTicks = 1000
 
 	/**
 	 * Cycles through track's track pieces as starting points for the race, instead of always starting at the same point. This makes the AI more robust and able to handle different parts of the track.
@@ -406,7 +406,12 @@ export default class Game {
 
 				// Resets every individual's car
 				for (const individual of this.population) {
-					individual.pos = new Vector(startingPoint.x + (Math.random() - 0.5) * trackWidth / 2, startingPoint.y + (Math.random() - 0.5) * trackWidth / 2)
+					const pointFromRadius = Math.sqrt(Math.random())
+					const radius = pointFromRadius * trackWidth / 4
+					const angle = Math.random() * 2 * Math.PI
+					const initialPosition = new Vector(startingPoint.x + radius * Math.cos(angle), startingPoint.y + radius * Math.sin(angle))
+					individual.pos = initialPosition
+					// individual.pos = new Vector(startingPoint.x + (Math.random() - 0.5) * trackWidth / 2, startingPoint.y + (Math.random() - 0.5) * trackWidth / 2)
 					individual.speed = 0
 					individual.direction = startingDirection
 					individual.acceleration = 0
