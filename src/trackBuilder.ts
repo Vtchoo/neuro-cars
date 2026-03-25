@@ -39,8 +39,8 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
         width: trackWidth,
     } as StraightPiece
 
-    track.addStraight(initialTrackPiece.start, initialTrackPiece.end, initialTrackPiece.width)
-    console.log(track.pieces)
+    game.track.addStraight(initialTrackPiece.start, initialTrackPiece.end, initialTrackPiece.width)
+    console.log(game.track.pieces)
     buttons = new Array()
 
     buttons[0] = p.createButton("Large Left")
@@ -70,7 +70,7 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
             button.size(buttonWidth, buttonHeight)
             button.position(20 + (buttonWidth + 5) * j, 20 + (buttonHeight + 5) * i)
             button.mousePressed(() => {
-                track.appendArc(turnInfo.radius * trackWidth, Math.PI / 4, turnInfo.direction === "right", trackWidth)
+                game.track.appendArc(turnInfo.radius * trackWidth, Math.PI / 4, turnInfo.direction === "right", trackWidth)
             })
         }
     }
@@ -80,20 +80,20 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
     buttons[8].position(20, 20 + 4 * (buttonHeight + 5))
     // buttons[8].mousePressed(() => { buildTrack(1, "straight", trackWidth, currentDirection, renderTrack, p) })
     buttons[8].mousePressed(() => {
-        track.appendStraight(trackWidth, trackWidth)
+        game.track.appendStraight(trackWidth, trackWidth)
     })
 
     buttons[9] = p.createButton("SQRT(2) units straight")
     buttons[9].size(2 * buttonWidth + 5, buttonHeight)
     buttons[9].position(20, 20 + 5 * (buttonHeight + 5))
-    buttons[9].mousePressed(() => { track.appendStraight(Math.sqrt(2) * trackWidth, trackWidth) })
+    buttons[9].mousePressed(() => { game.track.appendStraight(Math.sqrt(2) * trackWidth, trackWidth) })
 
     buttons[10] = p.createButton("Delete Last")
     buttons[10].size(2 * buttonWidth + 5, buttonHeight)
     buttons[10].position(20, 20 + 6 * (buttonHeight + 5))
     buttons[10].mousePressed(() => {
-        if (track.pieces.length > 1) {
-            track.deleteLastPiece()
+        if (game.track.pieces.length > 1) {
+            game.track.deleteLastPiece()
         }
     })
 
