@@ -152,6 +152,14 @@ export default class Game {
 			p.keyPressed = () => {
 				this.keyPressed()
 			}
+
+			p.windowResized = () => {
+				this.p.resizeCanvas(window.innerWidth, window.innerHeight)
+				this.renderTrack.resizeCanvas(this.p.width, this.p.height)
+				this.renderCars.resizeCanvas(this.p.width, this.p.height)
+				this.grid.resizeCanvas(this.p.width, this.p.height)
+				// this.renderMap.resizeCanvas(this.p.width, this.p.height)
+			}
 		})
 	}
 

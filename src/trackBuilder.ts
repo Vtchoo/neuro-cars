@@ -105,17 +105,20 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
 
     buttons[12] = p.createButton("Reset")
     buttons[12].size(buttonWidth, buttonHeight)
-    buttons[12].position(20, p.height - buttonHeight - 20)
+    // buttons[12].position(20, p.height - buttonHeight - 20)
+    buttons[12].style(`bottom: 20px; left: 20px; position: absolute;`)
     buttons[12].mousePressed(() => resetTrack(game))
 
     buttons[13] = p.createButton("Done!")
     buttons[13].size(buttonWidth, buttonHeight)
-    buttons[13].position(20 + 1 * (buttonWidth + 5), p.height - buttonHeight - 20)
+    // buttons[13].position(20 + 1 * (buttonWidth + 5), p.height - buttonHeight - 20)
+    buttons[13].style(`bottom: 20px; left: ${buttonWidth + 25}px; position: absolute;`)
     buttons[13].mousePressed(() => setTrack(renderTrack, trackMap, renderMap, p, resolution, game))
 
     buttons[14] = p.createButton("Load Track")
     buttons[14].size(buttonWidth, buttonHeight)
-    buttons[14].position(20 + 2 * (buttonWidth + 5), p.height - buttonHeight - 20)
+    // buttons[14].position(20 + 2 * (buttonWidth + 5), p.height - buttonHeight - 20)
+    buttons[14].style(`bottom: 20px; left: ${2 * (buttonWidth + 25)}px; position: absolute;`)
     buttons[14].mousePressed(() => loadTrackInEditor(p, game))
 }
 
@@ -198,27 +201,32 @@ export function setTrack(renderTrack: p5.Graphics, trackMap: number[][], renderM
     // Show additional buttons to control the visualization
     const exibInputs = p.createButton("Show Inputs")
     exibInputs.size(buttonWidth, buttonHeight)
-    exibInputs.position(20, p.height - buttonHeight - 20)
+    // exibInputs.position(20, p.height - buttonHeight - 20)
+    exibInputs.style(`bottom: 20px; left: 20px; position: absolute;`)
     exibInputs.mousePressed(() => game.toggleShowInputs())
 
     const exibMap = p.createButton("Show Map")
     exibMap.size(buttonWidth, buttonHeight)
-    exibMap.position(20 + (buttonWidth + 5) * 1, p.height - buttonHeight - 20)
+    // exibMap.position(20 + (buttonWidth + 5) * 1, p.height - buttonHeight - 20)
+    exibMap.style(`bottom: 20px; left: ${buttonWidth + 25}px; position: absolute;`)
     exibMap.mousePressed(() => game.toggleShowMap())
 
     const incrTime = p.createButton("Increase simul. time")
     incrTime.size(buttonWidth, buttonHeight)
-    incrTime.position(20 + (buttonWidth + 5) * 2, p.height - buttonHeight - 20)
+    // incrTime.position(20 + (buttonWidth + 5) * 2, p.height - buttonHeight - 20)
+    incrTime.style(`bottom: 20px; left: ${2 * (buttonWidth + 5)}px; position: absolute;`)
     incrTime.mousePressed(() => game.incrementMaxTicks(100))
 
     const showGraph = p.createButton("Show graphs")
     showGraph.size(buttonWidth, buttonHeight)
-    showGraph.position(20 + (buttonWidth + 5) * 3, p.height - buttonHeight - 20)
+    // showGraph.position(20 + (buttonWidth + 5) * 3, p.height - buttonHeight - 20)
+    showGraph.style(`bottom: 20px; left: ${3 * (buttonWidth + 5)}px; position: absolute;`)
     showGraph.mousePressed(() => game.toggleDrawGraphs())
 
     const followBest = p.createButton("Follow best car")
     followBest.size(buttonWidth, buttonHeight)
-    followBest.position(20 + (buttonWidth + 5) * 4, p.height - buttonHeight - 20)
+    // followBest.position(20 + (buttonWidth + 5) * 4, p.height - buttonHeight - 20)
+    followBest.style(`bottom: 20px; left: ${4 * (buttonWidth + 5)}px; position: absolute;`)
     followBest.mousePressed(() => { game.followBestCar = !game.followBestCar })
 
     game.setPhase("setup")
