@@ -55,7 +55,7 @@ export default class Track {
 
     // debug
     drawLastPieceVector: boolean = true
-    drawTrackMapBounds: boolean = true
+    drawTrackMapBounds: boolean = false
     drawTrackMapCells: boolean = false
 
     boundQueryType: "analytic" | "map" = "map"
