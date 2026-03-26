@@ -322,6 +322,8 @@ export default class Game {
 				// Sort the population by fitness
 				this.population.sort(function (a, b) { return b.neuralNet.fitness - a.neuralNet.fitness })
 
+				this.population.forEach(car => car.fadeColor())
+
 				if (this.population[0].speed > 0.01) {
 					console.log("Best car is still moving, next generation will have more time to run")
 					// add some extra frames cause the best car hasn't actually stopped but just got very slow, so we give it some extra time to see if it can get unstuck and keep going

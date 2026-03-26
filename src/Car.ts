@@ -29,11 +29,23 @@ interface RGB {
     b: number
 }
 
+interface HSL {
+    h: number
+    s: number
+    l: number
+}
+
 export default class Car {
     // Car paint (helps to keep track of individuals)
-    paintRGB: RGB
+    private color: HSL
+    private colorRGB: RGB
+
+    private set colorHSL(color: HSL) {
+        this.color = color
+        this.colorRGB = convertHSLToRGB(color.h, color.s, color.l)
+    }
     get paint() {
-        return "rgb(" + this.paintRGB.r + "," + this.paintRGB.g + "," + this.paintRGB.b + ")"
+        return "rgb(" + this.colorRGB.r + "," + this.colorRGB.g + "," + this.colorRGB.b + ")"
     }
 
     private inputFormat: InputFormat | InputFormat[] = "lookahead"
@@ -55,6 +67,12 @@ export default class Car {
     private totalLookAheadPoints = 10
     lastCurrentCarPositionInTrack: Vector | null = null
     lastLookAheadPoints: Vector[] | null = null
+
+    fadeColor() {
+        const fadedColor = { ...this.color }
+        fadedColor.s = Math.max(0, fadedColor.s - 1)
+        this.colorHSL = fadedColor
+    }
 
     private getInputsCount() {
         const fixedInputs = 1 // speed
@@ -89,7 +107,8 @@ export default class Car {
         this.neuralNet = new NeuralNet(nnLayers, nnNeurons, inputs, nnOutputs, nnRange, nnMutationRate, nnActivation)
 
         const color = { h: this.generation % 360, s: 100, l: 50 } // getRandomColor()
-        this.paintRGB = convertHSLToRGB(color.h, color.s, color.l)
+        this.color = color
+        this.colorRGB = convertHSLToRGB(color.h, color.s, color.l)
     }
 
     // Updates car position
