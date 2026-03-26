@@ -4,6 +4,7 @@ import { newVector, Vector } from "./Vector"
 import Track, { TrackPiece, TrackPieceType } from "./Track"
 import { queryTrack, TrackSegment } from "./utils/track"
 import { convertHSLToRGB } from "./utils/colors"
+import { softsign } from "./utils/activationFunctions"
 
 let avgDeltaTime = 1 / 60 // 0.016807703080427727
 
@@ -263,11 +264,13 @@ export default class Car {
 
         const normalizationFactor = 1 + maxLookaheadDistance
 
+        const trackPiece = track.analyticPieces[currentCarPositionInTrack.segmentIndex]
+
         const finalInputs = [
             ...relativeLookAheadPoints.flatMap(point => [point.x / normalizationFactor, point.y / normalizationFactor]),
             this.speed,
             currentCarPositionInTrack.headingAngle,
-            currentCarPositionInTrack.lateralOffset,
+            currentCarPositionInTrack.lateralOffset / (trackPiece.width / 2),
         ]
 
         return finalInputs
