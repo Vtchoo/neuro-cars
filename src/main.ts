@@ -24,7 +24,7 @@ const trackWidth = 120
 // Simulation settings
 var averageFrameRate
 var frameRecord = []
-var avgDeltaTime = 0.016807703080427727
+var avgDeltaTime = 1 / 60 // 0.016807703080427727
 
 // Data logging and graphing
 var maxFitness = [0]

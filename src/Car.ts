@@ -5,7 +5,7 @@ import Track, { TrackPiece, TrackPieceType } from "./Track"
 import { queryTrack, TrackSegment } from "./utils/track"
 import { convertHSLToRGB } from "./utils/colors"
 
-let avgDeltaTime = 0.016807703080427727
+let avgDeltaTime = 1 / 60 // 0.016807703080427727
 
 // Neural net settings
 const nnLayers = 1
