@@ -285,7 +285,7 @@ export default class Game {
 
 				// Follow best car camera logic
 				if (this.followBestCar && this.population.length > 0 && !playerDrive) {
-					const bestCar = this.population[0] // Population is sorted during breeding, so [0] is the best
+					const bestCar = this.population.reduce((best, car) => car.neuralNet.fitness > best.neuralNet.fitness ? car : best, this.population[0])
 					// Center camera on the best car
 					this.cameraOffsetX = -bestCar.pos.x
 					this.cameraOffsetY = -bestCar.pos.y
@@ -613,7 +613,8 @@ export default class Game {
 			game: {
 				generation: this.generation,
 				ticks: this.ticks,
-				maxTicks: this.maxTicks
+				maxTicks: this.maxTicks,
+				startPointIndex: this.startPointIndex,
 			},
 			population: this.population.map(car => ({
 				NN: car.neuralNet.exportData(),
@@ -682,6 +683,7 @@ export default class Game {
 		this.generation = saveData.game.generation;
 		this.ticks = saveData.game.ticks;
 		this.maxTicks = saveData.game.maxTicks;
+		this.startPointIndex = saveData.game.startPointIndex;
 
 		// Restore population
 		this.population = saveData.population.map((carData: any) => {
