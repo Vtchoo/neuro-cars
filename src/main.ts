@@ -49,6 +49,7 @@ export default class Game {
 
 	private p: p5
 
+	backgroundImage: p5.Image
 	renderTrack: p5.Graphics
 	renderCars: p5.Graphics
 
@@ -171,6 +172,7 @@ export default class Game {
 
 	preload() {
 		carSprite = this.p.loadImage("./images/car.png")
+		this.backgroundImage = this.p.loadImage("./images/grass.jpg")
 		//carSprite = loadImage("car.png")
 		// carSprite = this.p.loadImage("https://raw.githubusercontent.com/Vtchoo/smartRace2/master/images/car.png")
 	}
@@ -182,15 +184,17 @@ export default class Game {
 		this.renderTrack = this.p.createGraphics(this.p.width, this.p.height)
 		this.renderCars = this.p.createGraphics(this.p.width, this.p.height)
 		this.grid = this.p.createGraphics(this.p.width, this.p.height)
-		this.p.background("green")
 	}
 
 	draw() {
-		this.p.background("green")
 		this.p.push()
 		this.p.translate(this.p.width / 2, this.p.height / 2)
 		this.p.scale(this.cameraZoom)
 		this.p.translate(this.cameraOffsetX, this.cameraOffsetY)
+
+		// Draw tiled background that covers the visible area
+		this.drawTiledBackground()
+
 		switch (phase) {
 			case "setStart":
 
@@ -222,7 +226,6 @@ export default class Game {
 
 			case "buildTrack":
 
-				this.p.background("green")
 				this.track.draw(this.p, this.p)
 				// this.p.image(this.renderTrack, 0, 0)
 				if (this.showGrid == true) { this.p.image(this.grid, 0, 0) }
@@ -514,6 +517,48 @@ export default class Game {
 		}
 	}
 
+	private drawTiledBackground() {
+		if (!this.backgroundImage) return;
+		
+		const imageScaling = 1; // Adjust this if you want to scale the background image
+
+		const imgWidth = this.backgroundImage.width * imageScaling;
+		const imgHeight = this.backgroundImage.height * imageScaling;
+		
+		// Calculate the visible area in world coordinates (considering camera transform)
+		const screenWidth = this.p.width;
+		const screenHeight = this.p.height;
+		
+		// Calculate world bounds visible on screen (accounting for camera transform)
+		const worldLeft = (-screenWidth / 2) / this.cameraZoom - this.cameraOffsetX;
+		const worldRight = (screenWidth / 2) / this.cameraZoom - this.cameraOffsetX;
+		const worldTop = (-screenHeight / 2) / this.cameraZoom - this.cameraOffsetY;
+		const worldBottom = (screenHeight / 2) / this.cameraZoom - this.cameraOffsetY;
+		
+		// Calculate which tiles we need to draw (with small buffer)
+		const startX = Math.floor(worldLeft / imgWidth) - 1;
+		const endX = Math.ceil(worldRight / imgWidth) + 1;
+		const startY = Math.floor(worldTop / imgHeight) - 1;
+		const endY = Math.ceil(worldBottom / imgHeight) + 1;
+		
+		// Draw only the visible tiles
+		this.p.push()
+		this.p.noSmooth()
+		for (let x = startX; x <= endX; x++) {
+			for (let y = startY; y <= endY; y++) {
+				// apply a random rotation to the background image based on the tile coordinates to add some visual variety
+				const rotationAngle = ((x * 31 + y * 17) % 4) * (Math.PI / 2); // Rotate in 90 degree increments
+				this.p.push()
+				this.p.translate(x * imgWidth + imgWidth / 2, y * imgHeight + imgHeight / 2)
+				this.p.rotate(rotationAngle)
+				
+				this.p.image(this.backgroundImage, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight);
+				this.p.pop()
+			}
+		}
+		this.p.pop()
+	}
+
 	private previousMouseX = 0
 	private previousMouseY = 0
 	private cameraOffsetX = 0
@@ -675,10 +720,6 @@ export default class Game {
 		this.track = Track.fromData(saveData.track);
 
 		// Regenerate track graphics
-		this.renderTrack.push();
-		this.renderTrack.fill("green");
-		this.renderTrack.rect(0, 0, this.p.width, this.p.height);
-		this.renderTrack.pop();
 		this.track.draw(this.p, this.p);
 
 		// Restore game state

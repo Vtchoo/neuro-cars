@@ -235,7 +235,7 @@ export default class Track {
     }
 
     draw(p: p5, renderTrack: p5) {
-        renderTrack.background("green")
+        // renderTrack.background("green")
         renderTrack.push()
         renderTrack.strokeCap(p.SQUARE)
         renderTrack.noFill()
