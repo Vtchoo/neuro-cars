@@ -58,7 +58,7 @@ export default class Track {
     drawTrackMapBounds: boolean = false
     drawTrackMapCells: boolean = false
 
-    boundQueryType: "analytic" | "map" = "map"
+    boundQueryType: "analytic" | "map" = "analytic"
 
     /**
      * The analyticPieces array is used to store aggregated track pieces that can be used
@@ -632,36 +632,150 @@ export default class Track {
         const track = new Track();
         track.startingPoint = new Vector(data.startingPoint.x, data.startingPoint.y);
         track.startingDirection = data.startingDirection;
+        
+        // Load all pieces first without generating analytic pieces (for performance)
         for (const pieceData of data.pieces) {
+            let piece: TrackPiece;
             switch (pieceData.type) {
                 case TrackPieceType.Straight:
-                    track.addStraight(
-                        new Vector(pieceData.start.x, pieceData.start.y),
-                        new Vector(pieceData.end.x, pieceData.end.y),
-                        pieceData.width
-                    );
+                    piece = {
+                        type: TrackPieceType.Straight,
+                        start: new Vector(pieceData.start.x, pieceData.start.y),
+                        end: new Vector(pieceData.end.x, pieceData.end.y),
+                        width: pieceData.width
+                    };
                     break;
                 case TrackPieceType.Arc:
-                    track.addArc(
-                        new Vector(pieceData.start.x, pieceData.start.y),
-                        new Vector(pieceData.center.x, pieceData.center.y),
-                        new Vector(pieceData.end.x, pieceData.end.y),
-                        pieceData.clockwise,
-                        pieceData.width
-                    );
+                    piece = {
+                        type: TrackPieceType.Arc,
+                        start: new Vector(pieceData.start.x, pieceData.start.y),
+                        center: new Vector(pieceData.center.x, pieceData.center.y),
+                        end: new Vector(pieceData.end.x, pieceData.end.y),
+                        clockwise: pieceData.clockwise,
+                        width: pieceData.width
+                    };
                     break;
                 case TrackPieceType.Spline:
-                    track.addSpline(
-                        new Vector(pieceData.start.x, pieceData.start.y),
-                        new Vector(pieceData.control1.x, pieceData.control1.y),
-                        new Vector(pieceData.control2.x, pieceData.control2.y),
-                        new Vector(pieceData.end.x, pieceData.end.y),
-                        pieceData.width
-                    );
+                    piece = {
+                        type: TrackPieceType.Spline,
+                        start: new Vector(pieceData.start.x, pieceData.start.y),
+                        control1: new Vector(pieceData.control1.x, pieceData.control1.y),
+                        control2: new Vector(pieceData.control2.x, pieceData.control2.y),
+                        end: new Vector(pieceData.end.x, pieceData.end.y),
+                        width: pieceData.width
+                    };
                     break;
             }
+            track.pieces.push(piece);
         }
 
+        // Generate optimized analytic pieces in batch for much better performance
+        track.generateAnalyticPieces();
+
         return track;
+    }
+
+    /**
+     * Generates optimized analytic pieces from the current pieces array.
+     * This merges consecutive pieces of the same type and properties for better performance.
+     */
+    generateAnalyticPieces() {
+        this.analyticPieces = [];
+        
+        for (const piece of this.pieces) {
+            const lastAnalytic = this.analyticPieces[this.analyticPieces.length - 1];
+            
+            // Try to merge with the last analytic piece if possible
+            if (this.canMergeWithLast(piece, lastAnalytic)) {
+                this.mergeWithLastAnalytic(piece);
+            } else {
+                // Add as new analytic piece
+                this.analyticPieces.push(this.clonePiece(piece));
+            }
+        }
+        
+        console.log(`Generated ${this.analyticPieces.length} analytic pieces from ${this.pieces.length} original pieces`);
+    }
+
+    private canMergeWithLast(piece: TrackPiece, lastAnalytic: TrackPiece | undefined): boolean {
+        if (!lastAnalytic || piece.type !== lastAnalytic.type || piece.width !== lastAnalytic.width) {
+            return false;
+        }
+
+        switch (piece.type) {
+            case TrackPieceType.Straight:
+                // Can merge straights if they're collinear (same direction)
+                const lastStraight = lastAnalytic as StraightPiece;
+                const dir1 = Math.atan2(lastStraight.end.y - lastStraight.start.y, lastStraight.end.x - lastStraight.start.x);
+                const dir2 = Math.atan2(piece.end.y - piece.start.y, piece.end.x - piece.start.x);
+                return Math.abs(dir1 - dir2) < 0.001; // Small tolerance for floating point errors
+                
+            case TrackPieceType.Arc:
+                // Can merge arcs if they have same center and direction
+                const lastArc = lastAnalytic as ArcPiece;
+                const arcPiece = piece as ArcPiece;
+                return lastArc.center.x === arcPiece.center.x && 
+                       lastArc.center.y === arcPiece.center.y && 
+                       lastArc.clockwise === arcPiece.clockwise;
+                       
+            case TrackPieceType.Spline:
+                // Don't merge splines for now as it's more complex
+                return false;
+        }
+    }
+
+    private mergeWithLastAnalytic(piece: TrackPiece) {
+        const lastIndex = this.analyticPieces.length - 1;
+        const lastAnalytic = this.analyticPieces[lastIndex];
+
+        switch (piece.type) {
+            case TrackPieceType.Straight:
+                // Extend the last straight to the new end point
+                this.analyticPieces[lastIndex] = {
+                    ...lastAnalytic,
+                    end: new Vector(piece.end.x, piece.end.y)
+                } as StraightPiece;
+                break;
+                
+            case TrackPieceType.Arc:
+                // Extend the last arc to the new end point
+                this.analyticPieces[lastIndex] = {
+                    ...lastAnalytic,
+                    end: new Vector(piece.end.x, piece.end.y)
+                } as ArcPiece;
+                break;
+        }
+    }
+
+    private clonePiece(piece: TrackPiece): TrackPiece {
+        switch (piece.type) {
+            case TrackPieceType.Straight:
+                return {
+                    type: TrackPieceType.Straight,
+                    start: new Vector(piece.start.x, piece.start.y),
+                    end: new Vector(piece.end.x, piece.end.y),
+                    width: piece.width
+                };
+            case TrackPieceType.Arc:
+                const arcPiece = piece as ArcPiece;
+                return {
+                    type: TrackPieceType.Arc,
+                    start: new Vector(piece.start.x, piece.start.y),
+                    center: new Vector(arcPiece.center.x, arcPiece.center.y),
+                    end: new Vector(piece.end.x, piece.end.y),
+                    clockwise: arcPiece.clockwise,
+                    width: piece.width
+                };
+            case TrackPieceType.Spline:
+                const splinePiece = piece as SplinePiece;
+                return {
+                    type: TrackPieceType.Spline,
+                    start: new Vector(piece.start.x, piece.start.y),
+                    control1: new Vector(splinePiece.control1.x, splinePiece.control1.y),
+                    control2: new Vector(splinePiece.control2.x, splinePiece.control2.y),
+                    end: new Vector(piece.end.x, piece.end.y),
+                    width: piece.width
+                };
+        }
     }
 }
