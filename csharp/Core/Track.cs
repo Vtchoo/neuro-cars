@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using SmartRace.Utils;
@@ -49,6 +50,8 @@ namespace SmartRace.Core
 
         private List<TrackSegment> trackSegments;
 
+        private ConcurrentDictionary<string, bool> TrackMapCache = new();
+
         public Track(ITrackPiece[] pieces, Vector startingPoint, double startingDirection)
         {
             AnalyticPieces = pieces;
@@ -62,6 +65,11 @@ namespace SmartRace.Core
         // Basic track boundary check using track pieces
         public bool IsInsideTrack(double x, double y)
         {
+            var cacheKey = $"{x:F0}_{y:F0}";
+
+            if (TrackMapCache.TryGetValue(cacheKey, out bool cachedResult))
+                return cachedResult;
+
             var point = new XY(x, y);
             
             // Check if point is within reasonable distance of any track segment
@@ -69,9 +77,13 @@ namespace SmartRace.Core
             {
                 var closest = TrackMath.ClosestPointOnSegment(segment, point);
                 if (closest.Distance < GetTrackWidthAtSegment() / 2)
+                {
+                    TrackMapCache.TryAdd(cacheKey, true);
                     return true;
+                }
             }
-            
+
+            TrackMapCache.TryAdd(cacheKey, false);
             return false;
         }
 
@@ -113,6 +125,7 @@ namespace SmartRace.Core
 
             var pieces = new List<ITrackPiece>();
 
+            // Load all pieces first
             foreach (var pieceJson in trackJson.Pieces)
             {
                 var start = new Vector(pieceJson.Start.X, pieceJson.Start.Y);
@@ -139,8 +152,123 @@ namespace SmartRace.Core
             }
 
             var startingPoint = new Vector(trackJson.StartingPoint.X, trackJson.StartingPoint.Y);
+            var track = new Track(pieces.ToArray(), startingPoint, trackJson.StartingDirection);
             
-            return new Track(pieces.ToArray(), startingPoint, trackJson.StartingDirection);
+            // Generate optimized analytic pieces for better performance
+            track.GenerateOptimizedAnalyticPieces();
+            
+            return track;
+        }
+
+        /// <summary>
+        /// Generates optimized analytic pieces by merging consecutive pieces of the same type.
+        /// This significantly improves performance with tracks that have many small pieces.
+        /// </summary>
+        public void GenerateOptimizedAnalyticPieces()
+        {
+            if (AnalyticPieces == null || AnalyticPieces.Length == 0)
+                return;
+
+            var originalCount = AnalyticPieces.Length;
+            var optimizedPieces = new List<ITrackPiece>();
+            
+            foreach (var piece in AnalyticPieces)
+            {
+                var lastOptimized = optimizedPieces.LastOrDefault();
+                
+                if (CanMergeWithLast(piece, lastOptimized))
+                {
+                    MergeWithLast(optimizedPieces, piece);
+                }
+                else
+                {
+                    optimizedPieces.Add(ClonePiece(piece));
+                }
+            }
+            
+            AnalyticPieces = optimizedPieces.ToArray();
+            Console.WriteLine($"Optimized track: {optimizedPieces.Count} analytic pieces from {originalCount} original pieces");
+        }
+
+        private bool CanMergeWithLast(ITrackPiece piece, ITrackPiece lastOptimized)
+        {
+            if (lastOptimized == null || 
+                piece.Type != lastOptimized.Type || 
+                Math.Abs(piece.Width - lastOptimized.Width) > 0.001)
+                return false;
+
+            switch (piece.Type)
+            {
+                case TrackPieceType.Straight:
+                    // Can merge straights if they're collinear
+                    var dir1 = Math.Atan2(lastOptimized.End.Y - lastOptimized.Start.Y, 
+                                         lastOptimized.End.X - lastOptimized.Start.X);
+                    var dir2 = Math.Atan2(piece.End.Y - piece.Start.Y, 
+                                         piece.End.X - piece.Start.X);
+                    return Math.Abs(dir1 - dir2) < 0.001; // Small tolerance for floating point errors
+                    
+                case TrackPieceType.Arc:
+                    // Can merge arcs if they have same center and direction
+                    var lastArc = (IArcPiece)lastOptimized;
+                    var arcPiece = (IArcPiece)piece;
+                    return Math.Abs(lastArc.Center.X - arcPiece.Center.X) < 0.001 && 
+                           Math.Abs(lastArc.Center.Y - arcPiece.Center.Y) < 0.001 && 
+                           lastArc.Clockwise == arcPiece.Clockwise;
+                           
+                default:
+                    return false; // Don't merge other types for now
+            }
+        }
+
+        private void MergeWithLast(List<ITrackPiece> optimizedPieces, ITrackPiece piece)
+        {
+            var lastIndex = optimizedPieces.Count - 1;
+            var lastOptimized = optimizedPieces[lastIndex];
+
+            switch (piece.Type)
+            {
+                case TrackPieceType.Straight:
+                    optimizedPieces[lastIndex] = new StraightPiece(
+                        lastOptimized.Start, 
+                        piece.End, 
+                        piece.Width);
+                    break;
+                    
+                case TrackPieceType.Arc:
+                    var lastArc = (IArcPiece)lastOptimized;
+                    var arcPiece = (IArcPiece)piece;
+                    optimizedPieces[lastIndex] = new ArcPiece(
+                        lastOptimized.Start, 
+                        piece.End, 
+                        lastArc.Center, 
+                        lastArc.Clockwise, 
+                        piece.Width);
+                    break;
+            }
+        }
+
+        private ITrackPiece ClonePiece(ITrackPiece piece)
+        {
+            switch (piece.Type)
+            {
+                case TrackPieceType.Straight:
+                    return new StraightPiece(
+                        new Vector(piece.Start.X, piece.Start.Y), 
+                        new Vector(piece.End.X, piece.End.Y), 
+                        piece.Width);
+                        
+                case TrackPieceType.Arc:
+                    var arcPiece = (IArcPiece)piece;
+                    return new ArcPiece(
+                        new Vector(piece.Start.X, piece.Start.Y), 
+                        new Vector(piece.End.X, piece.End.Y), 
+                        new Vector(arcPiece.Center.X, arcPiece.Center.Y), 
+                        arcPiece.Clockwise, 
+                        piece.Width);
+                        
+                default:
+                    throw new NotSupportedException($"Unsupported piece type for cloning: {piece.Type}");
+            }
         }
 
         // Convert back to JSON data for saving
