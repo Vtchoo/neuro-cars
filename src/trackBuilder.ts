@@ -205,12 +205,6 @@ export function setTrack(renderTrack: p5.Graphics, trackMap: number[][], renderM
     exibInputs.style(`bottom: 20px; left: 20px; position: absolute;`)
     exibInputs.mousePressed(() => game.toggleShowInputs())
 
-    const exibMap = p.createButton("Show Map")
-    exibMap.size(buttonWidth, buttonHeight)
-    // exibMap.position(20 + (buttonWidth + 5) * 1, p.height - buttonHeight - 20)
-    exibMap.style(`bottom: 20px; left: ${buttonWidth + 25}px; position: absolute;`)
-    exibMap.mousePressed(() => game.toggleShowMap())
-
     const incrTime = p.createButton("Increase simul. time")
     incrTime.size(buttonWidth, buttonHeight)
     // incrTime.position(20 + (buttonWidth + 5) * 2, p.height - buttonHeight - 20)

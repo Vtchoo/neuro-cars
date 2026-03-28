@@ -70,7 +70,7 @@ export default class Car {
 
     fadeColor() {
         const fadedColor = { ...this.color }
-        fadedColor.s = Math.max(0, fadedColor.s - 1)
+        fadedColor.s = Math.max(0, fadedColor.s - 2)
         this.colorHSL = fadedColor
     }
 

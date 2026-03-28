@@ -111,7 +111,7 @@ namespace SmartRace.Core
         public void FadeColor()
         {
             HSL fadedColor = color;
-            fadedColor.S = Math.Max(0, fadedColor.S - 1);
+            fadedColor.S = Math.Max(0, fadedColor.S - 2);
             ColorHSL = fadedColor;
         }
 

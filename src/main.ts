@@ -5,6 +5,7 @@ import { newVector, Vector } from './Vector';
 import Car from './Car';
 import { NeuralNet } from './NeuralNet';
 import Track, { TrackPieceType } from './Track';
+import { tooltip } from './utils/tooltip';
 //---------- SMART RACE 2 ----------
 
 // Important objects
@@ -303,6 +304,26 @@ export default class Game {
 					// player.show()
 				}
 
+				// if mouse is over some car, show that car's inputs (only if showInputs is not "all" or "best")
+				// and also show a tooltip with the car's fitness and generation
+				const mouseWorldX = (this.p.mouseX - this.p.width / 2) / this.cameraZoom - this.cameraOffsetX
+				const mouseWorldY = (this.p.mouseY - this.p.height / 2) / this.cameraZoom - this.cameraOffsetY
+				for (const car of this.population) {
+					if (mouseWorldX > car.pos.x - 10 && mouseWorldX < car.pos.x + 10 && mouseWorldY > car.pos.y - 10 && mouseWorldY < car.pos.y + 10) {
+						if (this.showInputs === "none") {
+							car.showInputs(this.p)
+						}
+						tooltip(
+							this.p,
+							[`Fitness: ${car.neuralNet.fitness.toFixed(2)}`, `Gen: ${car.generation}`],
+							car.pos.x + 20 / this.cameraZoom,
+							car.pos.y + 15 / this.cameraZoom,
+							1 / this.cameraZoom
+						)
+						break
+					}
+				}
+
 				// Draws the graph data
 
 				const everyCarIsStopped = this.population.every(car => car.speed < 0.01)
@@ -519,28 +540,28 @@ export default class Game {
 
 	private drawTiledBackground() {
 		if (!this.backgroundImage) return;
-		
+
 		const imageScaling = 1; // Adjust this if you want to scale the background image
 
 		const imgWidth = this.backgroundImage.width * imageScaling;
 		const imgHeight = this.backgroundImage.height * imageScaling;
-		
+
 		// Calculate the visible area in world coordinates (considering camera transform)
 		const screenWidth = this.p.width;
 		const screenHeight = this.p.height;
-		
+
 		// Calculate world bounds visible on screen (accounting for camera transform)
 		const worldLeft = (-screenWidth / 2) / this.cameraZoom - this.cameraOffsetX;
 		const worldRight = (screenWidth / 2) / this.cameraZoom - this.cameraOffsetX;
 		const worldTop = (-screenHeight / 2) / this.cameraZoom - this.cameraOffsetY;
 		const worldBottom = (screenHeight / 2) / this.cameraZoom - this.cameraOffsetY;
-		
+
 		// Calculate which tiles we need to draw (with small buffer)
 		const startX = Math.floor(worldLeft / imgWidth) - 1;
 		const endX = Math.ceil(worldRight / imgWidth) + 1;
 		const startY = Math.floor(worldTop / imgHeight) - 1;
 		const endY = Math.ceil(worldBottom / imgHeight) + 1;
-		
+
 		// Draw only the visible tiles
 		this.p.push()
 		this.p.noSmooth()
@@ -551,7 +572,7 @@ export default class Game {
 				this.p.push()
 				this.p.translate(x * imgWidth + imgWidth / 2, y * imgHeight + imgHeight / 2)
 				this.p.rotate(rotationAngle)
-				
+
 				this.p.image(this.backgroundImage, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight);
 				this.p.pop()
 			}
