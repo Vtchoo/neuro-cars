@@ -70,7 +70,7 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
             button.size(buttonWidth, buttonHeight)
             button.position(20 + (buttonWidth + 5) * j, 20 + (buttonHeight + 5) * i)
             button.mousePressed(() => {
-                game.track.appendArc(turnInfo.radius * trackWidth, Math.PI / 4, turnInfo.direction === "right", trackWidth)
+                game.track.appendArc(turnInfo.radius * trackWidth, Math.PI / 8, turnInfo.direction === "right", trackWidth)
             })
         }
     }

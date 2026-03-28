@@ -49,8 +49,13 @@ let player: Car
 export default class Game {
 
 	private p: p5
+	private canvas: p5.Renderer
 
 	backgroundImage: p5.Image
+	referenceImage: p5.Image | null = null
+	referenceImageScale: number = 1
+	referenceImageOpacity: number = 0.5
+	private referenceImageButton: p5.Element | null = null
 	renderTrack: p5.Graphics
 	renderCars: p5.Graphics
 
@@ -135,11 +140,21 @@ export default class Game {
 				this.draw()
 			}
 
-			p.mouseClicked = () => {
-				this.mouseClicked()
+			p.mouseClicked = (e) => {
+				console.log('Mouse clicked:', e)
+				// if CTRL is pressed, we don't want to trigger mouseClicked because the user is probably trying to save or load the game, so we check if CTRL is pressed and if the click is on the canvas before triggering mouseClicked
+				if (e?.ctrlKey) {
+					return
+				}
+
+
+				if (e?.target === this.canvas.elt) {
+					this.mouseClicked()
+				}
 			}
 
-			p.mousePressed = () => {
+			p.mousePressed = (e) => {
+				console.log('Mouse pressed:', e)
 				this.mousePressed()
 			}
 
@@ -160,6 +175,10 @@ export default class Game {
 				this.renderTrack.resizeCanvas(this.p.width, this.p.height)
 				this.renderCars.resizeCanvas(this.p.width, this.p.height)
 				this.grid.resizeCanvas(this.p.width, this.p.height)
+				// Update reference image button position
+				if (this.referenceImageButton) {
+					this.referenceImageButton.position(20, this.p.height)
+				}
 				// this.renderMap.resizeCanvas(this.p.width, this.p.height)
 			}
 		})
@@ -181,11 +200,18 @@ export default class Game {
 	setup() {
 
 		// Create canvas
-		this.p.createCanvas(window.innerWidth, window.innerHeight)
+		this.canvas = this.p.createCanvas(window.innerWidth, window.innerHeight)
 		this.renderTrack = this.p.createGraphics(this.p.width, this.p.height)
 		this.renderCars = this.p.createGraphics(this.p.width, this.p.height)
 		this.grid = this.p.createGraphics(this.p.width, this.p.height)
 	}
+
+	convertMousePositionToWorldCoordinates(mouseX: number, mouseY: number) {
+		const worldX = (mouseX - this.p.width / 2) / this.cameraZoom - this.cameraOffsetX
+		const worldY = (mouseY - this.p.height / 2) / this.cameraZoom - this.cameraOffsetY
+		return { x: worldX, y: worldY }
+	}
+
 
 	draw() {
 		this.p.push()
@@ -195,6 +221,8 @@ export default class Game {
 
 		// Draw tiled background that covers the visible area
 		this.drawTiledBackground()
+		if (this.referenceImage)
+			this.drawReferenceImage()
 
 		switch (phase) {
 			case "setStart":
@@ -204,18 +232,22 @@ export default class Game {
 				// this.p.rect(0, 0, this.p.width, this.p.height)
 				this.p.fill("black")
 				this.p.noStroke()
-				this.p.rect((this.p.mouseX - this.p.width / 2) / this.cameraZoom - trackWidth / 2, (this.p.mouseY - this.p.height / 2) / this.cameraZoom - trackWidth / 2, trackWidth, trackWidth)
+				const { x: rectangleCenterX, y: rectangleCenterY } = this.convertMousePositionToWorldCoordinates(this.p.mouseX, this.p.mouseY)
+				// const rectangleCenterX = (this.p.mouseX - this.p.width / 2 + this.cameraOffsetX * this.cameraZoom)
+				// const rectangleCenterY = (this.p.mouseY - this.p.height / 2 + this.cameraOffsetY * this.cameraZoom)
+				this.p.rect(rectangleCenterX - trackWidth / 2, rectangleCenterY - trackWidth / 2, trackWidth, trackWidth)
 				this.p.pop();
 				// this.p.image(this.renderTrack, 0, 0)
 				break
 
-			case "rotateStart":
+			case "rotateStart": {
 
 				this.p.push()
 				// this.p.fill("green")
 				// this.p.rect(0, 0, this.p.width, this.p.height)
 				this.p.translate(this.start.x, this.start.y)
-				this.p.rotate(Math.atan2((this.p.mouseY - this.p.height / 2) / this.cameraZoom - this.start.y, (this.p.mouseX - this.p.width / 2) / this.cameraZoom - this.start.x))
+				const { x: mouseWorldX, y: mouseWorldY } = this.convertMousePositionToWorldCoordinates(this.p.mouseX, this.p.mouseY)
+				this.p.rotate(Math.atan2(mouseWorldY - this.start.y, mouseWorldX - this.start.x))
 				this.p.fill("black")
 				this.p.rect(-trackWidth / 2, -trackWidth / 2, trackWidth, trackWidth)
 				this.p.stroke("white")
@@ -224,7 +256,7 @@ export default class Game {
 				this.p.pop()
 				// this.p.image(this.renderTrack, 0, 0)
 				break
-
+			}
 			case "buildTrack":
 
 				this.track.draw(this.p, this.p)
@@ -463,6 +495,7 @@ export default class Game {
 
 		// Draw UI overlay (not affected by camera transform)
 		this.drawUI()
+		this.drawPhaseSpecificUI()
 	}
 
 	mouseClicked() {
@@ -472,12 +505,15 @@ export default class Game {
 				phase = "setStart"
 				break
 			case "setStart":
-				this.start = newVector((this.p.mouseX - this.p.width / 2) / this.cameraZoom, (this.p.mouseY - this.p.height / 2) / this.cameraZoom)
+				// this.start = newVector((this.p.mouseX - this.p.width / 2) / this.cameraZoom, (this.p.mouseY - this.p.height / 2) / this.cameraZoom)
+				const { x: worldX, y: worldY } = this.convertMousePositionToWorldCoordinates(this.p.mouseX, this.p.mouseY)
+				this.start = newVector(worldX, worldY)
 				this.track.startingPoint = this.start
 				phase = "rotateStart"
 				break
 			case "rotateStart":
-				this.direction = Math.atan2((this.p.mouseY - this.p.height / 2) / this.cameraZoom - this.start.y, (this.p.mouseX - this.p.width / 2) / this.cameraZoom - this.start.x)
+				const { x: worldX2, y: worldY2 } = this.convertMousePositionToWorldCoordinates(this.p.mouseX, this.p.mouseY)
+				this.direction = Math.atan2(worldY2 - this.start.y, worldX2 - this.start.x)
 				phase = "buildTrack"
 				this.track.startingDirection = this.direction
 
@@ -538,6 +574,102 @@ export default class Game {
 		}
 	}
 
+	private drawReferenceImage() {
+		if (this.referenceImage && (phase === "setStart" || phase === "rotateStart" || phase === "buildTrack")) {
+			this.p.push()
+			this.p.tint(255, this.referenceImageOpacity * 255)
+			// Draw reference image centered at origin with proper scale
+			const scaledWidth = this.referenceImage.width * this.referenceImageScale
+			const scaledHeight = this.referenceImage.height * this.referenceImageScale
+			this.p.image(this.referenceImage, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight)
+			this.p.pop()
+		}
+	}
+
+	private drawPhaseSpecificUI() {
+		if (phase === "menu") {
+			if (!this.referenceImageButton) {
+				this.createReferenceImageButton()
+			}
+			// Show reference image button
+			if (this.referenceImageButton) {
+				this.referenceImageButton.show()
+			}
+			// Show reference image info if loaded
+			if (this.referenceImage) {
+				this.p.fill(0, 0, 0, 150)
+				this.p.noStroke()
+				this.p.rect(180, this.p.height - 110, 200, 80)
+
+				this.p.fill(255)
+				this.p.textAlign(this.p.LEFT)
+				this.p.textSize(12)
+				this.p.text("Reference Image Loaded", 190, this.p.height - 90)
+				this.p.text(`Scale: ${this.referenceImageScale.toFixed(3)}`, 190, this.p.height - 70)
+				this.p.text(`Opacity: ${Math.round(this.referenceImageOpacity * 100)}%`, 190, this.p.height - 50)
+				this.p.text("Use +/- to adjust opacity", 190, this.p.height - 35)
+				this.p.text("Press R to remove reference", 190, this.p.height - 20)
+			}
+		}
+		if (phase === "setStart") {
+			// Hide reference image button in other phases
+			if (this.referenceImageButton) {
+				this.referenceImageButton.hide()
+			}
+		} else {
+		}
+	}
+
+	private createReferenceImageButton() {
+		this.referenceImageButton = this.p.createButton("Load Reference Image")
+		// this.referenceImageButton.parent(document.querySelector("canvas")) // Ensure the button is added to the DOM
+		this.referenceImageButton.position(20, this.p.height)
+		this.referenceImageButton.size(150, 30)
+		this.referenceImageButton.mouseClicked(() => {
+			this.loadReferenceImage()
+		})
+	}
+
+	private loadReferenceImage() {
+		// Create file input
+		const input = this.p.createFileInput((file: any) => {
+			if (file.type === 'image') {
+				// Prompt for distance
+				const distanceInput = prompt('Enter the distance from top to bottom of the image in meters:')
+				if (distanceInput === null) {
+					input.remove()
+					return
+				}
+
+				const distanceMeters = parseFloat(distanceInput)
+				if (isNaN(distanceMeters) || distanceMeters <= 0) {
+					alert('Please enter a valid positive number for distance')
+					input.remove()
+					return
+				}
+
+				// Load the image
+				this.p.loadImage(file.data, (img: p5.Image) => {
+					this.referenceImage = img
+					// Calculate scale: 1 meter = 10 pixels
+					// distanceMeters * 10 pixels/meter = desired height in pixels
+					const desiredHeightPixels = distanceMeters * 10
+					this.referenceImageScale = desiredHeightPixels / img.height
+					console.log(`Reference image loaded: ${img.width}x${img.height}, scaled by ${this.referenceImageScale}`)
+				}, () => {
+					alert('Failed to load image. Please try a different file.')
+				})
+			} else {
+				alert('Please select an image file')
+			}
+			input.remove()
+			this.setPhase("setStart") // Ensure we are in the correct phase to show the reference image after loading
+		})
+
+		// Trigger file input
+		input.elt.click()
+	}
+
 	private drawTiledBackground() {
 		if (!this.backgroundImage) return;
 
@@ -594,6 +726,15 @@ export default class Game {
 	mouseDragged() {
 		console.log("dragging")
 		switch (phase) {
+			case "setStart":
+				// only move in this phase if CTRL is pressed, otherwise the user is probably trying to move the camera, so we check if CTRL is pressed before allowing the user to move the starting point
+				if (this.p.keyIsDown(this.p.CONTROL)) {
+					this.cameraOffsetX += (this.p.mouseX - this.previousMouseX) / this.cameraZoom
+					this.cameraOffsetY += (this.p.mouseY - this.previousMouseY) / this.cameraZoom
+					this.previousMouseX = this.p.mouseX
+					this.previousMouseY = this.p.mouseY
+				}
+				break
 			case "buildTrack":
 			case "running":
 				// move camera around
@@ -668,6 +809,30 @@ export default class Game {
 			case 'G':
 				// Toggle show graphs
 				this.drawGraphs = !this.drawGraphs
+				break
+			case '=':
+			case '+':
+				// Increase reference image opacity
+				if (this.referenceImage) {
+					this.referenceImageOpacity = Math.min(1, this.referenceImageOpacity + 0.1)
+					console.log(`Reference image opacity: ${Math.round(this.referenceImageOpacity * 100)}%`)
+				}
+				break
+			case '-':
+			case '_':
+				// Decrease reference image opacity
+				if (this.referenceImage) {
+					this.referenceImageOpacity = Math.max(0.1, this.referenceImageOpacity - 0.1)
+					console.log(`Reference image opacity: ${Math.round(this.referenceImageOpacity * 100)}%`)
+				}
+				break
+			case 'r':
+			case 'R':
+				// Remove reference image (only in setStart, rotateStart, or buildTrack phase)
+				if ((phase === "setStart" || phase === "rotateStart" || phase === "buildTrack") && this.referenceImage) {
+					this.referenceImage = null
+					console.log("Reference image removed")
+				}
 				break
 		}
 	}

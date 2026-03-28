@@ -219,10 +219,10 @@ export default class Track {
             throw new Error("Cannot determine direction of the last piece. Please check the track pieces for consistency.")
         }
 
-        const startAngle = lastPieceDirection + (clockwise ? Math.PI / 2 : -Math.PI / 2)
-        const center = new Vector(lastPieceEnd.x + radius * Math.cos(startAngle), lastPieceEnd.y + radius * Math.sin(startAngle))
-        const endAngle = startAngle + (clockwise ? -angle : angle)
-        const end = new Vector(center.x + radius * Math.cos(endAngle - (clockwise ? Math.PI / 2 : -Math.PI / 2)), center.y + radius * Math.sin(endAngle - (clockwise ? Math.PI / 2 : -Math.PI / 2)))
+        const startAngle = lastPieceDirection + (clockwise ? -Math.PI / 2 : Math.PI / 2)
+        const center = new Vector(lastPieceEnd.x - radius * Math.cos(startAngle), lastPieceEnd.y - radius * Math.sin(startAngle))
+        const endAngle = startAngle + (clockwise ? angle : -angle)
+        const end = new Vector(center.x + radius * Math.cos(endAngle), center.y + radius * Math.sin(endAngle))
         this.addArc(lastPieceEnd, center, end, clockwise, width)
     }
 
