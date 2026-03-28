@@ -16,15 +16,27 @@ let buttons: p5.Element[]
 
 let showGrid = true
 
+// const turnButtons = [
+//     { label: 'Large Left', radius: 3.5, direction: 'left' },
+//     { label: 'Large Right', radius: 3.5, direction: 'right' },
+//     { label: 'Big Left', radius: 2.5, direction: 'left' },
+//     { label: 'Big Right', radius: 2.5, direction: 'right' },
+//     { label: 'Medium Left', radius: 1.5, direction: 'left' },
+//     { label: 'Medium Right', radius: 1.5, direction: 'right' },
+//     { label: 'Small Left', radius: 0.5, direction: 'left' },
+//     { label: 'Small Right', radius: 0.5, direction: 'right' },
+// ]
 const turnButtons = [
-    { label: 'Large Left', radius: 3.5, direction: 'left' },
-    { label: 'Large Right', radius: 3.5, direction: 'right' },
-    { label: 'Big Left', radius: 2.5, direction: 'left' },
-    { label: 'Big Right', radius: 2.5, direction: 'right' },
-    { label: 'Medium Left', radius: 1.5, direction: 'left' },
-    { label: 'Medium Right', radius: 1.5, direction: 'right' },
-    { label: 'Small Left', radius: 0.5, direction: 'left' },
-    { label: 'Small Right', radius: 0.5, direction: 'right' },
+    { label: 'Very Large Left', radius: 5.5, direction: 'left' },
+    { label: 'Very Large Right', radius: 5.5, direction: 'right' },
+    { label: 'Large Left', radius: 4.5, direction: 'left' },
+    { label: 'Large Right', radius: 4.5, direction: 'right' },
+    { label: 'Big Left', radius: 3.5, direction: 'left' },
+    { label: 'Big Right', radius: 3.5, direction: 'right' },
+    { label: 'Medium Left', radius: 2.5, direction: 'left' },
+    { label: 'Medium Right', radius: 2.5, direction: 'right' },
+    { label: 'Small Left', radius: 1.5, direction: 'left' },
+    { label: 'Small Right', radius: 1.5, direction: 'right' },
 ]
 
 export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirection: number, trackWidth: number, renderTrack: p5.Graphics, trackMap: number[][], renderMap: p5.Graphics, resolution: number, game: Game, track: Track) {
@@ -43,16 +55,18 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
     console.log(game.track.pieces)
     buttons = new Array()
 
-    buttons[0] = p.createButton("Large Left")
-    buttons[1] = p.createButton("Large Right")
-    buttons[2] = p.createButton("Big Left")
-    buttons[3] = p.createButton("Big Right")
-    buttons[4] = p.createButton("Medium Left")
-    buttons[5] = p.createButton("Medium Right")
-    buttons[6] = p.createButton("Small Left")
-    buttons[7] = p.createButton("Small Right")
+    buttons.push(p.createButton("Very Large Left"))
+    buttons.push(p.createButton("Very Large Right"))
+    buttons.push(p.createButton("Large Left"))
+    buttons.push(p.createButton("Large Right"))
+    buttons.push(p.createButton("Big Left"))
+    buttons.push(p.createButton("Big Right"))
+    buttons.push(p.createButton("Medium Left"))
+    buttons.push(p.createButton("Medium Right"))
+    buttons.push(p.createButton("Small Left"))
+    buttons.push(p.createButton("Small Right"))
 
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 5; i++) {
         for (let j = 0; j < 2; j++) {
 
             // let dir
@@ -70,56 +84,62 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
             button.size(buttonWidth, buttonHeight)
             button.position(20 + (buttonWidth + 5) * j, 20 + (buttonHeight + 5) * i)
             button.mousePressed(() => {
-                game.track.appendArc(turnInfo.radius * trackWidth, Math.PI / 8, turnInfo.direction === "right", trackWidth)
+                game.track.appendArc(turnInfo.radius * trackWidth, Math.PI / 16, turnInfo.direction === "right", trackWidth)
             })
         }
     }
 
-    buttons[8] = p.createButton("1 unit Straight")
-    buttons[8].size(2 * buttonWidth + 5, buttonHeight)
-    buttons[8].position(20, 20 + 4 * (buttonHeight + 5))
-    // buttons[8].mousePressed(() => { buildTrack(1, "straight", trackWidth, currentDirection, renderTrack, p) })
-    buttons[8].mousePressed(() => {
+    const straightButton = p.createButton("1 unit Straight")
+    straightButton.size(2 * buttonWidth + 5, buttonHeight)
+    straightButton.position(20, 20 + buttons.length * (buttonHeight + 5))
+    // straightButton.mousePressed(() => { buildTrack(1, "straight", trackWidth, currentDirection, renderTrack, p) })
+    straightButton.mousePressed(() => {
         game.track.appendStraight(trackWidth, trackWidth)
     })
+    buttons.push(straightButton)
 
-    buttons[9] = p.createButton("SQRT(2) units straight")
-    buttons[9].size(2 * buttonWidth + 5, buttonHeight)
-    buttons[9].position(20, 20 + 5 * (buttonHeight + 5))
-    buttons[9].mousePressed(() => { game.track.appendStraight(Math.sqrt(2) * trackWidth, trackWidth) })
+    const sqrt2Button = p.createButton("SQRT(2) units straight")
+    sqrt2Button.size(2 * buttonWidth + 5, buttonHeight)
+    sqrt2Button.position(20, 20 + buttons.length * (buttonHeight + 5))
+    sqrt2Button.mousePressed(() => { game.track.appendStraight(Math.sqrt(2) * trackWidth, trackWidth) })
+    buttons.push(sqrt2Button)
 
-    buttons[10] = p.createButton("Delete Last")
-    buttons[10].size(2 * buttonWidth + 5, buttonHeight)
-    buttons[10].position(20, 20 + 6 * (buttonHeight + 5))
-    buttons[10].mousePressed(() => {
+    const deleteLastButton = p.createButton("Delete Last")
+    deleteLastButton.size(2 * buttonWidth + 5, buttonHeight)
+    deleteLastButton.position(20, 20 + buttons.length * (buttonHeight + 5))
+    deleteLastButton.mousePressed(() => {
         if (game.track.pieces.length > 1) {
             game.track.deleteLastPiece()
         }
     })
+    buttons.push(deleteLastButton)
 
+    const showGridButton = p.createButton("Show Grid")
+    showGridButton.size(2 * buttonWidth + 5, buttonHeight)
+    showGridButton.position(20, 20 + buttons.length * (buttonHeight + 5))
+    showGridButton.mousePressed(() => { showGrid = !showGrid })
+    buttons.push(showGridButton)
 
-    buttons[11] = p.createButton("Show Grid")
-    buttons[11].size(2 * buttonWidth + 5, buttonHeight)
-    buttons[11].position(20, 20 + 7 * (buttonHeight + 5))
-    buttons[11].mousePressed(() => { showGrid = !showGrid })
+    const resetButton = p.createButton("Reset")
+    resetButton.size(buttonWidth, buttonHeight)
+    // resetButton.position(20, p.height - buttonHeight - 20)
+    resetButton.style(`bottom: 20px; left: 20px; position: absolute;`)
+    resetButton.mousePressed(() => resetTrack(game))
+    buttons.push(resetButton)
 
-    buttons[12] = p.createButton("Reset")
-    buttons[12].size(buttonWidth, buttonHeight)
-    // buttons[12].position(20, p.height - buttonHeight - 20)
-    buttons[12].style(`bottom: 20px; left: 20px; position: absolute;`)
-    buttons[12].mousePressed(() => resetTrack(game))
+    const doneButton = p.createButton("Done!")
+    doneButton.size(buttonWidth, buttonHeight)
+    // doneButton.position(20 + 1 * (buttonWidth + 5), p.height - buttonHeight - 20)
+    doneButton.style(`bottom: 20px; left: ${buttonWidth + 25}px; position: absolute;`)
+    doneButton.mousePressed(() => setTrack(renderTrack, trackMap, renderMap, p, resolution, game))
+    buttons.push(doneButton)
 
-    buttons[13] = p.createButton("Done!")
-    buttons[13].size(buttonWidth, buttonHeight)
-    // buttons[13].position(20 + 1 * (buttonWidth + 5), p.height - buttonHeight - 20)
-    buttons[13].style(`bottom: 20px; left: ${buttonWidth + 25}px; position: absolute;`)
-    buttons[13].mousePressed(() => setTrack(renderTrack, trackMap, renderMap, p, resolution, game))
-
-    buttons[14] = p.createButton("Load Track")
-    buttons[14].size(buttonWidth, buttonHeight)
-    // buttons[14].position(20 + 2 * (buttonWidth + 5), p.height - buttonHeight - 20)
-    buttons[14].style(`bottom: 20px; left: ${2 * (buttonWidth + 25)}px; position: absolute;`)
-    buttons[14].mousePressed(() => loadTrackInEditor(p, game))
+    const loadTrackButton = p.createButton("Load Track")
+    loadTrackButton.size(buttonWidth, buttonHeight)
+    // loadTrackButton.position(20 + 2 * (buttonWidth + 5), p.height - buttonHeight - 20)
+    loadTrackButton.style(`bottom: 20px; left: ${2 * (buttonWidth + 25)}px; position: absolute;`)
+    loadTrackButton.mousePressed(() => loadTrackInEditor(p, game))
+    buttons.push(loadTrackButton)
 }
 
 function resetTrack(game: Game) {
