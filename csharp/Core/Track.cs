@@ -44,6 +44,7 @@ namespace SmartRace.Core
     // Concrete Track implementation
     public class Track : ITrack
     {
+        public ITrackPiece[] Pieces { get; set; }
         public ITrackPiece[] AnalyticPieces { get; private set; }
         public Vector StartingPoint { get; set; }
         public double StartingDirection { get; set; }
@@ -54,6 +55,7 @@ namespace SmartRace.Core
 
         public Track(ITrackPiece[] pieces, Vector startingPoint, double startingDirection)
         {
+            Pieces = pieces;
             AnalyticPieces = pieces;
             StartingPoint = startingPoint;
             StartingDirection = startingDirection;

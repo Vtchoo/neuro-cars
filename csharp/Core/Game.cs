@@ -344,7 +344,7 @@ namespace SmartRace.Core
         // Update starting point for variety
         private void UpdateStartingPoint()
         {
-            if (cycleStartPoint == CycleStartPoint.Off || track?.AnalyticPieces == null || track.AnalyticPieces.Length == 0)
+            if (cycleStartPoint == CycleStartPoint.Off || track?.Pieces == null || track.Pieces.Length == 0)
                 return;
 
             var random = new Random();
@@ -356,14 +356,14 @@ namespace SmartRace.Core
                 // Update the start point index based on cycling mode
                 if (cycleStartPoint == CycleStartPoint.Sequential)
                 {
-                    startPointIndex = (startPointIndex + 1) % track.AnalyticPieces.Length;
+                    startPointIndex = (startPointIndex + 1) % track.Pieces.Length;
                 }
                 else if (cycleStartPoint == CycleStartPoint.Random)
                 {
-                    startPointIndex = random.Next(track.AnalyticPieces.Length);
+                    startPointIndex = random.Next(track.Pieces.Length);
                 }
 
-                var startPieceCandidate = track.AnalyticPieces[startPointIndex];
+                var startPieceCandidate = track.Pieces[startPointIndex];
                 
                 // If it's an arc and the radius is too small, skip it because cars would crash immediately
                 if (startPieceCandidate.Type == TrackPieceType.Arc)

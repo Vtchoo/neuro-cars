@@ -42,6 +42,7 @@ namespace SmartRace.Core
         bool IsInsideTrack(double x, double y);
         TrackDataJson? ToJsonData();
 
+        ITrackPiece[] Pieces { get; }
         ITrackPiece[] AnalyticPieces { get; }
     }
 
