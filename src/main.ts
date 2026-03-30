@@ -305,13 +305,14 @@ export default class Game {
 					individual.update(this.trackMap, this.resolution, this.track)
 				})
 
+				const bestCar = this.population.reduce((best, car) => car.neuralNet.fitness > best.neuralNet.fitness ? car : best, this.population[0])
+
 				switch (this.showInputs) {
 					case "all":
 						this.population.forEach(car => car.showInputs(this.p))
 						break
 					case "best":
-						if (this.population.length > 0)
-							this.population[0].showInputs(this.p)
+						bestCar?.showInputs(this.p)
 						break
 				}
 
@@ -321,7 +322,6 @@ export default class Game {
 
 				// Follow best car camera logic
 				if (this.followBestCar && this.population.length > 0 && !playerDrive) {
-					const bestCar = this.population.reduce((best, car) => car.neuralNet.fitness > best.neuralNet.fitness ? car : best, this.population[0])
 					// Center camera on the best car
 					this.cameraOffsetX = -bestCar.pos.x
 					this.cameraOffsetY = -bestCar.pos.y
@@ -345,9 +345,10 @@ export default class Game {
 						if (this.showInputs === "none") {
 							car.showInputs(this.p)
 						}
+						const realLifeSpeed = car.speed * (1/60) / (1/30) * 60 / 10 * 3.6
 						tooltip(
 							this.p,
-							[`Fitness: ${car.neuralNet.fitness.toFixed(2)}`, `Gen: ${car.generation}`],
+							[`Fitness: ${car.neuralNet.fitness.toFixed(2)}`, `Gen: ${car.generation}`, `Speed: ${realLifeSpeed.toFixed(2)} km/h`],
 							car.pos.x + 20 / this.cameraZoom,
 							car.pos.y + 15 / this.cameraZoom,
 							1 / this.cameraZoom
