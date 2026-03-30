@@ -69,7 +69,7 @@ namespace SmartRace.Core
         private int startPointIndex = 0;
 
         // Events for progress reporting
-        public event Action<int, double, double> GenerationCompleted; // generation, maxFitness, avgFitness
+        public event Action<int, double, double, double> GenerationCompleted; // generation, maxFitness, avgFitness, fitnessPerTick
         public event Action<int> TickCompleted; // ticks
         public event Action<string> StatusUpdated;
 
@@ -264,10 +264,12 @@ namespace SmartRace.Core
                 car.FadeColor();
             }
 
-            // Report generation completion
-            GenerationCompleted?.Invoke(Generation, maxFitness, avgFitness);
+            var fitnessPerTick = Ticks > 0 ? maxFitness / Ticks : 0;
             
-            StatusUpdated?.Invoke($"Generation {Generation}: Max={maxFitness:F2}, Avg={avgFitness:F2}, Ticks={Ticks}");
+            // Report generation completion
+            GenerationCompleted?.Invoke(Generation, maxFitness, avgFitness, fitnessPerTick);
+
+            StatusUpdated?.Invoke($"Generation {Generation}: Max={maxFitness:F2}, Avg={avgFitness:F2}, Ticks={Ticks}, Per tick={fitnessPerTick:F2}");
         }
 
         // Genetic algorithm breeding

@@ -240,17 +240,17 @@ namespace SmartRace.WinForms
             }
         }
 
-        private void Game_GenerationCompleted(int generation, double maxFitness, double avgFitness)
+        private void Game_GenerationCompleted(int generation, double maxFitness, double avgFitness, double fitnessPerTick)
         {
             if (InvokeRequired)
             {
-                Invoke(new Action<int, double, double>(Game_GenerationCompleted), generation, maxFitness, avgFitness);
+                Invoke(new Action<int, double, double, double>(Game_GenerationCompleted), generation, maxFitness, avgFitness, fitnessPerTick);
                 return;
             }
 
             UpdateStatsDisplay();
             progressBar.Value = generation + 1;
-            LogMessage($"Generation {generation} completed - Max: {maxFitness:F2}, Avg: {avgFitness:F2}");
+            LogMessage($"Generation {generation} completed - Max: {maxFitness:F2}, Avg: {avgFitness:F2}, Per tick: {fitnessPerTick:F2}");
         }
 
         private void Game_TickCompleted(int ticks)
