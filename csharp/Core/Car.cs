@@ -180,7 +180,7 @@ namespace SmartRace.Core
 
 
             var inputs = new double[GetInputsCount()];
-            inputs[0] = Speed;
+            inputs[0] = ActivationFunctions.SignedLog(Speed);
             inputs[1] = LastDrivingWheelDirection;
 
             switch (inputFormat)

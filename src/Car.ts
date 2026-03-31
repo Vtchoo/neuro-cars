@@ -4,7 +4,7 @@ import { newVector, Vector } from "./Vector"
 import Track, { TrackPiece, TrackPieceType } from "./Track"
 import { queryTrack, TrackSegment } from "./utils/track"
 import { convertHSLToRGB } from "./utils/colors"
-import { softsign } from "./utils/activationFunctions"
+import { signedLog, softsign } from "./utils/activationFunctions"
 
 let avgDeltaTime = 1 / 60 // 0.016807703080427727
 
@@ -165,7 +165,7 @@ export default class Car {
     // Gets sensors' data
     getInputs(trackMap: number[][], showInputs: boolean, p: p5, resolution: number, track: Track) {
         const inputs = [
-            this.speed,
+            signedLog(this.speed),
             this.lastDrivingWheelDirection,
         ]
 
