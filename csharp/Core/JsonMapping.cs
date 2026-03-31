@@ -73,7 +73,10 @@ namespace SmartRace.Core
         
         [JsonPropertyName("acceleration")]
         public double Acceleration { get; set; }
-        
+
+        [JsonPropertyName("lastDrivingWheelDirection")]
+        public double LastDrivingWheelDirection { get; set; } = 0;
+
         // Note: JavaScript version doesn't save paintRGB consistently, so making it optional
         [JsonPropertyName("paintRGB")]
         public object PaintRGB { get; set; }
@@ -269,7 +272,8 @@ namespace SmartRace.Core
                 Position = new PositionJson { X = car.Position.X, Y = car.Position.Y },
                 Speed = car.Speed,
                 Direction = car.Direction,
-                Acceleration = car.Acceleration
+                Acceleration = car.Acceleration,
+                LastDrivingWheelDirection = car.LastDrivingWheelDirection,
             };
         }
 
@@ -286,6 +290,7 @@ namespace SmartRace.Core
             car.NeuralNet = CreateNeuralNetFromJson(jsonData.NN);
             car.Speed = jsonData.Speed;
             car.Acceleration = jsonData.Acceleration;
+            car.LastDrivingWheelDirection = jsonData.LastDrivingWheelDirection;
 
             return car;
         }

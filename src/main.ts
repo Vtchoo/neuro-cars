@@ -858,6 +858,7 @@ export default class Game {
 				speed: car.speed,
 				direction: car.direction,
 				acceleration: car.acceleration,
+				lastDrivingWheelDirection: car.lastDrivingWheelDirection,
 				paintRGB: car.paintRGB
 			}))
 		};
@@ -924,6 +925,7 @@ export default class Game {
 			car.speed = carData.speed;
 			car.acceleration = carData.acceleration;
 			car.paintRGB = carData.paintRGB;
+			car.lastDrivingWheelDirection = carData.lastDrivingWheelDirection || 0;
 			return car;
 		});
 
