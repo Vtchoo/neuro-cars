@@ -89,12 +89,12 @@ export default class Track {
     /**
      * Maximum depth for quadtree subdivision
      */
-    private maxQuadTreeDepth: number = 8
+    private maxQuadTreeDepth: number = 12
     
     /**
      * Minimum size for quadtree subdivision
      */
-    private minQuadTreeSize: number = 16
+    private minQuadTreeSize: number = 2
 
     getLastPieceEnd(): Vector | null {
         if (this.pieces.length === 0) {
@@ -840,10 +840,16 @@ export default class Track {
     private trackPieceCrossesLine(piece: TrackPiece, lineStart: XY, lineEnd: XY): boolean {
         switch (piece.type) {
             case TrackPieceType.Straight: {
-                return this.lineSegmentIntersection(
-                    piece.start, piece.end,
-                    lineStart, lineEnd
-                ).intersects;
+                // For straights, check if some of the 2 parallel lines that form the track width intersect with the line
+                const dir = Math.atan2(piece.end.y - piece.start.y, piece.end.x - piece.start.x);
+                const offsetX = piece.width * Math.sin(dir) / 2;
+                const offsetY = piece.width * Math.cos(dir) / 2;
+                const line1Start = { x: piece.start.x - offsetX, y: piece.start.y + offsetY };
+                const line1End = { x: piece.end.x - offsetX, y: piece.end.y + offsetY };
+                const line2Start = { x: piece.start.x + offsetX, y: piece.start.y - offsetY };
+                const line2End = { x: piece.end.x + offsetX, y: piece.end.y - offsetY };
+                return this.lineSegmentIntersection(line1Start, line1End, lineStart, lineEnd).intersects ||
+                       this.lineSegmentIntersection(line2Start, line2End, lineStart, lineEnd).intersects;
             }
             case TrackPieceType.Arc: {
                 // For arcs, check if the arc path intersects the line
