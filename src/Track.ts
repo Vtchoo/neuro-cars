@@ -1123,8 +1123,8 @@ export default class Track {
                 // Can merge arcs if they have same center and direction
                 const lastArc = lastAnalytic as ArcPiece;
                 const arcPiece = piece as ArcPiece;
-                return lastArc.center.x === arcPiece.center.x &&
-                    lastArc.center.y === arcPiece.center.y &&
+                return Math.abs(lastArc.center.x - arcPiece.center.x) < 0.001 &&
+                    Math.abs(lastArc.center.y - arcPiece.center.y) < 0.001 &&
                     lastArc.clockwise === arcPiece.clockwise;
 
             case TrackPieceType.Spline:
