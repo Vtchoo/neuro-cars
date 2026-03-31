@@ -69,7 +69,7 @@ export default class Track {
 
     // debug
     drawLastPieceVector: boolean = true
-    drawTrackMapBounds: boolean = true
+    drawTrackMapBounds: boolean = false
     drawTrackMapCells: boolean = false
     drawQuadTree: boolean = true
 
@@ -89,7 +89,7 @@ export default class Track {
     /**
      * Maximum depth for quadtree subdivision
      */
-    private maxQuadTreeDepth: number = 12
+    private maxQuadTreeDepth: number = 10
     
     /**
      * Minimum size for quadtree subdivision
@@ -317,7 +317,7 @@ export default class Track {
             switch (piece.type) {
                 case TrackPieceType.Straight:
                     renderTrack.push()
-                    renderTrack.line(piece.start.x, piece.start.y, piece.end.x, piece.end.y)
+                    // renderTrack.line(piece.start.x, piece.start.y, piece.end.x, piece.end.y)
                     renderTrack.strokeWeight(1)
                     renderTrack.stroke("white")
                     const dir = Math.atan2(piece.end.y - piece.start.y, piece.end.x - piece.start.x)
@@ -343,7 +343,7 @@ export default class Track {
                     const actualAngleStart = piece.clockwise ? angleStart : angleEnd
                     const actualAngleEnd = piece.clockwise ? angleEnd : angleStart
                     renderTrack.push()
-                    renderTrack.arc(piece.center.x, piece.center.y, radius * 2, radius * 2, actualAngleStart, actualAngleEnd)
+                    // renderTrack.arc(piece.center.x, piece.center.y, radius * 2, radius * 2, actualAngleStart, actualAngleEnd)
                     renderTrack.strokeWeight(1)
                     renderTrack.stroke("white")
                     renderTrack.arc(piece.center.x, piece.center.y, (radius - piece.width / 2) * 2, (radius - piece.width / 2) * 2, actualAngleStart, actualAngleEnd, "open")
@@ -446,6 +446,7 @@ export default class Track {
             maxY = Math.max(maxY, bounds.maxY)
         }
 
+        console.log(`Calculated track bounds: minX=${minX}, minY=${minY}, maxX=${maxX}, maxY=${maxY}`)
         return { minX, minY, maxX, maxY }
     }
 
@@ -852,13 +853,47 @@ export default class Track {
                        this.lineSegmentIntersection(line2Start, line2End, lineStart, lineEnd).intersects;
             }
             case TrackPieceType.Arc: {
-                // For arcs, check if the arc path intersects the line
-                // This is a simplified check - for a more accurate implementation,
-                // we would need to check the actual arc geometry
-                return this.lineSegmentIntersection(
-                    piece.start, piece.end,  // Approximate with chord
-                    lineStart, lineEnd
-                ).intersects;
+                // let's do the actual arc-line intersection check
+                const radius = Math.sqrt((piece.center.x - piece.start.x) ** 2 + (piece.center.y - piece.start.y) ** 2);
+                const internalRadius = radius - piece.width / 2;
+                const externalRadius = radius + piece.width / 2;
+
+                // Check intersection with both the internal and external circles
+                const internalArc = {
+                    center: piece.center,
+                    start: {
+                        x: piece.center.x + internalRadius * Math.cos(Math.atan2(piece.start.y - piece.center.y, piece.start.x - piece.center.x)),
+                        y: piece.center.y + internalRadius * Math.sin(Math.atan2(piece.start.y - piece.center.y, piece.start.x - piece.center.x))
+                    },
+                    end: {
+                        x: piece.center.x + internalRadius * Math.cos(Math.atan2(piece.end.y - piece.center.y, piece.end.x - piece.center.x)),
+                        y: piece.center.y + internalRadius * Math.sin(Math.atan2(piece.end.y - piece.center.y, piece.end.x - piece.center.x))
+                    },
+                    clockwise: piece.clockwise,
+                    kind: "arc" as const
+                }
+                const internalIntersections = this.arcLineIntersection(internalArc, lineStart, lineEnd);
+
+                const externalArc = {
+                    center: piece.center,
+                    start: {
+                        x: piece.center.x + externalRadius * Math.cos(Math.atan2(piece.start.y - piece.center.y, piece.start.x - piece.center.x)),
+                        y: piece.center.y + externalRadius * Math.sin(Math.atan2(piece.start.y - piece.center.y, piece.start.x - piece.center.x))
+                    },
+                    end: {
+                        x: piece.center.x + externalRadius * Math.cos(Math.atan2(piece.end.y - piece.center.y, piece.end.x - piece.center.x)),
+                        y: piece.center.y + externalRadius * Math.sin(Math.atan2(piece.end.y - piece.center.y, piece.end.x - piece.center.x))
+                    },
+                    clockwise: piece.clockwise,
+                    kind: "arc" as const
+                }
+                const externalIntersections = this.arcLineIntersection(externalArc, lineStart, lineEnd);
+
+                if (internalIntersections.some(intersection => intersection.intersects) || externalIntersections.some(intersection => intersection.intersects)) {
+                    return true;
+                }
+
+                return false;
             }
             case TrackPieceType.Spline: {
                 // For splines, sample points along the curve and check intersections
@@ -901,6 +936,72 @@ export default class Track {
         
         return { intersects: false };
     }
+
+    private circleLineIntersection(center: XY, radius: number, lineStart: XY, lineEnd: XY): LineIntersection[] {
+        const dx = lineEnd.x - lineStart.x;
+        const dy = lineEnd.y - lineStart.y;
+        const fx = lineStart.x - center.x;
+        const fy = lineStart.y - center.y;
+        const a = dx * dx + dy * dy;
+        const b = 2 * (fx * dx + fy * dy);
+        const c = fx * fx + fy * fy - radius * radius;
+        const discriminant = b * b - 4 * a * c;
+
+        if (discriminant < 0) {
+            return [{ intersects: false }]; // No intersection
+        }
+
+        const sqrtDiscriminant = Math.sqrt(discriminant);
+        const t1 = (-b - sqrtDiscriminant) / (2 * a);
+        const t2 = (-b + sqrtDiscriminant) / (2 * a);
+        const intersections: LineIntersection[] = [];
+
+        if (t1 >= 0 && t1 <= 1) {
+            intersections.push({
+                intersects: true,
+                point: {
+                    x: lineStart.x + t1 * dx,
+                    y: lineStart.y + t1 * dy
+                }
+            });
+        }
+
+        if (t2 >= 0 && t2 <= 1) {
+            intersections.push({
+                intersects: true,
+                point: {
+                    x: lineStart.x + t2 * dx,
+                    y: lineStart.y + t2 * dy
+                }
+            });
+        }
+
+        if (intersections.length === 0) {
+            intersections.push({ intersects: false });
+        }
+
+        return intersections;
+    }
+
+    private arcLineIntersection(arc: ArcSegment, lineStart: XY, lineEnd: XY): LineIntersection[] {
+        const circleIntersections = this.circleLineIntersection(arc.center, length(sub(arc.start, arc.center)), lineStart, lineEnd);
+        const validIntersections: LineIntersection[] = [];
+        for (const intersection of circleIntersections) {
+            if (intersection.intersects) {
+                const point = intersection.point!;
+                const angle = Math.atan2(point.y - arc.center.y, point.x - arc.center.x);
+                const startAngle = Math.atan2(arc.start.y - arc.center.y, arc.start.x - arc.center.x);
+                const endAngle = Math.atan2(arc.end.y - arc.center.y, arc.end.x - arc.center.x);
+                const isWithinArc = !arc.clockwise ? (angle <= startAngle && angle >= endAngle) || (startAngle < endAngle && (angle <= startAngle || angle >= endAngle))
+                    : (angle >= startAngle && angle <= endAngle) || (startAngle > endAngle && (angle >= startAngle || angle <= endAngle));
+                if (isWithinArc) {
+                    validIntersections.push(intersection);
+                }
+            }
+        }
+        return validIntersections.length > 0 ? validIntersections : [{ intersects: false }];
+    }
+
     
     /**
      * Checks if a quadrant has track (fallback method)
