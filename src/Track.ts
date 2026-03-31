@@ -2,6 +2,13 @@ import p5 from "p5"
 import { Vector } from "./Vector"
 import { ArcSegment, closestPointOnArcSegment, closestPointOnLineSegment, length, LineSegment, sub, XY,  } from "./utils/track"
 
+interface BoundingBox {
+    minX: number
+    minY: number
+    maxX: number
+    maxY: number
+}
+
 export enum TrackPieceType {
     Straight = "Straight",
     Arc = "Arc",
@@ -36,12 +43,6 @@ export interface SplinePiece extends BaseTrackPiece {
 
 export type TrackPiece = StraightPiece | ArcPiece | SplinePiece
 
-interface TrackMap {
-    map: number[][]
-    offset: Vector
-    resolution: number
-}
-
 export interface TrackOptions {
     boundQueryType: "analytic" | "map"
 }
@@ -51,11 +52,9 @@ export default class Track {
     startingPoint: Vector = new Vector(0, 0)
     startingDirection: number = 0
 
-    private trackMap: TrackMap | null = null
-
     // debug
     drawLastPieceVector: boolean = true
-    drawTrackMapBounds: boolean = false
+    drawTrackMapBounds: boolean = true
     drawTrackMapCells: boolean = false
 
     boundQueryType: "analytic" | "map" = "analytic"
@@ -99,7 +98,6 @@ export default class Track {
                 width,
             })
         }
-        this.trackMap = null // invalidate track map since the track has changed
     }
 
     addArc(start: Vector, center: Vector, end: Vector, clockwise: boolean, width: number) {
@@ -133,7 +131,6 @@ export default class Track {
                 width,
             })
         }
-        this.trackMap = null // invalidate track map since the track has changed
     }
 
     addSpline(start: Vector, control1: Vector, control2: Vector, end: Vector, width: number) {
@@ -145,8 +142,6 @@ export default class Track {
             end,
             width,
         })
-
-        this.trackMap = null // invalidate track map since the track has changed
     }
 
     getLastPieceEndDirection(): number | null {
@@ -315,35 +310,13 @@ export default class Track {
         }
 
         if (this.drawTrackMapBounds) {
-            if (!this.trackMap) {
-                this.trackMap = this.generateTrackMap(3)
-            }
-            const resolution = this.trackMap.resolution
+            const boundingBox = this.calculateTrackBounds()
 
             renderTrack.push()
             renderTrack.strokeWeight(1)
             renderTrack.stroke("purple")
             renderTrack.noFill()
-            renderTrack.rect(this.startingPoint.x + this.trackMap.offset.x, this.startingPoint.y + this.trackMap.offset.y, this.trackMap.map[0].length * resolution, this.trackMap.map.length * resolution)
-
-            if (this.drawTrackMapCells) {
-                for (let row = 0; row < this.trackMap.map.length; row++) {
-                    for (let col = 0; col < this.trackMap.map[0].length; col++) {
-                        renderTrack.strokeWeight(1)
-                        if (this.trackMap.map[row][col] === 0) {
-                            renderTrack.stroke("gray")
-                            renderTrack.fill("white")
-                            // renderTrack.point(this.startingPoint.x + this.trackMap.offset.x + col * resolution + resolution / 2, this.startingPoint.y + this.trackMap.offset.y + row * resolution + resolution / 2)
-                            renderTrack.rect(this.startingPoint.x + this.trackMap.offset.x + col * resolution, this.startingPoint.y + this.trackMap.offset.y + row * resolution, resolution, resolution)
-                        } else {
-                            renderTrack.stroke("limegreen")
-                            renderTrack.fill("white")
-                            renderTrack.rect(this.startingPoint.x + this.trackMap.offset.x + col * resolution, this.startingPoint.y + this.trackMap.offset.y + row * resolution, resolution, resolution)
-                        }
-                    }
-                }
-            }
-
+            renderTrack.rect(boundingBox.minX, boundingBox.minY, boundingBox.maxX - boundingBox.minX, boundingBox.maxY - boundingBox.minY)
             renderTrack.pop()
         }
 
@@ -372,34 +345,18 @@ export default class Track {
             }
             case "map":
             default: {
-
-                if (!this.trackMap) {
-                    this.trackMap = this.generateTrackMap(3)
-                }
-
-                const col = Math.floor((x - this.startingPoint.x - this.trackMap.offset.x) / this.trackMap.resolution)
-                const row = Math.floor((y - this.startingPoint.y - this.trackMap.offset.y) / this.trackMap.resolution)
-
-                if (row < 0 || row >= this.trackMap.map.length || col < 0 || col >= this.trackMap.map[0].length) {
-                    return false
-                }
-                return this.trackMap.map[row][col] === 0
+                throw new Error("Map-based bound query is not available anymore due to performance issues. Please use analytic-based query instead.")
             }
         }
     }
 
-    generateTrackMap(resolution: number = 1): TrackMap {
-        if (this.analyticPieces.length === 0) {
-            return { map: [[1]], offset: new Vector(0, 0), resolution }
-        }
-
-        // Calculate bounding box of all track pieces
+    private calculateTrackBounds(): BoundingBox {
         let minX = Infinity
         let minY = Infinity
         let maxX = -Infinity
         let maxY = -Infinity
 
-        for (const piece of this.analyticPieces) {
+        for (const piece of this.analyticPieces || this.pieces) {
             const bounds = this.getPieceBounds(piece)
             minX = Math.min(minX, bounds.minX)
             minY = Math.min(minY, bounds.minY)
@@ -407,52 +364,8 @@ export default class Track {
             maxY = Math.max(maxY, bounds.maxY)
         }
 
-        // Add padding to ensure track edges are captured
-        const maxTrackWidth = Math.max(...this.analyticPieces.map(p => p.width))
-        const padding = maxTrackWidth / 2 + resolution * 2
-        minX -= padding
-        minY -= padding
-        maxX += padding
-        maxY += padding
-
-        // Calculate matrix dimensions
-        const width = Math.ceil((maxX - minX) / resolution)
-        const height = Math.ceil((maxY - minY) / resolution)
-
-        // Ensure minimum size
-        const finalWidth = Math.max(width, 1)
-        const finalHeight = Math.max(height, 1)
-
-        // Create matrix (1 = grass/other, 0 = asphalt/track)
-        const map: number[][] = Array(finalHeight).fill(null).map(() => Array(finalWidth).fill(1))
-
-        // For each pixel, check if it's within track bounds
-        for (let row = 0; row < finalHeight; row++) {
-            for (let col = 0; col < finalWidth; col++) {
-                const worldX = minX + (col + 0.5) * resolution  // Sample at center of pixel
-                const worldY = minY + (row + 0.5) * resolution
-                const queryPoint = { x: worldX, y: worldY }
-
-                // Check distance to any track piece
-                let isOnTrack = false
-                for (const piece of this.analyticPieces) {
-                    const distance = this.getDistanceToPiece(piece, queryPoint)
-                    if (distance <= piece.width / 2) {
-                        isOnTrack = true
-                        break
-                    }
-                }
-
-                map[row][col] = isOnTrack ? 0 : 1
-            }
-        }
-
-        // Calculate offset from starting point
-        const offset = new Vector(minX - this.startingPoint.x, minY - this.startingPoint.y)
-
-        return { map, offset, resolution }
+        return { minX, minY, maxX, maxY }
     }
-
 
     private getPieceBounds(piece: TrackPiece): { minX: number, minY: number, maxX: number, maxY: number } {
         const halfWidth = piece.width / 2
@@ -583,8 +496,6 @@ export default class Track {
             }
         }
         this.analyticPieces = newAnalyticPieces
-
-        this.trackMap = null // invalidate track map since the track has changed
     }
 
     // Export track data for saving
