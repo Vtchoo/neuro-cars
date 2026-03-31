@@ -1,6 +1,6 @@
 import p5 from "p5"
 import { Vector } from "./Vector"
-import { ArcSegment, closestPointOnArcSegment, closestPointOnLineSegment, length, LineSegment, sub, XY,  } from "./utils/track"
+import { ArcSegment, closestPointOnArcSegment, closestPointOnLineSegment, length, LineSegment, sub, XY, } from "./utils/track"
 
 interface BoundingBox {
     minX: number
@@ -70,8 +70,8 @@ export default class Track {
     // debug
     drawLastPieceVector: boolean = true
     drawTrackMapBounds: boolean = false
-    drawTrackMapCells: boolean = false
-    drawQuadTree: boolean = true
+    // drawTrackMapCells: boolean = false
+    drawQuadTree: boolean = false
 
     boundQueryType: "analytic" | "map" | "quadTree" = "quadTree"
 
@@ -80,17 +80,17 @@ export default class Track {
      * for collision detection and other calculations that require a more continuous representation of the track.
      */
     analyticPieces: TrackPiece[] = []
-    
+
     /**
      * QuadTree root node for efficient spatial queries
      */
     private quadTree: QuadTreeNode | null = null
-    
+
     /**
      * Maximum depth for quadtree subdivision
      */
-    private maxQuadTreeDepth: number = 10
-    
+    private maxQuadTreeDepth: number = 12
+
     /**
      * Minimum size for quadtree subdivision
      */
@@ -288,7 +288,7 @@ export default class Track {
             if (!this.quadTree) {
                 this.buildQuadTree()
             }
-            
+
             const drawQuadTreeNode = (node: QuadTreeNode) => {
                 renderTrack.push()
                 if (node.hasTrack) {
@@ -419,10 +419,14 @@ export default class Track {
                 return false
             }
             case "quadTree": {
+                if (!this.quadTree) {
+                    this.buildQuadTree()
+                }
+
                 if (!this.quadTree || this.analyticPieces.length === 0) {
                     return false
                 }
-                
+
                 return this.queryQuadTree(this.quadTree, x, y)
             }
             case "map":
@@ -510,7 +514,7 @@ export default class Track {
 
                 // Check if any cardinal directions (0°, 90°, 180°, 270°) are within the arc
                 const cardinalAngles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2]
-                
+
                 for (const cardinalAngle of cardinalAngles) {
                     if (isAngleInArc(cardinalAngle)) {
                         // Add the point on the circle at this cardinal angle
@@ -684,7 +688,7 @@ export default class Track {
         const track = new Track();
         track.startingPoint = new Vector(data.startingPoint.x, data.startingPoint.y);
         track.startingDirection = data.startingDirection;
-        
+
         // Load all pieces first without generating analytic pieces (for performance)
         for (const pieceData of data.pieces) {
             let piece: TrackPiece;
@@ -735,10 +739,10 @@ export default class Track {
      */
     generateAnalyticPieces() {
         this.analyticPieces = [];
-        
+
         for (const piece of this.pieces) {
             const lastAnalytic = this.analyticPieces[this.analyticPieces.length - 1];
-            
+
             // Try to merge with the last analytic piece if possible
             if (this.canMergeWithLast(piece, lastAnalytic)) {
                 this.mergeWithLastAnalytic(piece);
@@ -747,10 +751,10 @@ export default class Track {
                 this.analyticPieces.push(this.clonePiece(piece));
             }
         }
-        
+
         console.log(`Generated ${this.analyticPieces.length} analytic pieces from ${this.pieces.length} original pieces`);
     }
-    
+
     /**
      * Builds the quadTree for efficient spatial queries
      */
@@ -759,7 +763,7 @@ export default class Track {
             this.quadTree = null;
             return;
         }
-        
+
         const bounds = this.calculateTrackBounds();
         // Add some padding to ensure the track is fully contained
         const padding = 50;
@@ -767,10 +771,10 @@ export default class Track {
         bounds.minY -= padding;
         bounds.maxX += padding;
         bounds.maxY += padding;
-        
+
         this.quadTree = this.createQuadTreeNode(bounds, this.analyticPieces, 0);
     }
-    
+
     /**
      * Creates a quadTree node recursively
      */
@@ -781,23 +785,23 @@ export default class Track {
             hasTrack: false,
             trackPieces: [...trackPieces]
         };
-        
+
         // Check if we should stop subdividing
         const width = bounds.maxX - bounds.minX;
         const height = bounds.maxY - bounds.minY;
-        
-        if (depth >= this.maxQuadTreeDepth || 
+
+        if (depth >= this.maxQuadTreeDepth ||
             Math.min(width, height) < this.minQuadTreeSize ||
             trackPieces.length === 0) {
-            
+
             node.hasTrack = this.checkQuadrantHasTrack(bounds, trackPieces);
             return node;
         }
-        
+
         // The root node (depth 0) must always be subdivided since its borders
         // won't intersect with track pieces by design (they contain the entire track with padding)
         const shouldSubdivide = depth === 0 || this.shouldSubdivideQuadrant(bounds, trackPieces);
-        
+
         if (!shouldSubdivide) {
             // If no border crossing, check if any corner is inside the track
             node.hasTrack = this.checkQuadrantCornerInTrack(bounds);
@@ -805,30 +809,30 @@ export default class Track {
             // Subdivide into 4 children
             node.isLeaf = false;
             node.children = [];
-            
+
             const midX = (bounds.minX + bounds.maxX) / 2;
             const midY = (bounds.minY + bounds.maxY) / 2;
-            
+
             const childBounds = [
                 { minX: bounds.minX, minY: bounds.minY, maxX: midX, maxY: midY }, // Bottom-left
                 { minX: midX, minY: bounds.minY, maxX: bounds.maxX, maxY: midY }, // Bottom-right
                 { minX: bounds.minX, minY: midY, maxX: midX, maxY: bounds.maxY }, // Top-left
                 { minX: midX, minY: midY, maxX: bounds.maxX, maxY: bounds.maxY }  // Top-right
             ];
-            
+
             for (const childBound of childBounds) {
                 // Get track pieces that intersect with this child
-                const relevantPieces = trackPieces.filter(piece => 
+                const relevantPieces = trackPieces.filter(piece =>
                     this.pieceIntersectsBounds(piece, childBound)
                 );
-                
+
                 node.children.push(this.createQuadTreeNode(childBound, relevantPieces, depth + 1));
             }
         }
-        
+
         return node;
     }
-    
+
     /**
      * Checks if track piece boundaries cross the quadrant borders
      */
@@ -839,7 +843,7 @@ export default class Track {
             { start: { x: bounds.maxX, y: bounds.maxY }, end: { x: bounds.minX, y: bounds.maxY } }, // Top edge
             { start: { x: bounds.minX, y: bounds.maxY }, end: { x: bounds.minX, y: bounds.minY } }  // Left edge
         ];
-        
+
         for (const piece of trackPieces) {
             for (const quadLine of quadrantLines) {
                 if (this.trackPieceCrossesLine(piece, quadLine.start, quadLine.end)) {
@@ -847,10 +851,10 @@ export default class Track {
                 }
             }
         }
-        
+
         return false;
     }
-    
+
     /**
      * Checks if any corner of the quadrant is inside the track
      */
@@ -861,7 +865,7 @@ export default class Track {
             { x: bounds.maxX, y: bounds.maxY },
             { x: bounds.minX, y: bounds.maxY }
         ];
-        
+
         for (const corner of corners) {
             // Use analytic method to check if corner is in track
             const queryPoint = { x: corner.x, y: corner.y };
@@ -872,22 +876,22 @@ export default class Track {
                 }
             }
         }
-        
+
         return false;
     }
-    
+
     /**
      * Checks if a track piece intersects with the given bounds
      */
     private pieceIntersectsBounds(piece: TrackPiece, bounds: BoundingBox): boolean {
         const pieceBounds = this.getPieceBounds(piece);
-        
-        return !(pieceBounds.maxX < bounds.minX || 
-                 pieceBounds.minX > bounds.maxX || 
-                 pieceBounds.maxY < bounds.minY || 
-                 pieceBounds.minY > bounds.maxY);
+
+        return !(pieceBounds.maxX < bounds.minX ||
+            pieceBounds.minX > bounds.maxX ||
+            pieceBounds.maxY < bounds.minY ||
+            pieceBounds.minY > bounds.maxY);
     }
-    
+
     /**
      * Checks if a track piece crosses a line segment
      */
@@ -903,7 +907,7 @@ export default class Track {
                 const line2Start = { x: piece.start.x + offsetX, y: piece.start.y - offsetY };
                 const line2End = { x: piece.end.x + offsetX, y: piece.end.y - offsetY };
                 return this.lineSegmentIntersection(line1Start, line1End, lineStart, lineEnd).intersects ||
-                       this.lineSegmentIntersection(line2Start, line2End, lineStart, lineEnd).intersects;
+                    this.lineSegmentIntersection(line2Start, line2End, lineStart, lineEnd).intersects;
             }
             case TrackPieceType.Arc: {
                 // let's do the actual arc-line intersection check
@@ -956,7 +960,7 @@ export default class Track {
                     const t2 = (i + 1) / samples;
                     const p1 = this.evaluateBezier(piece, t1);
                     const p2 = this.evaluateBezier(piece, t2);
-                    
+
                     if (this.lineSegmentIntersection(p1, p2, lineStart, lineEnd).intersects) {
                         return true;
                     }
@@ -964,29 +968,29 @@ export default class Track {
                 return false;
             }
         }
-        
+
         return false;
     }
-    
+
     /**
      * Checks if two line segments intersect
      */
     private lineSegmentIntersection(a1: XY, a2: XY, b1: XY, b2: XY): LineIntersection {
         const denom = (b2.y - b1.y) * (a2.x - a1.x) - (b2.x - b1.x) * (a2.y - a1.y);
-        
+
         if (Math.abs(denom) < 1e-10) {
             return { intersects: false }; // Lines are parallel
         }
-        
+
         const ua = ((b2.x - b1.x) * (a1.y - b1.y) - (b2.y - b1.y) * (a1.x - b1.x)) / denom;
         const ub = ((a2.x - a1.x) * (a1.y - b1.y) - (a2.y - a1.y) * (a1.x - b1.x)) / denom;
-        
+
         if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
             const x = a1.x + ua * (a2.x - a1.x);
             const y = a1.y + ua * (a2.y - a1.y);
             return { intersects: true, point: { x, y } };
         }
-        
+
         return { intersects: false };
     }
 
@@ -1055,7 +1059,7 @@ export default class Track {
         return validIntersections.length > 0 ? validIntersections : [{ intersects: false }];
     }
 
-    
+
     /**
      * Checks if a quadrant has track (fallback method)
      */
@@ -1063,7 +1067,7 @@ export default class Track {
         // Check center point of quadrant
         const centerX = (bounds.minX + bounds.maxX) / 2;
         const centerY = (bounds.minY + bounds.maxY) / 2;
-        
+
         const queryPoint = { x: centerX, y: centerY };
         for (const piece of trackPieces) {
             const distance = this.getDistanceToPiece(piece, queryPoint);
@@ -1071,10 +1075,10 @@ export default class Track {
                 return true;
             }
         }
-        
+
         return false;
     }
-    
+
     /**
      * Queries the quadTree to check if a point is inside the track
      */
@@ -1084,11 +1088,11 @@ export default class Track {
             y < node.bounds.minY || y > node.bounds.maxY) {
             return false;
         }
-        
+
         if (node.isLeaf) {
             return node.hasTrack;
         }
-        
+
         // Query children
         if (node.children) {
             for (const child of node.children) {
@@ -1097,10 +1101,10 @@ export default class Track {
                 }
             }
         }
-        
+
         return false;
     }
-                
+
 
     private canMergeWithLast(piece: TrackPiece, lastAnalytic: TrackPiece | undefined): boolean {
         if (!lastAnalytic || piece.type !== lastAnalytic.type || piece.width !== lastAnalytic.width) {
@@ -1114,15 +1118,15 @@ export default class Track {
                 const dir1 = Math.atan2(lastStraight.end.y - lastStraight.start.y, lastStraight.end.x - lastStraight.start.x);
                 const dir2 = Math.atan2(piece.end.y - piece.start.y, piece.end.x - piece.start.x);
                 return Math.abs(dir1 - dir2) < 0.001; // Small tolerance for floating point errors
-                
+
             case TrackPieceType.Arc:
                 // Can merge arcs if they have same center and direction
                 const lastArc = lastAnalytic as ArcPiece;
                 const arcPiece = piece as ArcPiece;
-                return lastArc.center.x === arcPiece.center.x && 
-                       lastArc.center.y === arcPiece.center.y && 
-                       lastArc.clockwise === arcPiece.clockwise;
-                       
+                return lastArc.center.x === arcPiece.center.x &&
+                    lastArc.center.y === arcPiece.center.y &&
+                    lastArc.clockwise === arcPiece.clockwise;
+
             case TrackPieceType.Spline:
                 // Don't merge splines for now as it's more complex
                 return false;
@@ -1141,7 +1145,7 @@ export default class Track {
                     end: new Vector(piece.end.x, piece.end.y)
                 } as StraightPiece;
                 break;
-                
+
             case TrackPieceType.Arc:
                 // Extend the last arc to the new end point
                 this.analyticPieces[lastIndex] = {
