@@ -317,7 +317,7 @@ export default class Track {
             switch (piece.type) {
                 case TrackPieceType.Straight:
                     renderTrack.push()
-                    // renderTrack.line(piece.start.x, piece.start.y, piece.end.x, piece.end.y)
+                    renderTrack.line(piece.start.x, piece.start.y, piece.end.x, piece.end.y)
                     renderTrack.strokeWeight(1)
                     renderTrack.stroke("white")
                     const dir = Math.atan2(piece.end.y - piece.start.y, piece.end.x - piece.start.x)
@@ -343,7 +343,7 @@ export default class Track {
                     const actualAngleStart = piece.clockwise ? angleStart : angleEnd
                     const actualAngleEnd = piece.clockwise ? angleEnd : angleStart
                     renderTrack.push()
-                    // renderTrack.arc(piece.center.x, piece.center.y, radius * 2, radius * 2, actualAngleStart, actualAngleEnd)
+                    renderTrack.arc(piece.center.x, piece.center.y, radius * 2, radius * 2, actualAngleStart, actualAngleEnd)
                     renderTrack.strokeWeight(1)
                     renderTrack.stroke("white")
                     renderTrack.arc(piece.center.x, piece.center.y, (radius - piece.width / 2) * 2, (radius - piece.width / 2) * 2, actualAngleStart, actualAngleEnd, "open")
