@@ -467,12 +467,65 @@ export default class Track {
                 const centerX = piece.center.x
                 const centerY = piece.center.y
 
-                // For simplicity, use the full circle bounds
-                // A more precise implementation would calculate the actual arc bounds
-                const minX = centerX - radius - halfWidth
-                const maxX = centerX + radius + halfWidth
-                const minY = centerY - radius - halfWidth
-                const maxY = centerY + radius + halfWidth
+                // Calculate the actual arc bounds instead of using full circle
+                const startAngle = Math.atan2(piece.start.y - centerY, piece.start.x - centerX)
+                const endAngle = Math.atan2(piece.end.y - centerY, piece.end.x - centerX)
+
+                // Helper function to check if an angle is within the arc
+                const isAngleInArc = (angle: number): boolean => {
+                    // Normalize all angles to [0, 2π]
+                    const normalizeAngle = (a: number) => {
+                        while (a < 0) a += 2 * Math.PI
+                        while (a >= 2 * Math.PI) a -= 2 * Math.PI
+                        return a
+                    }
+
+                    const normStart = normalizeAngle(startAngle)
+                    const normEnd = normalizeAngle(endAngle)
+                    const normAngle = normalizeAngle(angle)
+
+                    if (!piece.clockwise) {
+                        // Clockwise: from start to end going clockwise (decreasing angles)
+                        if (normStart >= normEnd) {
+                            // Normal case: start > end, angle should be between start and end
+                            return normAngle >= normEnd && normAngle <= normStart
+                        } else {
+                            // Arc crosses 0: angle should be >= end or <= start
+                            return normAngle >= normEnd || normAngle <= normStart
+                        }
+                    } else {
+                        // Counter-clockwise: from start to end going counter-clockwise (increasing angles)
+                        if (normStart <= normEnd) {
+                            // Normal case: start < end, angle should be between start and end
+                            return normAngle >= normStart && normAngle <= normEnd
+                        } else {
+                            // Arc crosses 0: angle should be >= start or <= end
+                            return normAngle >= normStart || normAngle <= normEnd
+                        }
+                    }
+                }
+
+                // Collect points that contribute to the bounding box
+                const boundingPoints: Vector[] = [piece.start, piece.end]
+
+                // Check if any cardinal directions (0°, 90°, 180°, 270°) are within the arc
+                const cardinalAngles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2]
+                
+                for (const cardinalAngle of cardinalAngles) {
+                    if (isAngleInArc(cardinalAngle)) {
+                        // Add the point on the circle at this cardinal angle
+                        const x = centerX + radius * Math.cos(cardinalAngle)
+                        const y = centerY + radius * Math.sin(cardinalAngle)
+                        boundingPoints.push(new Vector(x, y))
+                    }
+                }
+
+                // Calculate bounds from all collected points
+                const minX = Math.min(...boundingPoints.map(p => p.x)) - halfWidth
+                const maxX = Math.max(...boundingPoints.map(p => p.x)) + halfWidth
+                const minY = Math.min(...boundingPoints.map(p => p.y)) - halfWidth
+                const maxY = Math.max(...boundingPoints.map(p => p.y)) + halfWidth
+
                 return { minX, minY, maxX, maxY }
             }
 
