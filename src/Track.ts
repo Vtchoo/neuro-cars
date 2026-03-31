@@ -9,6 +9,21 @@ interface BoundingBox {
     maxY: number
 }
 
+interface QuadTreeNode {
+    bounds: BoundingBox
+    isLeaf: boolean
+    hasTrack: boolean
+    children?: QuadTreeNode[]
+    trackPieces?: TrackPiece[]
+}
+
+interface LineIntersection {
+    intersects: boolean
+    point?: { x: number, y: number }
+}
+
+
+
 export enum TrackPieceType {
     Straight = "Straight",
     Arc = "Arc",
@@ -44,7 +59,7 @@ export interface SplinePiece extends BaseTrackPiece {
 export type TrackPiece = StraightPiece | ArcPiece | SplinePiece
 
 export interface TrackOptions {
-    boundQueryType: "analytic" | "map"
+    boundQueryType: "analytic" | "map" | "quadTree"
 }
 
 export default class Track {
@@ -56,14 +71,30 @@ export default class Track {
     drawLastPieceVector: boolean = true
     drawTrackMapBounds: boolean = true
     drawTrackMapCells: boolean = false
+    drawQuadTree: boolean = true
 
-    boundQueryType: "analytic" | "map" = "analytic"
+    boundQueryType: "analytic" | "map" | "quadTree" = "quadTree"
 
     /**
      * The analyticPieces array is used to store aggregated track pieces that can be used
      * for collision detection and other calculations that require a more continuous representation of the track.
      */
     analyticPieces: TrackPiece[] = []
+    
+    /**
+     * QuadTree root node for efficient spatial queries
+     */
+    private quadTree: QuadTreeNode | null = null
+    
+    /**
+     * Maximum depth for quadtree subdivision
+     */
+    private maxQuadTreeDepth: number = 8
+    
+    /**
+     * Minimum size for quadtree subdivision
+     */
+    private minQuadTreeSize: number = 16
 
     getLastPieceEnd(): Vector | null {
         if (this.pieces.length === 0) {
@@ -98,6 +129,11 @@ export default class Track {
                 width,
             })
         }
+
+        // Rebuild quadTree if using quadTree bound query
+        if (this.boundQueryType === "quadTree") {
+            this.buildQuadTree();
+        }
     }
 
     addArc(start: Vector, center: Vector, end: Vector, clockwise: boolean, width: number) {
@@ -131,6 +167,11 @@ export default class Track {
                 width,
             })
         }
+
+        // Rebuild quadTree if using quadTree bound query
+        if (this.boundQueryType === "quadTree") {
+            this.buildQuadTree();
+        }
     }
 
     addSpline(start: Vector, control1: Vector, control2: Vector, end: Vector, width: number) {
@@ -142,6 +183,11 @@ export default class Track {
             end,
             width,
         })
+
+        // Rebuild quadTree if using quadTree bound query
+        if (this.boundQueryType === "quadTree") {
+            this.buildQuadTree();
+        }
     }
 
     getLastPieceEndDirection(): number | null {
@@ -236,6 +282,35 @@ export default class Track {
         renderTrack.noFill()
         renderTrack.strokeWeight(1)
         renderTrack.stroke("black")
+
+        if (this.drawQuadTree) {
+
+            if (!this.quadTree) {
+                this.buildQuadTree()
+            }
+            
+            const drawQuadTreeNode = (node: QuadTreeNode) => {
+                renderTrack.push()
+                if (node.hasTrack) {
+                    renderTrack.stroke("rgba(255, 0, 0, 0.5)")
+                } else {
+                    renderTrack.stroke("rgba(0, 0, 255, 0.5)")
+                }
+                renderTrack.noFill()
+                renderTrack.rect(node.bounds.minX, node.bounds.minY, node.bounds.maxX - node.bounds.minX, node.bounds.maxY - node.bounds.minY)
+                renderTrack.pop()
+                if (!node.isLeaf && node.children) {
+                    for (let child of node.children) {
+                        drawQuadTreeNode(child)
+                    }
+                }
+            }
+
+            if (this.quadTree) {
+                drawQuadTreeNode(this.quadTree)
+            }
+        }
+
 
         for (let piece of this.analyticPieces) {
             renderTrack.strokeWeight(piece.width)
@@ -342,6 +417,13 @@ export default class Track {
                 }
 
                 return false
+            }
+            case "quadTree": {
+                if (!this.quadTree || this.analyticPieces.length === 0) {
+                    return false
+                }
+                
+                return this.queryQuadTree(this.quadTree, x, y)
             }
             case "map":
             default: {
@@ -496,6 +578,11 @@ export default class Track {
             }
         }
         this.analyticPieces = newAnalyticPieces
+
+        // Rebuild quadTree if using quadTree bound query
+        if (this.boundQueryType === "quadTree") {
+            this.buildQuadTree();
+        }
     }
 
     // Export track data for saving
@@ -576,6 +663,8 @@ export default class Track {
                         width: pieceData.width
                     };
                     break;
+                default:
+                    throw new Error(`Unknown piece type: ${pieceData.type}`);
             }
             track.pieces.push(piece);
         }
@@ -607,6 +696,251 @@ export default class Track {
         
         console.log(`Generated ${this.analyticPieces.length} analytic pieces from ${this.pieces.length} original pieces`);
     }
+    
+    /**
+     * Builds the quadTree for efficient spatial queries
+     */
+    private buildQuadTree() {
+        if (this.analyticPieces.length === 0) {
+            this.quadTree = null;
+            return;
+        }
+        
+        const bounds = this.calculateTrackBounds();
+        // Add some padding to ensure the track is fully contained
+        const padding = 50;
+        bounds.minX -= padding;
+        bounds.minY -= padding;
+        bounds.maxX += padding;
+        bounds.maxY += padding;
+        
+        this.quadTree = this.createQuadTreeNode(bounds, this.analyticPieces, 0);
+    }
+    
+    /**
+     * Creates a quadTree node recursively
+     */
+    private createQuadTreeNode(bounds: BoundingBox, trackPieces: TrackPiece[], depth: number): QuadTreeNode {
+        const node: QuadTreeNode = {
+            bounds,
+            isLeaf: true,
+            hasTrack: false,
+            trackPieces: [...trackPieces]
+        };
+        
+        // Check if we should stop subdividing
+        const width = bounds.maxX - bounds.minX;
+        const height = bounds.maxY - bounds.minY;
+        
+        if (depth >= this.maxQuadTreeDepth || 
+            Math.min(width, height) < this.minQuadTreeSize ||
+            trackPieces.length === 0) {
+            
+            node.hasTrack = this.checkQuadrantHasTrack(bounds, trackPieces);
+            return node;
+        }
+        
+        // The root node (depth 0) must always be subdivided since its borders
+        // won't intersect with track pieces by design (they contain the entire track with padding)
+        const shouldSubdivide = depth === 0 || this.shouldSubdivideQuadrant(bounds, trackPieces);
+        
+        if (!shouldSubdivide) {
+            // If no border crossing, check if any corner is inside the track
+            node.hasTrack = this.checkQuadrantCornerInTrack(bounds);
+        } else {
+            // Subdivide into 4 children
+            node.isLeaf = false;
+            node.children = [];
+            
+            const midX = (bounds.minX + bounds.maxX) / 2;
+            const midY = (bounds.minY + bounds.maxY) / 2;
+            
+            const childBounds = [
+                { minX: bounds.minX, minY: bounds.minY, maxX: midX, maxY: midY }, // Bottom-left
+                { minX: midX, minY: bounds.minY, maxX: bounds.maxX, maxY: midY }, // Bottom-right
+                { minX: bounds.minX, minY: midY, maxX: midX, maxY: bounds.maxY }, // Top-left
+                { minX: midX, minY: midY, maxX: bounds.maxX, maxY: bounds.maxY }  // Top-right
+            ];
+            
+            for (const childBound of childBounds) {
+                // Get track pieces that intersect with this child
+                const relevantPieces = trackPieces.filter(piece => 
+                    this.pieceIntersectsBounds(piece, childBound)
+                );
+                
+                node.children.push(this.createQuadTreeNode(childBound, relevantPieces, depth + 1));
+            }
+        }
+        
+        return node;
+    }
+    
+    /**
+     * Checks if track piece boundaries cross the quadrant borders
+     */
+    private shouldSubdivideQuadrant(bounds: BoundingBox, trackPieces: TrackPiece[]): boolean {
+        const quadrantLines = [
+            { start: { x: bounds.minX, y: bounds.minY }, end: { x: bounds.maxX, y: bounds.minY } }, // Bottom edge
+            { start: { x: bounds.maxX, y: bounds.minY }, end: { x: bounds.maxX, y: bounds.maxY } }, // Right edge
+            { start: { x: bounds.maxX, y: bounds.maxY }, end: { x: bounds.minX, y: bounds.maxY } }, // Top edge
+            { start: { x: bounds.minX, y: bounds.maxY }, end: { x: bounds.minX, y: bounds.minY } }  // Left edge
+        ];
+        
+        for (const piece of trackPieces) {
+            for (const quadLine of quadrantLines) {
+                if (this.trackPieceCrossesLine(piece, quadLine.start, quadLine.end)) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Checks if any corner of the quadrant is inside the track
+     */
+    private checkQuadrantCornerInTrack(bounds: BoundingBox): boolean {
+        const corners = [
+            { x: bounds.minX, y: bounds.minY },
+            { x: bounds.maxX, y: bounds.minY },
+            { x: bounds.maxX, y: bounds.maxY },
+            { x: bounds.minX, y: bounds.maxY }
+        ];
+        
+        for (const corner of corners) {
+            // Use analytic method to check if corner is in track
+            const queryPoint = { x: corner.x, y: corner.y };
+            for (const piece of this.analyticPieces) {
+                const distance = this.getDistanceToPiece(piece, queryPoint);
+                if (distance <= piece.width / 2) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Checks if a track piece intersects with the given bounds
+     */
+    private pieceIntersectsBounds(piece: TrackPiece, bounds: BoundingBox): boolean {
+        const pieceBounds = this.getPieceBounds(piece);
+        
+        return !(pieceBounds.maxX < bounds.minX || 
+                 pieceBounds.minX > bounds.maxX || 
+                 pieceBounds.maxY < bounds.minY || 
+                 pieceBounds.minY > bounds.maxY);
+    }
+    
+    /**
+     * Checks if a track piece crosses a line segment
+     */
+    private trackPieceCrossesLine(piece: TrackPiece, lineStart: XY, lineEnd: XY): boolean {
+        switch (piece.type) {
+            case TrackPieceType.Straight: {
+                return this.lineSegmentIntersection(
+                    piece.start, piece.end,
+                    lineStart, lineEnd
+                ).intersects;
+            }
+            case TrackPieceType.Arc: {
+                // For arcs, check if the arc path intersects the line
+                // This is a simplified check - for a more accurate implementation,
+                // we would need to check the actual arc geometry
+                return this.lineSegmentIntersection(
+                    piece.start, piece.end,  // Approximate with chord
+                    lineStart, lineEnd
+                ).intersects;
+            }
+            case TrackPieceType.Spline: {
+                // For splines, sample points along the curve and check intersections
+                const samples = 10;
+                for (let i = 0; i < samples; i++) {
+                    const t1 = i / samples;
+                    const t2 = (i + 1) / samples;
+                    const p1 = this.evaluateBezier(piece, t1);
+                    const p2 = this.evaluateBezier(piece, t2);
+                    
+                    if (this.lineSegmentIntersection(p1, p2, lineStart, lineEnd).intersects) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Checks if two line segments intersect
+     */
+    private lineSegmentIntersection(a1: XY, a2: XY, b1: XY, b2: XY): LineIntersection {
+        const denom = (b2.y - b1.y) * (a2.x - a1.x) - (b2.x - b1.x) * (a2.y - a1.y);
+        
+        if (Math.abs(denom) < 1e-10) {
+            return { intersects: false }; // Lines are parallel
+        }
+        
+        const ua = ((b2.x - b1.x) * (a1.y - b1.y) - (b2.y - b1.y) * (a1.x - b1.x)) / denom;
+        const ub = ((a2.x - a1.x) * (a1.y - b1.y) - (a2.y - a1.y) * (a1.x - b1.x)) / denom;
+        
+        if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
+            const x = a1.x + ua * (a2.x - a1.x);
+            const y = a1.y + ua * (a2.y - a1.y);
+            return { intersects: true, point: { x, y } };
+        }
+        
+        return { intersects: false };
+    }
+    
+    /**
+     * Checks if a quadrant has track (fallback method)
+     */
+    private checkQuadrantHasTrack(bounds: BoundingBox, trackPieces: TrackPiece[]): boolean {
+        // Check center point of quadrant
+        const centerX = (bounds.minX + bounds.maxX) / 2;
+        const centerY = (bounds.minY + bounds.maxY) / 2;
+        
+        const queryPoint = { x: centerX, y: centerY };
+        for (const piece of trackPieces) {
+            const distance = this.getDistanceToPiece(piece, queryPoint);
+            if (distance <= piece.width / 2) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Queries the quadTree to check if a point is inside the track
+     */
+    private queryQuadTree(node: QuadTreeNode, x: number, y: number): boolean {
+        // Check if point is within bounds
+        if (x < node.bounds.minX || x > node.bounds.maxX ||
+            y < node.bounds.minY || y > node.bounds.maxY) {
+            return false;
+        }
+        
+        if (node.isLeaf) {
+            return node.hasTrack;
+        }
+        
+        // Query children
+        if (node.children) {
+            for (const child of node.children) {
+                if (this.queryQuadTree(child, x, y)) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+                
 
     private canMergeWithLast(piece: TrackPiece, lastAnalytic: TrackPiece | undefined): boolean {
         if (!lastAnalytic || piece.type !== lastAnalytic.type || piece.width !== lastAnalytic.width) {
