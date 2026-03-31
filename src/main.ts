@@ -474,6 +474,7 @@ export default class Game {
 					individual.speed = 0
 					individual.direction = startingDirection
 					individual.acceleration = 0
+					individual.lastDrivingWheelDirection = 0
 					individual.neuralNet.resetFitness()
 				}
 

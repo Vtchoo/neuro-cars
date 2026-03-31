@@ -57,6 +57,7 @@ export default class Car {
     speed = 0
     acceleration = 0
     direction = 0
+    lastDrivingWheelDirection = 0
 
     // The brain inside the car
     neuralNet: NeuralNet
@@ -75,7 +76,7 @@ export default class Car {
     }
 
     private getInputsCount() {
-        const fixedInputs = 1 // speed
+        const fixedInputs = 2 // speed and last driving wheel direction
 
         if (Array.isArray(this.inputFormat)) {
 
@@ -158,24 +159,35 @@ export default class Car {
         this.acceleration = (input[0] > 0 && this.speed >= 0) || this.speed < 0 ? input[0] * .05 : input[0] * .15
         //this.acceleration = input[0] * .05
         this.direction += input[1] * .05 * (1 - 1 / (1 + Math.abs(this.speed))) * Math.sign(this.speed) * avgDeltaTime / (1 / 30)
+        this.lastDrivingWheelDirection = input[1]
     }
 
     // Gets sensors' data
     getInputs(trackMap: number[][], showInputs: boolean, p: p5, resolution: number, track: Track) {
+        const inputs = [
+            this.speed,
+            this.lastDrivingWheelDirection,
+        ]
+
         switch (this.inputFormat) {
-            case "raycast":
-                return this.getRaycastInputs(showInputs, p, track)
-            case "lookahead":
-                return this.getLookaheadInputs(track)
+            case "raycast": {
+                const raycastInputs = this.getRaycastInputs(showInputs, p, track)
+                inputs.push(...raycastInputs)
+                break
+            }
+            case "lookahead": {
+                const lookaheadInputs = this.getLookaheadInputs(track)
+                inputs.push(...lookaheadInputs)
+                break
+            }
         }
 
+        return inputs
     }
 
     private getRaycastInputs(showInputs: boolean, p: p5, track: Track) {
-        const inputs = new Array(this.totalRayCastRays + 1).fill(0)
+        const inputs = new Array(this.totalRayCastRays).fill(0)
         const maxIncrements = 30
-
-        inputs[this.totalRayCastRays] = this.speed
 
         for (let i = 0; i < this.totalRayCastRays; i++) {
 
@@ -287,12 +299,22 @@ export default class Car {
 
         const finalInputs = [
             ...relativeLookAheadPoints.flatMap(point => [point.x / normalizationFactor, point.y / normalizationFactor]),
-            this.speed,
             currentCarPositionInTrack.headingAngle,
             currentCarPositionInTrack.lateralOffset / (trackPiece.width / 2),
         ]
 
         return finalInputs
+    }
+
+    reset(startX: number, startY: number, startDir: number) {
+        this.pos = newVector(startX, startY)
+        this.direction = startDir
+        this.speed = 0
+        this.acceleration = 0
+        this.lastDrivingWheelDirection = 0
+        this.lastRayCastDistances = null
+        this.lastCurrentCarPositionInTrack = null
+        this.lastLookAheadPoints = null
     }
 }
 

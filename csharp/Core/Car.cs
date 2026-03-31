@@ -83,6 +83,7 @@ namespace SmartRace.Core
         public double Speed { get; set; } = 0;
         public double Acceleration { get; set; } = 0;
         public double Direction { get; set; } = 0;
+        public double LastDrivingWheelDirection { get; set; } = 0;
 
         // The brain inside the car
         public NeuralNet NeuralNet { get; set; }
@@ -118,7 +119,7 @@ namespace SmartRace.Core
 
         private int GetInputsCount()
         {
-            const int fixedInputs = 1; // speed
+            const int fixedInputs = 2; // speed and last driving wheel direction
             return fixedInputs + GetInputsCountForFormat(inputFormat);
         }
 
@@ -162,6 +163,7 @@ namespace SmartRace.Core
         {
             Acceleration = (input[0] > 0 && Speed >= 0) || Speed < 0 ? input[0] * 0.05 : input[0] * 0.15;
             Direction += input[1] * 0.05 * (1 - 1 / (1 + Math.Abs(Speed))) * Math.Sign(Speed) * avgDeltaTime / (1.0 / 30.0);
+            LastDrivingWheelDirection = input[1];
         }
 
         // Gets sensors' data
@@ -172,15 +174,29 @@ namespace SmartRace.Core
             {
                 double[] defaultInputs = new double[GetInputsCount()];
                 defaultInputs[defaultInputs.Length - 1] = Speed; // Add speed as last input
+                defaultInputs[defaultInputs.Length - 2] = LastDrivingWheelDirection; // Add last driving wheel direction as second last input
                 return defaultInputs;
             }
+
+
+            var inputs = new double[GetInputsCount()];
+            inputs[0] = Speed;
+            inputs[1] = LastDrivingWheelDirection;
 
             switch (inputFormat)
             {
                 case InputFormat.Raycast:
-                    return GetRaycastInputs(track);
+                    {
+                        var variableInputs = GetRaycastInputs(track);
+                        Array.Copy(variableInputs, 0, inputs, 2, variableInputs.Length);
+                        return inputs;
+                    }
                 case InputFormat.Lookahead:
-                    return GetLookaheadInputs(track);
+                    {
+                        var variableInputs = GetLookaheadInputs(track);
+                        Array.Copy(variableInputs, 0, inputs, 2, variableInputs.Length);
+                        return inputs;
+                    }
                 default:
                     return new double[0];
             }
@@ -188,10 +204,8 @@ namespace SmartRace.Core
 
         private double[] GetRaycastInputs(ITrack track)
         {
-            double[] inputs = new double[totalRayCastRays + 1];
+            double[] inputs = new double[totalRayCastRays];
             const int maxIncrements = 30;
-
-            inputs[totalRayCastRays] = Speed;
 
             // Return default inputs if no track available
             if (track == null)
@@ -233,7 +247,7 @@ namespace SmartRace.Core
             // Return default inputs if no track available
             if (track == null)
             {
-                double[] defaultInputs = new double[totalLookAheadPoints * 2 + 3]; // points + speed + heading + lateral
+                double[] defaultInputs = new double[totalLookAheadPoints * 2]; // points + speed + heading + lateral
                 defaultInputs[defaultInputs.Length - 3] = Speed;
                 return defaultInputs;
             }
@@ -340,7 +354,6 @@ namespace SmartRace.Core
                 finalInputs.Add(point.X / normalizationFactor);
                 finalInputs.Add(point.Y / normalizationFactor);
             }
-            finalInputs.Add(Speed);
             finalInputs.Add(currentCarPositionInTrack.HeadingAngle);
             finalInputs.Add(currentCarPositionInTrack.LateralOffset / (trackPiece.Width / 2));
 
@@ -372,6 +385,18 @@ namespace SmartRace.Core
         private static HSL GetRandomColor()
         {
             return new HSL(random.Next(360), 100, 50);
+        }
+
+        public void Reset(double startX, double startY, double startDir)
+        {
+            Position = VectorFactory.NewVector(startX, startY);
+            Direction = startDir;
+            Speed = 0;
+            Acceleration = 0;
+            LastDrivingWheelDirection = 0;
+            LastRayCastDistances = null;
+            LastCurrentCarPositionInTrack = null;
+            LastLookAheadPoints = null;
         }
     }
 
