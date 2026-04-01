@@ -150,39 +150,44 @@ function resetTrack(game: Game) {
 function loadTrackInEditor(p: p5, game: Game) {
     // Create a file input element to load a track
     const input = p.createFileInput((file: any) => {
-        if (file.type === 'application' && file.subtype === 'json' || file.name.endsWith('.json')) {
-            const fr = new FileReader()
-            fr.onload = (e) => {
-                try {
-                    const saveData = JSON.parse(e.target?.result as string)
-                    if (saveData.track && saveData.track.pieces) {
-                        // Load the track data into the current track
-                        const track = Track.fromData(saveData.track)
-                        console.log("Track loaded successfully")
-                        
-                        // Update the track in the game
-                        game.track = track
-                        game.start = track.startingPoint
-                        game.direction = track.startingDirection
-                        
-                        alert("Track loaded successfully!")
-                    } else {
-                        alert("Invalid save file - no track data found") 
-                    }
-                } catch (error) {
-                    console.error("Error loading track:", error)
-                    alert("Error loading track file")
-                }
-            }
-            fr.readAsText(file.file)
-        } else {
+        if (file.type !== 'application' || file.subtype !== 'json' || !file.name.endsWith('.json')) {
             alert("Please select a JSON file")
+            // Remove the file input after use
+            input.remove()
+            return
         }
-        
+
+        const fr = new FileReader()
+        fr.onload = (e) => {
+            try {
+                const saveData = JSON.parse(e.target?.result as string)
+                if (!saveData.track.pieces) {
+                    alert("Invalid save file - no track data found")
+                    // Remove the file input after use
+                    input.remove()
+                    return
+                }
+                // Load the track data into the current track
+                const track = Track.fromData(saveData.track)
+                console.log("Track loaded successfully")
+
+                // Update the track in the game
+                game.track = track
+                game.start = track.startingPoint
+                game.direction = track.startingDirection
+
+                alert("Track loaded successfully!")
+            } catch (error) {
+                console.error("Error loading track:", error)
+                alert("Error loading track file")
+            }
+        }
+        fr.readAsText(file.file)
+
         // Remove the file input after use
         input.remove()
     })
-    
+
     // Trigger the file input
     input.elt.click()
 }
