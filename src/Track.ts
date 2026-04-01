@@ -131,9 +131,9 @@ export default class Track {
         }
 
         // Rebuild quadTree if using quadTree bound query
-        if (this.boundQueryType === "quadTree") {
-            this.buildQuadTree();
-        }
+        // if (this.boundQueryType === "quadTree") {
+        //     this.buildQuadTree();
+        // }
     }
 
     addArc(start: Vector, center: Vector, end: Vector, clockwise: boolean, width: number) {
@@ -169,9 +169,9 @@ export default class Track {
         }
 
         // Rebuild quadTree if using quadTree bound query
-        if (this.boundQueryType === "quadTree") {
-            this.buildQuadTree();
-        }
+        // if (this.boundQueryType === "quadTree") {
+        //     this.buildQuadTree();
+        // }
     }
 
     addSpline(start: Vector, control1: Vector, control2: Vector, end: Vector, width: number) {
@@ -185,9 +185,9 @@ export default class Track {
         })
 
         // Rebuild quadTree if using quadTree bound query
-        if (this.boundQueryType === "quadTree") {
-            this.buildQuadTree();
-        }
+        // if (this.boundQueryType === "quadTree") {
+        //     this.buildQuadTree();
+        // }
     }
 
     getLastPieceEndDirection(): number | null {
@@ -638,9 +638,9 @@ export default class Track {
         this.analyticPieces = newAnalyticPieces
 
         // Rebuild quadTree if using quadTree bound query
-        if (this.boundQueryType === "quadTree") {
-            this.buildQuadTree();
-        }
+        // if (this.boundQueryType === "quadTree") {
+        //     this.buildQuadTree();
+        // }
     }
 
     // Export track data for saving
