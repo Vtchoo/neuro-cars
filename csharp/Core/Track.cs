@@ -53,6 +53,14 @@ namespace SmartRace.Core
 
         private ConcurrentDictionary<string, bool> TrackMapCache = new();
 
+        // QuadTree for spatial queries
+        private QuadTree _quadTree;
+        public string BoundQueryType { get; set; } = "quadTree"; // "analytic" or "quadTree"
+        
+        // QuadTree configuration
+        public int MaxQuadTreeDepth { get; set; } = 12;
+        public double MinQuadTreeSize { get; set; } = 2.0;
+
         public Track(ITrackPiece[] pieces, Vector startingPoint, double startingDirection)
         {
             Pieces = pieces;
@@ -62,10 +70,33 @@ namespace SmartRace.Core
             
             // Convert pieces to TrackSegments for geometry calculations
             trackSegments = pieces.Select(ConvertToTrackSegment).ToList();
+            
+            // Build quadtree for spatial queries
+            BuildQuadTree();
         }
 
         // Basic track boundary check using track pieces
         public bool IsInsideTrack(double x, double y)
+        {
+            var cacheKey = $"{x:F0}_{y:F0}";
+
+            if (TrackMapCache.TryGetValue(cacheKey, out bool cachedResult))
+                return cachedResult;
+
+            switch (BoundQueryType)
+            {
+                case "analytic":
+                    return IsInsideTrackAnalytic(x, y);
+                
+                case "quadTree":
+                    return IsInsideTrackQuadTree(x, y);
+                
+                default:
+                    return IsInsideTrackAnalytic(x, y);
+            }
+        }
+
+        private bool IsInsideTrackAnalytic(double x, double y)
         {
             var cacheKey = $"{x:F0}_{y:F0}";
 
@@ -87,6 +118,21 @@ namespace SmartRace.Core
 
             TrackMapCache.TryAdd(cacheKey, false);
             return false;
+        }
+
+        private bool IsInsideTrackQuadTree(double x, double y)
+        {
+            if (_quadTree == null)
+            {
+                BuildQuadTree();
+            }
+
+            if (_quadTree == null || AnalyticPieces.Length == 0)
+            {
+                return false;
+            }
+
+            return _quadTree.Query(x, y);
         }
 
         private double GetTrackWidthAtSegment()
@@ -159,6 +205,9 @@ namespace SmartRace.Core
             // Generate optimized analytic pieces for better performance
             track.GenerateOptimizedAnalyticPieces();
             
+            // Build quadtree for spatial queries
+            track.BuildQuadTree();
+            
             return track;
         }
 
@@ -190,6 +239,9 @@ namespace SmartRace.Core
             
             AnalyticPieces = optimizedPieces.ToArray();
             Console.WriteLine($"Optimized track: {optimizedPieces.Count} analytic pieces from {originalCount} original pieces");
+            
+            // Rebuild quadtree after optimization
+            BuildQuadTree();
         }
 
         private bool CanMergeWithLast(ITrackPiece piece, ITrackPiece lastOptimized)
@@ -301,6 +353,165 @@ namespace SmartRace.Core
                 StartingDirection = StartingDirection,
                 Pieces = pieces
             };
+        }
+        
+        /// <summary>
+        /// Builds the quadtree for efficient spatial queries
+        /// </summary>
+        public void BuildQuadTree()
+        {
+            if (AnalyticPieces == null || AnalyticPieces.Length == 0)
+            {
+                _quadTree = null;
+                return;
+            }
+
+            var bounds = CalculateTrackBounds();
+            
+            // Add some padding to ensure the track is fully contained
+            const double padding = 50.0;
+            bounds = new BoundingBox(
+                bounds.MinX - padding,
+                bounds.MinY - padding,
+                bounds.MaxX + padding,
+                bounds.MaxY + padding
+            );
+
+            _quadTree = new QuadTree(bounds, MaxQuadTreeDepth, MinQuadTreeSize);
+            _quadTree.Build(AnalyticPieces);
+            
+            Console.WriteLine($"Built quadtree with bounds: MinX={bounds.MinX:F1}, MinY={bounds.MinY:F1}, MaxX={bounds.MaxX:F1}, MaxY={bounds.MaxY:F1}");
+        }
+
+        /// <summary>
+        /// Calculates the bounding box that contains all track pieces
+        /// </summary>
+        private BoundingBox CalculateTrackBounds()
+        {
+            if (AnalyticPieces == null || AnalyticPieces.Length == 0)
+                return new BoundingBox(0, 0, 0, 0);
+
+            double minX = double.PositiveInfinity;
+            double minY = double.PositiveInfinity;
+            double maxX = double.NegativeInfinity;
+            double maxY = double.NegativeInfinity;
+
+            foreach (var piece in AnalyticPieces)
+            {
+                var bounds = GetPieceBounds(piece);
+                minX = Math.Min(minX, bounds.MinX);
+                minY = Math.Min(minY, bounds.MinY);
+                maxX = Math.Max(maxX, bounds.MaxX);
+                maxY = Math.Max(maxY, bounds.MaxY);
+            }
+
+            return new BoundingBox(minX, minY, maxX, maxY);
+        }
+
+        /// <summary>
+        /// Gets the bounding box of a track piece
+        /// </summary>
+        private BoundingBox GetPieceBounds(ITrackPiece piece)
+        {
+            double halfWidth = piece.Width / 2;
+
+            switch (piece.Type)
+            {
+                case TrackPieceType.Straight:
+                    double minX = Math.Min(piece.Start.X, piece.End.X) - halfWidth;
+                    double maxX = Math.Max(piece.Start.X, piece.End.X) + halfWidth;
+                    double minY = Math.Min(piece.Start.Y, piece.End.Y) - halfWidth;
+                    double maxY = Math.Max(piece.Start.Y, piece.End.Y) + halfWidth;
+                    return new BoundingBox(minX, minY, maxX, maxY);
+
+                case TrackPieceType.Arc:
+                    var arcPiece = (IArcPiece)piece;
+                    double radius = Math.Sqrt(Math.Pow(piece.Start.X - arcPiece.Center.X, 2) + 
+                                            Math.Pow(piece.Start.Y - arcPiece.Center.Y, 2));
+                    double centerX = arcPiece.Center.X;
+                    double centerY = arcPiece.Center.Y;
+
+                    // Calculate actual arc bounds instead of using full circle
+                    double startAngle = Math.Atan2(piece.Start.Y - centerY, piece.Start.X - centerX);
+                    double endAngle = Math.Atan2(piece.End.Y - centerY, piece.End.X - centerX);
+
+                    // Collect points that contribute to the bounding box
+                    var boundingPoints = new List<XY> { 
+                        new XY(piece.Start.X, piece.Start.Y), 
+                        new XY(piece.End.X, piece.End.Y) 
+                    };
+
+                    // Check if any cardinal directions (0°, 90°, 180°, 270°) are within the arc
+                    double[] cardinalAngles = { 0, Math.PI / 2, Math.PI, 3 * Math.PI / 2 };
+
+                    foreach (double cardinalAngle in cardinalAngles)
+                    {
+                        if (IsAngleInArc(cardinalAngle, startAngle, endAngle, arcPiece.Clockwise))
+                        {
+                            double x = centerX + radius * Math.Cos(cardinalAngle);
+                            double y = centerY + radius * Math.Sin(cardinalAngle);
+                            boundingPoints.Add(new XY(x, y));
+                        }
+                    }
+
+                    // Calculate bounds from all collected points
+                    minX = boundingPoints.Min(p => p.X) - halfWidth;
+                    maxX = boundingPoints.Max(p => p.X) + halfWidth;
+                    minY = boundingPoints.Min(p => p.Y) - halfWidth;
+                    maxY = boundingPoints.Max(p => p.Y) + halfWidth;
+
+                    return new BoundingBox(minX, minY, maxX, maxY);
+
+                default:
+                    return new BoundingBox(0, 0, 0, 0);
+            }
+        }
+
+        /// <summary>
+        /// Checks if an angle is within an arc
+        /// </summary>
+        private bool IsAngleInArc(double angle, double startAngle, double endAngle, bool clockwise)
+        {
+            // Normalize all angles to [0, 2π]
+            double NormalizeAngle(double a)
+            {
+                while (a < 0) a += 2 * Math.PI;
+                while (a >= 2 * Math.PI) a -= 2 * Math.PI;
+                return a;
+            }
+
+            double normStart = NormalizeAngle(startAngle);
+            double normEnd = NormalizeAngle(endAngle);
+            double normAngle = NormalizeAngle(angle);
+
+            if (!clockwise)
+            {
+                // Counter-clockwise: from start to end going counter-clockwise
+                if (normStart >= normEnd)
+                {
+                    // Normal case: start > end, angle should be between start and end
+                    return normAngle >= normEnd && normAngle <= normStart;
+                }
+                else
+                {
+                    // Arc crosses 0: angle should be >= end or <= start
+                    return normAngle >= normEnd || normAngle <= normStart;
+                }
+            }
+            else
+            {
+                // Clockwise: from start to end going clockwise
+                if (normStart <= normEnd)
+                {
+                    // Normal case: start < end, angle should be between start and end
+                    return normAngle >= normStart && normAngle <= normEnd;
+                }
+                else
+                {
+                    // Arc crosses 0: angle should be >= start or <= end
+                    return normAngle >= normStart || normAngle <= normEnd;
+                }
+            }
         }
     }
 }
