@@ -18,9 +18,6 @@ interface QuadTreeNode {
     trackPieces?: TrackPiece[]
 }
 
-
-
-
 export enum TrackPieceType {
     Straight = "Straight",
     Arc = "Arc",
@@ -63,6 +60,8 @@ export default class Track {
     pieces: TrackPiece[] = []
     startingPoint: Vector = new Vector(0, 0)
     startingDirection: number = 0
+
+    previewTrackPieces: TrackPiece[] = []
 
     // debug
     drawLastPieceVector: boolean = true
@@ -195,22 +194,26 @@ export default class Track {
             return null
         }
 
-        switch (lastPiece.type) {
+        return Track.getTrackPieceEndDirection(lastPiece)
+    }
+
+    static getTrackPieceEndDirection(piece: TrackPiece): number {
+        switch (piece.type) {
             case TrackPieceType.Straight:
-                return Math.atan2(lastPiece.end.y - lastPiece.start.y, lastPiece.end.x - lastPiece.start.x)
+                return Math.atan2(piece.end.y - piece.start.y, piece.end.x - piece.start.x)
             case TrackPieceType.Arc:
                 // For arcs, the direction at the end point is tangent to the circle at the end point
-                const radiusVector = new Vector(lastPiece.end.x - lastPiece.center.x, lastPiece.end.y - lastPiece.center.y)
+                const radiusVector = new Vector(piece.end.x - piece.center.x, piece.end.y - piece.center.y)
                 const tangentVector = new Vector(-radiusVector.y, radiusVector.x) // rotate radius vector by 90 degrees to get tangent vector
-                if (!lastPiece.clockwise) {
+                if (!piece.clockwise) {
                     tangentVector.x *= -1
                     tangentVector.y *= -1
                 }
                 return Math.atan2(tangentVector.y, tangentVector.x)
             case TrackPieceType.Spline:
                 // For splines, we can approximate the direction at the end using the tangent at the end point
-                const dx = lastPiece.end.x - lastPiece.control2.x
-                const dy = lastPiece.end.y - lastPiece.control2.y
+                const dx = piece.end.x - piece.control2.x
+                const dy = piece.end.y - piece.control2.y
                 return Math.atan2(dy, dx)
         }
     }
@@ -274,13 +277,13 @@ export default class Track {
         this.addSpline(lastPieceEnd, control1, control2, end, width)
     }
 
-    draw(p: p5, renderTrack: p5) {
+    draw(p: p5) {
         // renderTrack.background("green")
-        renderTrack.push()
-        renderTrack.strokeCap(p.SQUARE)
-        renderTrack.noFill()
-        renderTrack.strokeWeight(1)
-        renderTrack.stroke("black")
+        p.push()
+        p.strokeCap(p.SQUARE)
+        p.noFill()
+        p.strokeWeight(1)
+        p.stroke("black")
 
         if (this.drawQuadTree) {
 
@@ -289,15 +292,15 @@ export default class Track {
             }
 
             const drawQuadTreeNode = (node: QuadTreeNode) => {
-                renderTrack.push()
+                p.push()
                 if (node.hasTrack) {
-                    renderTrack.stroke("rgba(255, 0, 0, 0.5)")
+                    p.stroke("rgba(255, 0, 0, 0.5)")
                 } else {
-                    renderTrack.stroke("rgba(0, 0, 255, 0.5)")
+                    p.stroke("rgba(0, 0, 255, 0.5)")
                 }
-                renderTrack.noFill()
-                renderTrack.rect(node.bounds.minX, node.bounds.minY, node.bounds.maxX - node.bounds.minX, node.bounds.maxY - node.bounds.minY)
-                renderTrack.pop()
+                p.noFill()
+                p.rect(node.bounds.minX, node.bounds.minY, node.bounds.maxX - node.bounds.minX, node.bounds.maxY - node.bounds.minY)
+                p.pop()
                 if (!node.isLeaf && node.children) {
                     for (let child of node.children) {
                         drawQuadTreeNode(child)
@@ -312,27 +315,27 @@ export default class Track {
 
 
         for (let piece of this.analyticPieces) {
-            renderTrack.strokeWeight(piece.width)
+            p.strokeWeight(piece.width)
             switch (piece.type) {
                 case TrackPieceType.Straight:
-                    renderTrack.push()
-                    renderTrack.line(piece.start.x, piece.start.y, piece.end.x, piece.end.y)
-                    renderTrack.strokeWeight(1)
-                    renderTrack.stroke("white")
+                    p.push()
+                    p.line(piece.start.x, piece.start.y, piece.end.x, piece.end.y)
+                    p.strokeWeight(1)
+                    p.stroke("white")
                     const dir = Math.atan2(piece.end.y - piece.start.y, piece.end.x - piece.start.x)
-                    renderTrack.line(
+                    p.line(
                         piece.start.x - piece.width * Math.sin(dir) / 2,
                         piece.start.y + piece.width * Math.cos(dir) / 2,
                         piece.end.x - piece.width * Math.sin(dir) / 2,
                         piece.end.y + piece.width * Math.cos(dir) / 2
                     )
-                    renderTrack.line(
+                    p.line(
                         piece.start.x + piece.width * Math.sin(dir) / 2,
                         piece.start.y - piece.width * Math.cos(dir) / 2,
                         piece.end.x + piece.width * Math.sin(dir) / 2,
                         piece.end.y - piece.width * Math.cos(dir) / 2
                     )
-                    renderTrack.pop()
+                    p.pop()
                     break
                 case TrackPieceType.Arc:
                     const radius = Math.sqrt((piece.center.x - piece.start.x) ** 2 + (piece.center.y - piece.start.y) ** 2)
@@ -341,23 +344,23 @@ export default class Track {
                     // in p5, arcs are alays drawn clockwise, so we need to swap the start and end angles if the piece is counterclockwise
                     const actualAngleStart = piece.clockwise ? angleStart : angleEnd
                     const actualAngleEnd = piece.clockwise ? angleEnd : angleStart
-                    renderTrack.push()
-                    renderTrack.arc(piece.center.x, piece.center.y, radius * 2, radius * 2, actualAngleStart, actualAngleEnd)
-                    renderTrack.strokeWeight(1)
-                    renderTrack.stroke("white")
-                    renderTrack.arc(piece.center.x, piece.center.y, (radius - piece.width / 2) * 2, (radius - piece.width / 2) * 2, actualAngleStart, actualAngleEnd, "open")
-                    renderTrack.arc(piece.center.x, piece.center.y, (radius + piece.width / 2) * 2, (radius + piece.width / 2) * 2, actualAngleStart, actualAngleEnd, "open")
-                    renderTrack.pop()
+                    p.push()
+                    p.arc(piece.center.x, piece.center.y, radius * 2, radius * 2, actualAngleStart, actualAngleEnd)
+                    p.strokeWeight(1)
+                    p.stroke("white")
+                    p.arc(piece.center.x, piece.center.y, (radius - piece.width / 2) * 2, (radius - piece.width / 2) * 2, actualAngleStart, actualAngleEnd, "open")
+                    p.arc(piece.center.x, piece.center.y, (radius + piece.width / 2) * 2, (radius + piece.width / 2) * 2, actualAngleStart, actualAngleEnd, "open")
+                    p.pop()
                     break
                 case TrackPieceType.Spline:
-                    renderTrack.push()
-                    renderTrack.stroke("white")
-                    renderTrack.strokeWeight(piece.width + 2)
-                    renderTrack.bezier(piece.start.x, piece.start.y, piece.control1.x, piece.control1.y, piece.control2.x, piece.control2.y, piece.end.x, piece.end.y)
-                    renderTrack.stroke("black")
-                    renderTrack.strokeWeight(piece.width)
-                    renderTrack.bezier(piece.start.x, piece.start.y, piece.control1.x, piece.control1.y, piece.control2.x, piece.control2.y, piece.end.x, piece.end.y)
-                    renderTrack.pop()
+                    p.push()
+                    p.stroke("white")
+                    p.strokeWeight(piece.width + 2)
+                    p.bezier(piece.start.x, piece.start.y, piece.control1.x, piece.control1.y, piece.control2.x, piece.control2.y, piece.end.x, piece.end.y)
+                    p.stroke("black")
+                    p.strokeWeight(piece.width)
+                    p.bezier(piece.start.x, piece.start.y, piece.control1.x, piece.control1.y, piece.control2.x, piece.control2.y, piece.end.x, piece.end.y)
+                    p.pop()
                     break
             }
         }
@@ -366,36 +369,35 @@ export default class Track {
             const lastPieceEnd = this.getLastPieceEnd()
             const lastPieceDirection = this.getLastPieceEndDirection()
             if (lastPieceEnd && lastPieceDirection !== null) {
-                renderTrack.push()
-                renderTrack.stroke("red")
-                renderTrack.strokeWeight(2)
-                renderTrack.line(lastPieceEnd.x, lastPieceEnd.y, lastPieceEnd.x + 20 * Math.cos(lastPieceDirection), lastPieceEnd.y + 20 * Math.sin(lastPieceDirection))
-                renderTrack.pop()
+                p.push()
+                p.stroke("red")
+                p.strokeWeight(2)
+                p.line(lastPieceEnd.x, lastPieceEnd.y, lastPieceEnd.x + 20 * Math.cos(lastPieceDirection), lastPieceEnd.y + 20 * Math.sin(lastPieceDirection))
+                p.pop()
 
                 // draw gizmo for the last piece end point
-                renderTrack.push()
-                renderTrack.strokeWeight(2)
-                renderTrack.stroke("blue")
-                renderTrack.line(lastPieceEnd.x, lastPieceEnd.y, lastPieceEnd.x + 10, lastPieceEnd.y)
-                renderTrack.stroke("yellow")
-                renderTrack.line(lastPieceEnd.x, lastPieceEnd.y, lastPieceEnd.x, lastPieceEnd.y + 10)
-                renderTrack.pop()
+                p.push()
+                p.strokeWeight(2)
+                p.stroke("blue")
+                p.line(lastPieceEnd.x, lastPieceEnd.y, lastPieceEnd.x + 10, lastPieceEnd.y)
+                p.stroke("yellow")
+                p.line(lastPieceEnd.x, lastPieceEnd.y, lastPieceEnd.x, lastPieceEnd.y + 10)
+                p.pop()
             }
         }
 
         if (this.drawTrackMapBounds) {
             const boundingBox = this.calculateTrackBounds()
 
-            renderTrack.push()
-            renderTrack.strokeWeight(1)
-            renderTrack.stroke("purple")
-            renderTrack.noFill()
-            renderTrack.rect(boundingBox.minX, boundingBox.minY, boundingBox.maxX - boundingBox.minX, boundingBox.maxY - boundingBox.minY)
-            renderTrack.pop()
+            p.push()
+            p.strokeWeight(1)
+            p.stroke("purple")
+            p.noFill()
+            p.rect(boundingBox.minX, boundingBox.minY, boundingBox.maxX - boundingBox.minX, boundingBox.maxY - boundingBox.minY)
+            p.pop()
         }
 
-
-        renderTrack.pop()
+        p.pop()
     }
 
     isInsideTrack(x: number, y: number): boolean {
