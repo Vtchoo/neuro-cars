@@ -1,6 +1,7 @@
 import p5 from "p5"
 import { Vector } from "./Vector"
-import { ArcSegment, closestPointOnArcSegment, closestPointOnLineSegment, length, LineSegment, sub, XY, } from "./utils/track"
+import { closestPointOnArcSegment, closestPointOnLineSegment } from "./utils/track"
+import { arcLineIntersection, ArcSegment, length, LineSegment, lineSegmentIntersection, sub, XY } from "./utils/math"
 
 interface BoundingBox {
     minX: number
@@ -17,10 +18,6 @@ interface QuadTreeNode {
     trackPieces?: TrackPiece[]
 }
 
-interface LineIntersection {
-    intersects: boolean
-    point?: { x: number, y: number }
-}
 
 
 
@@ -73,7 +70,7 @@ export default class Track {
     // drawTrackMapCells: boolean = false
     drawQuadTree: boolean = false
 
-    useTrackMapCache: boolean = false
+    useTrackMapCache: boolean = true
     trackMapCache = new Map<string, boolean>()
     boundQueryType: "analytic" | "map" | "quadTree" = "quadTree"
 
@@ -925,8 +922,8 @@ export default class Track {
                 const line1End = { x: piece.end.x - offsetX, y: piece.end.y + offsetY };
                 const line2Start = { x: piece.start.x + offsetX, y: piece.start.y - offsetY };
                 const line2End = { x: piece.end.x + offsetX, y: piece.end.y - offsetY };
-                return this.lineSegmentIntersection(line1Start, line1End, lineStart, lineEnd).intersects ||
-                    this.lineSegmentIntersection(line2Start, line2End, lineStart, lineEnd).intersects;
+                return lineSegmentIntersection(line1Start, line1End, lineStart, lineEnd).intersects ||
+                    lineSegmentIntersection(line2Start, line2End, lineStart, lineEnd).intersects;
             }
             case TrackPieceType.Arc: {
                 // let's do the actual arc-line intersection check
@@ -948,7 +945,7 @@ export default class Track {
                     clockwise: piece.clockwise,
                     kind: "arc" as const
                 }
-                const internalIntersections = this.arcLineIntersection(internalArc, lineStart, lineEnd);
+                const internalIntersections = arcLineIntersection(internalArc, lineStart, lineEnd);
 
                 const externalArc = {
                     center: piece.center,
@@ -963,7 +960,7 @@ export default class Track {
                     clockwise: piece.clockwise,
                     kind: "arc" as const
                 }
-                const externalIntersections = this.arcLineIntersection(externalArc, lineStart, lineEnd);
+                const externalIntersections = arcLineIntersection(externalArc, lineStart, lineEnd);
 
                 if (internalIntersections.some(intersection => intersection.intersects) || externalIntersections.some(intersection => intersection.intersects)) {
                     return true;
@@ -980,7 +977,7 @@ export default class Track {
                     const p1 = this.evaluateBezier(piece, t1);
                     const p2 = this.evaluateBezier(piece, t2);
 
-                    if (this.lineSegmentIntersection(p1, p2, lineStart, lineEnd).intersects) {
+                    if (lineSegmentIntersection(p1, p2, lineStart, lineEnd).intersects) {
                         return true;
                     }
                 }
@@ -990,94 +987,6 @@ export default class Track {
 
         return false;
     }
-
-    /**
-     * Checks if two line segments intersect
-     */
-    private lineSegmentIntersection(a1: XY, a2: XY, b1: XY, b2: XY): LineIntersection {
-        const denom = (b2.y - b1.y) * (a2.x - a1.x) - (b2.x - b1.x) * (a2.y - a1.y);
-
-        if (Math.abs(denom) < 1e-10) {
-            return { intersects: false }; // Lines are parallel
-        }
-
-        const ua = ((b2.x - b1.x) * (a1.y - b1.y) - (b2.y - b1.y) * (a1.x - b1.x)) / denom;
-        const ub = ((a2.x - a1.x) * (a1.y - b1.y) - (a2.y - a1.y) * (a1.x - b1.x)) / denom;
-
-        if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
-            const x = a1.x + ua * (a2.x - a1.x);
-            const y = a1.y + ua * (a2.y - a1.y);
-            return { intersects: true, point: { x, y } };
-        }
-
-        return { intersects: false };
-    }
-
-    private circleLineIntersection(center: XY, radius: number, lineStart: XY, lineEnd: XY): LineIntersection[] {
-        const dx = lineEnd.x - lineStart.x;
-        const dy = lineEnd.y - lineStart.y;
-        const fx = lineStart.x - center.x;
-        const fy = lineStart.y - center.y;
-        const a = dx * dx + dy * dy;
-        const b = 2 * (fx * dx + fy * dy);
-        const c = fx * fx + fy * fy - radius * radius;
-        const discriminant = b * b - 4 * a * c;
-
-        if (discriminant < 0) {
-            return [{ intersects: false }]; // No intersection
-        }
-
-        const sqrtDiscriminant = Math.sqrt(discriminant);
-        const t1 = (-b - sqrtDiscriminant) / (2 * a);
-        const t2 = (-b + sqrtDiscriminant) / (2 * a);
-        const intersections: LineIntersection[] = [];
-
-        if (t1 >= 0 && t1 <= 1) {
-            intersections.push({
-                intersects: true,
-                point: {
-                    x: lineStart.x + t1 * dx,
-                    y: lineStart.y + t1 * dy
-                }
-            });
-        }
-
-        if (t2 >= 0 && t2 <= 1) {
-            intersections.push({
-                intersects: true,
-                point: {
-                    x: lineStart.x + t2 * dx,
-                    y: lineStart.y + t2 * dy
-                }
-            });
-        }
-
-        if (intersections.length === 0) {
-            intersections.push({ intersects: false });
-        }
-
-        return intersections;
-    }
-
-    private arcLineIntersection(arc: ArcSegment, lineStart: XY, lineEnd: XY): LineIntersection[] {
-        const circleIntersections = this.circleLineIntersection(arc.center, length(sub(arc.start, arc.center)), lineStart, lineEnd);
-        const validIntersections: LineIntersection[] = [];
-        for (const intersection of circleIntersections) {
-            if (intersection.intersects) {
-                const point = intersection.point!;
-                const angle = Math.atan2(point.y - arc.center.y, point.x - arc.center.x);
-                const startAngle = Math.atan2(arc.start.y - arc.center.y, arc.start.x - arc.center.x);
-                const endAngle = Math.atan2(arc.end.y - arc.center.y, arc.end.x - arc.center.x);
-                const isWithinArc = !arc.clockwise ? (angle <= startAngle && angle >= endAngle) || (startAngle < endAngle && (angle <= startAngle || angle >= endAngle))
-                    : (angle >= startAngle && angle <= endAngle) || (startAngle > endAngle && (angle >= startAngle || angle <= endAngle));
-                if (isWithinArc) {
-                    validIntersections.push(intersection);
-                }
-            }
-        }
-        return validIntersections.length > 0 ? validIntersections : [{ intersects: false }];
-    }
-
 
     /**
      * Checks if a quadrant has track (fallback method)

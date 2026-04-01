@@ -1,7 +1,4 @@
-export interface XY {
-    x: number
-    y: number
-}
+import { add, angleOf, ArcSegment, BezierSegment, clamp, distanceSq, dot, length, lengthSq, LineSegment, mul, normalize, sub, wrapAngle, XY } from "./math";
 
 export type ClosestPointResult = {
     point: XY;
@@ -9,28 +6,6 @@ export type ClosestPointResult = {
     distance: number;
     distanceSq: number;
     t: number;          // local segment parameter [0,1]
-};
-
-export type LineSegment = {
-    kind: "line";
-    start: XY;
-    end: XY;
-};
-
-export type ArcSegment = {
-    kind: "arc";
-    start: XY;
-    end: XY;
-    center: XY;
-    clockwise: boolean;
-};
-
-export type BezierSegment = {
-    kind: "bezier";
-    p0: XY;
-    p1: XY;
-    p2: XY;
-    p3: XY;
 };
 
 export type TrackSegment = LineSegment | ArcSegment | BezierSegment;
@@ -44,58 +19,6 @@ type TrackQueryResult = ClosestPointResult & {
     lateralOffset: number; // right positive, left negative
     headingAngle: number;  // signed angle from track tangent to car heading, in [-PI, PI]
 };
-
-export function add(a: XY, b: XY): XY {
-    return { x: a.x + b.x, y: a.y + b.y };
-}
-
-export function sub(a: XY, b: XY): XY {
-    return { x: a.x - b.x, y: a.y - b.y };
-}
-
-export function mul(v: XY, s: number): XY {
-    return { x: v.x * s, y: v.y * s };
-}
-
-export function dot(a: XY, b: XY): number {
-    return a.x * b.x + a.y * b.y;
-}
-
-export function cross(a: XY, b: XY): number {
-    return a.x * b.y - a.y * b.x;
-}
-
-export function lengthSq(v: XY): number {
-    return dot(v, v);
-}
-
-export function length(v: XY): number {
-    return Math.sqrt(lengthSq(v));
-}
-
-export function normalize(v: XY): XY {
-    const len = length(v);
-    if (len === 0) return { x: 0, y: 0 };
-    return { x: v.x / len, y: v.y / len };
-}
-
-export function clamp(v: number, min: number, max: number): number {
-    return Math.max(min, Math.min(max, v));
-}
-
-export function distanceSq(a: XY, b: XY): number {
-    return lengthSq(sub(a, b));
-}
-
-export function angleOf(v: XY): number {
-    return Math.atan2(v.y, v.x);
-}
-
-export function wrapAngle(a: number): number {
-    while (a <= -Math.PI) a += 2 * Math.PI;
-    while (a > Math.PI) a -= 2 * Math.PI;
-    return a;
-}
 
 /**
  * Signed angular travel from 'from' to 'to'.
