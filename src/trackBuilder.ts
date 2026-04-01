@@ -4,6 +4,7 @@ import p5 from "p5"
 import { newVector, Vector } from "./Vector"
 import Game from "./main"
 import Track, { StraightPiece, TrackPieceType } from "./Track"
+import { style } from "./utils/css"
 
 // Visual settings
 const buttonWidth = 60
@@ -13,19 +14,11 @@ let currentPosition: Vector
 let currentDirection: number
 
 let buttons: p5.Element[]
+let editor: p5.Element
+let controls: p5.Element
 
 let showGrid = true
 
-// const turnButtons = [
-//     { label: 'Large Left', radius: 3.5, direction: 'left' },
-//     { label: 'Large Right', radius: 3.5, direction: 'right' },
-//     { label: 'Big Left', radius: 2.5, direction: 'left' },
-//     { label: 'Big Right', radius: 2.5, direction: 'right' },
-//     { label: 'Medium Left', radius: 1.5, direction: 'left' },
-//     { label: 'Medium Right', radius: 1.5, direction: 'right' },
-//     { label: 'Small Left', radius: 0.5, direction: 'left' },
-//     { label: 'Small Right', radius: 0.5, direction: 'right' },
-// ]
 const turnButtons = [
     { label: 'Very Large Left', radius: 5.5, direction: 'left' },
     { label: 'Very Large Right', radius: 5.5, direction: 'right' },
@@ -39,7 +32,25 @@ const turnButtons = [
     { label: 'Small Right', radius: 1.5, direction: 'right' },
 ]
 
+const wideButtonStyle = style({
+    width: `100%`,
+    height: `${buttonHeight}px`
+})
+
 export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirection: number, trackWidth: number, renderTrack: p5.Graphics, trackMap: number[][], renderMap: p5.Graphics, resolution: number, game: Game, track: Track) {
+
+    editor = p.createElement("div")
+    editor.style(style({
+        position: 'absolute',
+        top: '1rem',
+        left: '1rem',
+        background: 'rgba(255, 255, 255, 0.8)',
+        padding: '.5rem',
+        borderRadius: '.5rem',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '.5rem'
+    }))
 
     currentPosition = initialPosition
     currentDirection = initialDirection
@@ -53,93 +64,85 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
 
     game.track.addStraight(initialTrackPiece.start, initialTrackPiece.end, initialTrackPiece.width)
     console.log(game.track.pieces)
-    buttons = new Array()
-
-    buttons.push(p.createButton("Very Large Left"))
-    buttons.push(p.createButton("Very Large Right"))
-    buttons.push(p.createButton("Large Left"))
-    buttons.push(p.createButton("Large Right"))
-    buttons.push(p.createButton("Big Left"))
-    buttons.push(p.createButton("Big Right"))
-    buttons.push(p.createButton("Medium Left"))
-    buttons.push(p.createButton("Medium Right"))
-    buttons.push(p.createButton("Small Left"))
-    buttons.push(p.createButton("Small Right"))
+    buttons = []
 
     for (let i = 0; i < 5; i++) {
+        const row = p.createElement("div")
+        row.style(style({
+            display: 'flex',
+            gap: '.5rem',
+            width: '100%',
+        }))
+
         for (let j = 0; j < 2; j++) {
-
-            // let dir
-            // if (j == 0) { dir = "left" } else { dir = "right" }
-
-            // buttons[i * 2 + j].size(buttonWidth, buttonHeight)
-            // buttons[i * 2 + j].position(20 + (buttonWidth + 5) * j, 20 + (buttonHeight + 5) * i)
-            // buttons[i * 2 + j].mousePressed(() => {
-            //     // buildTrack(6 - 2 * i, dir, trackWidth, currentDirection, renderTrack, p)
-            //     track.appendArc((6 - 2 * i) * trackWidth, Math.PI / 4, dir === "right", trackWidth)
-            // })
-
-            const button = buttons[i * 2 + j]
+            const button = p.createButton(turnButtons[i * 2 + j].label)
             const turnInfo = turnButtons[i * 2 + j]
             button.size(buttonWidth, buttonHeight)
-            button.position(20 + (buttonWidth + 5) * j, 20 + (buttonHeight + 5) * i)
+            button.style(style({
+                flex: 1,
+            }))
             button.mousePressed(() => {
                 game.track.appendArc(turnInfo.radius * trackWidth, Math.PI / 16, turnInfo.direction === "right", trackWidth)
             })
+            buttons.push(button)
+            row.child(button)
         }
+        editor.child(row)
     }
 
     const straightButton = p.createButton("1 unit Straight")
-    straightButton.size(2 * buttonWidth + 5, buttonHeight)
-    straightButton.position(20, 20 + buttons.length * (buttonHeight + 5))
-    // straightButton.mousePressed(() => { buildTrack(1, "straight", trackWidth, currentDirection, renderTrack, p) })
+    straightButton.style(wideButtonStyle)
     straightButton.mousePressed(() => {
         game.track.appendStraight(trackWidth, trackWidth)
     })
     buttons.push(straightButton)
+    editor.child(straightButton)
 
     const sqrt2Button = p.createButton("SQRT(2) units straight")
-    sqrt2Button.size(2 * buttonWidth + 5, buttonHeight)
-    sqrt2Button.position(20, 20 + buttons.length * (buttonHeight + 5))
+    sqrt2Button.style(wideButtonStyle)
     sqrt2Button.mousePressed(() => { game.track.appendStraight(Math.sqrt(2) * trackWidth, trackWidth) })
     buttons.push(sqrt2Button)
+    editor.child(sqrt2Button)
 
     const deleteLastButton = p.createButton("Delete Last")
-    deleteLastButton.size(2 * buttonWidth + 5, buttonHeight)
-    deleteLastButton.position(20, 20 + buttons.length * (buttonHeight + 5))
+    deleteLastButton.style(wideButtonStyle)
     deleteLastButton.mousePressed(() => {
         if (game.track.pieces.length > 1) {
             game.track.deleteLastPiece()
         }
     })
     buttons.push(deleteLastButton)
+    editor.child(deleteLastButton)
 
-    const showGridButton = p.createButton("Show Grid")
-    showGridButton.size(2 * buttonWidth + 5, buttonHeight)
-    showGridButton.position(20, 20 + buttons.length * (buttonHeight + 5))
-    showGridButton.mousePressed(() => { showGrid = !showGrid })
-    buttons.push(showGridButton)
+    controls = p.createElement("div")
+    controls.style(style({
+        display: 'flex',
+        background: 'rgba(255, 255, 255, 0.8)',
+        padding: '.5rem',
+        borderRadius: '.5rem',
+        gap: '.5rem',
+        position: 'absolute',
+        bottom: '1rem',
+        left: '1rem',
+    }))
 
     const resetButton = p.createButton("Reset")
     resetButton.size(buttonWidth, buttonHeight)
-    // resetButton.position(20, p.height - buttonHeight - 20)
-    resetButton.style(`bottom: 20px; left: 20px; position: absolute;`)
     resetButton.mousePressed(() => resetTrack(game))
     buttons.push(resetButton)
+    controls.child(resetButton)
 
     const doneButton = p.createButton("Done!")
     doneButton.size(buttonWidth, buttonHeight)
-    // doneButton.position(20 + 1 * (buttonWidth + 5), p.height - buttonHeight - 20)
-    doneButton.style(`bottom: 20px; left: ${buttonWidth + 25}px; position: absolute;`)
     doneButton.mousePressed(() => setTrack(renderTrack, trackMap, renderMap, p, resolution, game))
     buttons.push(doneButton)
+    controls.child(doneButton)
 
     const loadTrackButton = p.createButton("Load Track")
     loadTrackButton.size(buttonWidth, buttonHeight)
-    // loadTrackButton.position(20 + 2 * (buttonWidth + 5), p.height - buttonHeight - 20)
-    loadTrackButton.style(`bottom: 20px; left: ${2 * (buttonWidth + 25)}px; position: absolute;`)
     loadTrackButton.mousePressed(() => loadTrackInEditor(p, game))
     buttons.push(loadTrackButton)
+    controls.child(loadTrackButton)
 }
 
 function resetTrack(game: Game) {
@@ -214,6 +217,9 @@ export function createGrid(grid: p5.Graphics, start: Vector, direction: number, 
 }
 
 export function setTrack(renderTrack: p5.Graphics, trackMap: number[][], renderMap: p5.Graphics, p: p5, resolution: number, game: Game) {
+
+    editor.remove()
+    controls.remove()
 
     // Removes the track builder
     if (typeof buttons != "undefined") {
