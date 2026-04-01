@@ -1,6 +1,6 @@
 
 import p5 from 'p5';
-import { createGrid, createTrackBuilder, setTrack } from "./trackBuilder"
+import { createTrackBuilder, setTrack } from "./trackBuilder"
 import { newVector, Vector } from './Vector';
 import Car from './Car';
 import { NeuralNet } from './NeuralNet';
@@ -523,7 +523,6 @@ export default class Game {
 				this.currentPosition = newVector(this.start.x + trackWidth * Math.cos(this.direction) / 2, this.start.y + trackWidth * Math.sin(this.direction) / 2)
 				this.p.circle(this.currentPosition.x, this.currentPosition.y, 5)
 
-				createGrid(this.grid, this.start, this.direction, trackWidth, this.p)
 				createTrackBuilder(this.p, this.currentPosition, this.currentDirection, trackWidth, this.renderTrack, this.trackMap, this.renderMap, this.resolution, this, this.track)
 
 				break

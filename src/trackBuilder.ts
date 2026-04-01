@@ -37,16 +37,20 @@ const wideButtonStyle = style({
     height: `${buttonHeight}px`
 })
 
+const containerStyle = {
+    background: 'rgba(255, 255, 255, 0.8)',
+    padding: '.5rem',
+    borderRadius: '.5rem',
+}
+
 export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirection: number, trackWidth: number, renderTrack: p5.Graphics, trackMap: number[][], renderMap: p5.Graphics, resolution: number, game: Game, track: Track) {
 
     editor = p.createElement("div")
     editor.style(style({
+        ...containerStyle,
         position: 'absolute',
         top: '1rem',
         left: '1rem',
-        background: 'rgba(255, 255, 255, 0.8)',
-        padding: '.5rem',
-        borderRadius: '.5rem',
         display: 'flex',
         flexDirection: 'column',
         gap: '.5rem'
@@ -116,10 +120,8 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
 
     controls = p.createElement("div")
     controls.style(style({
+        ...containerStyle,
         display: 'flex',
-        background: 'rgba(255, 255, 255, 0.8)',
-        padding: '.5rem',
-        borderRadius: '.5rem',
         gap: '.5rem',
         position: 'absolute',
         bottom: '1rem',
@@ -193,27 +195,6 @@ function loadTrackInEditor(p: p5, game: Game) {
 
     // Trigger the file input
     input.elt.click()
-}
-
-export function createGrid(grid: p5.Graphics, start: Vector, direction: number, trackWidth: number, p: p5) {
-    var spacing = trackWidth
-    var angle = direction
-    var anchor = start
-
-    var offset = (grid.width % spacing) / spacing
-
-    for (let i = 0; i < 2 * grid.width / spacing; i++) {
-        for (let j = 0; j < 2 * grid.width / spacing; j++) {
-            grid.push()
-            grid.stroke("white")
-            grid.noFill()
-            grid.translate(anchor.x, anchor.y)
-            grid.rotate(angle)
-            grid.rectMode(p.CENTER)
-            grid.square(-grid.width + spacing * (i + offset), -grid.width + spacing * (j + offset), spacing)
-            grid.pop()
-        }
-    }
 }
 
 export function setTrack(renderTrack: p5.Graphics, trackMap: number[][], renderMap: p5.Graphics, p: p5, resolution: number, game: Game) {
