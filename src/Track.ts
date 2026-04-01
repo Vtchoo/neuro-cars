@@ -73,6 +73,8 @@ export default class Track {
     // drawTrackMapCells: boolean = false
     drawQuadTree: boolean = false
 
+    useTrackMapCache: boolean = false
+    trackMapCache = new Map<string, boolean>()
     boundQueryType: "analytic" | "map" | "quadTree" = "quadTree"
 
     /**
@@ -400,6 +402,13 @@ export default class Track {
     }
 
     isInsideTrack(x: number, y: number): boolean {
+
+        const cacheKey = `${Math.floor(x)},${Math.floor(y)}`
+
+        if (this.useTrackMapCache && this.trackMapCache.has(cacheKey)) {
+            return this.trackMapCache.get(cacheKey)!
+        }
+
         switch (this.boundQueryType) {
             case "analytic": {
                 if (this.analyticPieces.length === 0) {
@@ -412,9 +421,14 @@ export default class Track {
                 for (const piece of this.analyticPieces) {
                     const distance = this.getDistanceToPiece(piece, queryPoint)
                     if (distance <= piece.width / 2) {
+                        if (this.useTrackMapCache)
+                            this.trackMapCache.set(cacheKey, true)
                         return true
                     }
                 }
+
+                if (this.useTrackMapCache)
+                    this.trackMapCache.set(cacheKey, false)
 
                 return false
             }
@@ -424,10 +438,15 @@ export default class Track {
                 }
 
                 if (!this.quadTree || this.analyticPieces.length === 0) {
+                    if (this.useTrackMapCache)
+                        this.trackMapCache.set(cacheKey, false)
                     return false
                 }
 
-                return this.queryQuadTree(this.quadTree, x, y)
+                const result = this.queryQuadTree(this.quadTree, x, y)
+                if (this.useTrackMapCache)
+                    this.trackMapCache.set(cacheKey, result)
+                return result
             }
             case "map":
             default: {
