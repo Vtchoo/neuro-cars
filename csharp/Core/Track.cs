@@ -276,7 +276,7 @@ namespace SmartRace.Core
         // Convert back to JSON data for saving
         public TrackDataJson ToJsonData()
         {
-            var pieces = AnalyticPieces.Select(piece =>
+            var pieces = Pieces.Select(piece =>
             {
                 var pieceJson = new TrackPieceJson
                 {
