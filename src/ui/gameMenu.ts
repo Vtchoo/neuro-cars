@@ -58,7 +58,7 @@ export function buildGameMenu(game: Game, p: p5) {
     plus100Button.parent(ticksRow)
     plus5PercentButton.parent(ticksRow)
 
-    const increaseMaxTicksButton = p.createButton("Extend time: Off")
+    const increaseMaxTicksButton = p.createButton(`Extend time: ${game.increaseMaxTicksIfBestCarIsRunning ? 'On' : 'Off'}`)
     increaseMaxTicksButton.parent(menu)
     increaseMaxTicksButton.attribute("title", "If enabled, the game will automatically increase the max ticks for the next generation if the best car is still running when the max ticks is reached.")
     increaseMaxTicksButton.mouseClicked(() => {
@@ -67,7 +67,7 @@ export function buildGameMenu(game: Game, p: p5) {
         increaseMaxTicksButton.html(`Extend time: ${isEnabled ? 'On' : 'Off'}`)
     })
 
-    const showFitnessGraphButton = p.createButton("Show Fitness Graph: Off")
+    const showFitnessGraphButton = p.createButton(`Show Fitness Graph: ${game.drawGraphs ? 'On' : 'Off'}`)
     showFitnessGraphButton.parent(menu)
     showFitnessGraphButton.mouseClicked(() => {
         game.toggleDrawGraphs()
@@ -75,7 +75,7 @@ export function buildGameMenu(game: Game, p: p5) {
         showFitnessGraphButton.html(`Show Fitness Graph: ${isDrawing ? 'On' : 'Off'}`)
     })
 
-    const showInputsButton = p.createButton("Show Inputs: none")
+    const showInputsButton = p.createButton(`Show Inputs: ${game.showInputs}`)
     showInputsButton.parent(menu)
     showInputsButton.mouseClicked(() => {
         game.toggleShowInputs()

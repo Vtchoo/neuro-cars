@@ -90,7 +90,7 @@ export default class Game {
 	private showGrid = true // Shows grid when building the track
 	private showMap = false // Shows collision map during runtime
 	public showInputs: "none" | "all" | "best" = "none" // Shows the sensor inputs of the cars during runtime. "all" shows for all cars, "best" only for the best car, and "none" for none.
-	private drawGraphs = false
+	public drawGraphs = false
 	private resolution = 3 // Get 1 out of [resolution] pixels to create the track collision map
 
 	setShowGrid(show: boolean) {
