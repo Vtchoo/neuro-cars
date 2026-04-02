@@ -1,12 +1,13 @@
 
 import p5 from 'p5';
-import { createTrackBuilder, setTrack } from "./trackBuilder"
+import { createTrackBuilder, setTrack } from "./ui/trackBuilder"
 import { newVector, Vector } from './Vector';
 import Car from './Car';
 import { NeuralNet } from './NeuralNet';
 import Track, { TrackPieceType } from './Track';
 import { tooltip } from './utils/tooltip';
 import { buildMainMenu } from './ui/mainMenu';
+import { buildGameMenu } from './ui/gameMenu';
 //---------- SMART RACE 2 ----------
 
 // Important objects
@@ -51,6 +52,17 @@ export default class Game {
 
 	private p: p5
 	private canvas: p5.Renderer
+
+	private _gameMenu: p5.Element | null = null
+	get gameMenu() {
+		return this._gameMenu
+	}
+	set gameMenu(menu: p5.Element | null) {
+		if (this._gameMenu) {
+			this._gameMenu.remove()
+		}
+		this._gameMenu = menu
+	}
 
 	backgroundImage: p5.Image
 	referenceImage: p5.Image | null = null
@@ -243,7 +255,7 @@ export default class Game {
 			this.drawReferenceImage()
 
 		switch (phase) {
-			case "setStart":
+			case "setStart": {
 
 				this.p.push();
 				// this.p.fill("green")
@@ -257,7 +269,7 @@ export default class Game {
 				this.p.pop();
 				// this.p.image(this.renderTrack, 0, 0)
 				break
-
+			}
 			case "rotateStart": {
 
 				this.p.push()
@@ -275,14 +287,14 @@ export default class Game {
 				// this.p.image(this.renderTrack, 0, 0)
 				break
 			}
-			case "buildTrack":
+			case "buildTrack": {
 
 				this.track.draw(this.p)
 				// this.p.image(this.renderTrack, 0, 0)
 				if (this.showGrid == true) { this.p.image(this.grid, 0, 0) }
 				break
-
-			case "setup":
+			}
+			case "setup": {
 
 				this.track.draw(this.p)
 				// for (let i = 0; i < individuals; i++) {
@@ -298,8 +310,8 @@ export default class Game {
 
 				this.setPhase("running")
 				break
-
-			case "running":
+			}
+			case "running": {
 
 				// Shows the track
 				// this.p.image(this.renderTrack, 0, 0)
@@ -323,12 +335,10 @@ export default class Game {
 					individual.update(this.trackMap, this.resolution, this.track)
 				})
 
-				const bestCar = this.population.reduce((best, car) => {
-					if (this.followBestCar === 'bestActive' && car.speed < 0.01) {
-						return best
-					}
-					return car.neuralNet.fitness > best.neuralNet.fitness ? car : best
-				}, this.population[0])
+				const bestCar = this.population.reduce((best, car) => car.neuralNet.fitness > best.neuralNet.fitness ? car : best, this.population[0])
+				const bestActiveCar = this.population
+					.filter(car => car.speed > 0.01)
+					.reduce((best, car) => (car.neuralNet.fitness > best.neuralNet.fitness) ? car : best, this.population[0])
 
 				switch (this.showInputs) {
 					case "all":
@@ -345,9 +355,10 @@ export default class Game {
 
 				// Follow best car camera logic
 				if (this.followBestCar !== 'off' && this.population.length > 0 && !playerDrive) {
+					const carToFollow = (this.followBestCar === 'best' || !bestActiveCar) ? bestCar : bestActiveCar
 					// Center camera on the best car
-					this.cameraOffsetX = -bestCar.pos.x
-					this.cameraOffsetY = -bestCar.pos.y
+					this.cameraOffsetX = -carToFollow.pos.x
+					this.cameraOffsetY = -carToFollow.pos.y
 				}
 
 				// Allows the player to drive a car
@@ -393,7 +404,8 @@ export default class Game {
 				}
 
 				break
-			case "breeding":
+			}
+			case "breeding": {
 
 				// Shows the track
 				// this.p.image(this.renderTrack, 0, 0)
@@ -514,6 +526,7 @@ export default class Game {
 
 				phase = "running"
 				break
+			}
 		}
 
 		this.p.pop()
@@ -655,7 +668,7 @@ export default class Game {
 		})
 	}
 
-	private loadReferenceImage() {
+	public loadReferenceImage(onLoadCallback?: () => void) {
 		// Create file input
 		const input = this.p.createFileInput((file: any) => {
 			if (file.type === 'image') {
@@ -681,6 +694,9 @@ export default class Game {
 					const desiredHeightPixels = distanceMeters * 10
 					this.referenceImageScale = desiredHeightPixels / img.height
 					console.log(`Reference image loaded: ${img.width}x${img.height}, scaled by ${this.referenceImageScale}`)
+					if (onLoadCallback) {
+						onLoadCallback()
+					}
 				}, () => {
 					alert('Failed to load image. Please try a different file.')
 				})
@@ -904,7 +920,7 @@ export default class Game {
 	}
 
 	// Load game functionality
-	loadGame(onLoad?: () => void) {
+	loadGame(onLoadCallback?: () => void) {
 		const input = document.createElement('input');
 		input.type = 'file';
 		input.accept = '.json';
@@ -917,7 +933,10 @@ export default class Game {
 						const saveData = JSON.parse(e.target?.result as string);
 						this.restoreGameState(saveData);
 						console.log(`Game loaded! Generation: ${this.generation}`);
-						if (onLoad) onLoad();
+						this.gameMenu = buildGameMenu(this, this.p)
+						if (onLoadCallback) {
+							onLoadCallback();
+						}
 					} catch (error) {
 						console.error('Error loading save file:', error);
 						alert('Error loading save file. Please check the file format.');

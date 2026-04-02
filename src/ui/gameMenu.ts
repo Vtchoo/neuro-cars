@@ -83,10 +83,12 @@ export function buildGameMenu(game: Game, p: p5) {
         showInputsButton.html(`Show Inputs: ${currentMode}`)
     })
 
-    const followBestCarButton = p.createButton("Follow Best Car: Off")
+    const followBestCarButton = p.createButton(`Follow Best Car: ${game.followBestCar}`)
     followBestCarButton.parent(menu)
     followBestCarButton.mouseClicked(() => {
         const nextMode = game.toggleFollowBestCar()
         followBestCarButton.html(`Follow Best Car: ${nextMode}`)
     })
+
+    return menu
 }

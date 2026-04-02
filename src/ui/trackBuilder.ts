@@ -1,12 +1,12 @@
 // Creates the menu for building the track pieces (just like in Roller Coaster Tycoon)
 
 import p5 from "p5"
-import { newVector, Vector } from "./Vector"
-import Game from "./main"
-import Track, { StraightPiece, TrackPieceType } from "./Track"
-import { style } from "./utils/css"
-import { containerStyle } from "./ui/styles"
-import { buildGameMenu } from "./ui/gameMenu"
+import { newVector, Vector } from "../Vector"
+import Game from "../main"
+import Track, { StraightPiece, TrackPieceType } from "../Track"
+import { style } from "../utils/css"
+import { containerStyle } from "./styles"
+import { buildGameMenu } from "./gameMenu"
 
 // Visual settings
 const buttonWidth = 60
@@ -198,7 +198,7 @@ export function setTrack(game: Game, p: p5) {
     editor.remove()
     controls.remove()
 
-    buildGameMenu(game, p)
+    game.gameMenu = buildGameMenu(game, p)
 
     game.setPhase("setup")
 }

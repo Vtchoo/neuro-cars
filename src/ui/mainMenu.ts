@@ -18,10 +18,10 @@ export function buildMainMenu(game: Game, p: p5) {
         transform: 'translate(-50%, -50%)',
     }))
 
-    const title = p.createElement("h1", "Smart Race 2")
+    const title = p.createElement("h1", "NeuroCars")
     title.parent(menu)
 
-    const startButton = p.createElement("button", "Start")
+    const startButton = p.createButton("Start")
     startButton.style(style({
         width: '100%',
         padding: '0.5rem',
@@ -33,7 +33,7 @@ export function buildMainMenu(game: Game, p: p5) {
         game.setPhase("setStart")
     })
 
-    const loadTrackButton = p.createElement("button", "Load game")
+    const loadTrackButton = p.createButton("Load game")
     loadTrackButton.style(style({
         width: '100%',
         padding: '0.5rem',
@@ -43,7 +43,19 @@ export function buildMainMenu(game: Game, p: p5) {
     loadTrackButton.mouseClicked(() => {
         game.loadGame(() => {
             menu.remove()
-            buildGameMenu(game, p)
+        })
+    })
+
+    const loadReferenceImageButton = p.createButton("Load reference image")
+    loadReferenceImageButton.style(style({
+        width: '100%',
+        padding: '0.5rem',
+        fontSize: '1.25rem',
+    }))
+    loadReferenceImageButton.parent(menu)
+    loadReferenceImageButton.mouseClicked(() => {
+        game.loadReferenceImage(() => {
+            menu.remove()
         })
     })
 }
