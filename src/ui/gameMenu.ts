@@ -86,8 +86,7 @@ export function buildGameMenu(game: Game, p: p5) {
     const followBestCarButton = p.createButton("Follow Best Car: Off")
     followBestCarButton.parent(menu)
     followBestCarButton.mouseClicked(() => {
-        game.followBestCar = !game.followBestCar
-        const isFollowing = game.followBestCar
-        followBestCarButton.html(`Follow Best Car: ${isFollowing ? 'On' : 'Off'}`)
+        const nextMode = game.toggleFollowBestCar()
+        followBestCarButton.html(`Follow Best Car: ${nextMode}`)
     })
 }

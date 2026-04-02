@@ -68,7 +68,7 @@ export default class Game {
 	track = new Track()
 	population: Car[] = []
 
-	followBestCar = false
+	followBestCar: 'off' | 'best' | 'bestActive' = 'off'
 
 	private readonly decisionsPerSecond = 10
 	private lastDecisionTime = 0
@@ -114,6 +114,14 @@ export default class Game {
 		const currentIndex = options.indexOf(this.showInputs)
 		const nextIndex = (currentIndex + 1) % options.length
 		this.showInputs = options[nextIndex]
+		return this.showInputs
+	}
+	toggleFollowBestCar() {
+		const options = ['off', 'best', 'bestActive'] as const
+		const currentIndex = options.indexOf(this.followBestCar)
+		const nextIndex = (currentIndex + 1) % options.length
+		this.followBestCar = options[nextIndex]
+		return this.followBestCar
 	}
 	toggleDrawGraphs() {
 		this.drawGraphs = !this.drawGraphs
@@ -269,14 +277,14 @@ export default class Game {
 			}
 			case "buildTrack":
 
-				this.track.draw(this.p, this.p)
+				this.track.draw(this.p)
 				// this.p.image(this.renderTrack, 0, 0)
 				if (this.showGrid == true) { this.p.image(this.grid, 0, 0) }
 				break
 
 			case "setup":
 
-				this.track.draw(this.p, this.p)
+				this.track.draw(this.p)
 				// for (let i = 0; i < individuals; i++) {
 				// 	population[i] = new Car(start.x, start.y, direction)
 				// }
@@ -315,7 +323,12 @@ export default class Game {
 					individual.update(this.trackMap, this.resolution, this.track)
 				})
 
-				const bestCar = this.population.reduce((best, car) => car.neuralNet.fitness > best.neuralNet.fitness ? car : best, this.population[0])
+				const bestCar = this.population.reduce((best, car) => {
+					if (this.followBestCar === 'bestActive' && car.speed < 0.01) {
+						return best
+					}
+					return car.neuralNet.fitness > best.neuralNet.fitness ? car : best
+				}, this.population[0])
 
 				switch (this.showInputs) {
 					case "all":
@@ -331,7 +344,7 @@ export default class Game {
 				}
 
 				// Follow best car camera logic
-				if (this.followBestCar && this.population.length > 0 && !playerDrive) {
+				if (this.followBestCar !== 'off' && this.population.length > 0 && !playerDrive) {
 					// Center camera on the best car
 					this.cameraOffsetX = -bestCar.pos.x
 					this.cameraOffsetY = -bestCar.pos.y
@@ -793,8 +806,8 @@ export default class Game {
 			case 'f':
 			case 'F':
 				// Toggle follow best car
-				this.followBestCar = !this.followBestCar
-				console.log(`Follow best car: ${this.followBestCar ? 'ON' : 'OFF'}`)
+				const nextMode = this.toggleFollowBestCar()
+				console.log(`Follow best car: ${nextMode}`)
 				break
 			case 's':
 			case 'S':
@@ -802,7 +815,8 @@ export default class Game {
 				if (this.p.keyIsDown(this.p.CONTROL)) {
 					this.saveGame();
 				} else {
-					this.showInputs = !this.showInputs;
+					this.showInputs = this.toggleShowInputs()
+					console.log(`Show inputs: ${this.showInputs}`)
 				}
 				break
 			case 'l':
