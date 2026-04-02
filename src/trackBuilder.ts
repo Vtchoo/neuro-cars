@@ -6,6 +6,7 @@ import Game from "./main"
 import Track, { StraightPiece, TrackPieceType } from "./Track"
 import { style } from "./utils/css"
 import { containerStyle } from "./ui/styles"
+import { buildGameMenu } from "./ui/gameMenu"
 
 // Visual settings
 const buttonWidth = 60
@@ -131,7 +132,7 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
 
     const doneButton = p.createButton("Done!")
     doneButton.size(buttonWidth, buttonHeight)
-    doneButton.mousePressed(() => setTrack(renderTrack, trackMap, renderMap, p, resolution, game))
+    doneButton.mousePressed(() => setTrack(game, p))
     buttons.push(doneButton)
     controls.child(doneButton)
 
@@ -192,43 +193,12 @@ function loadTrackInEditor(p: p5, game: Game) {
     input.elt.click()
 }
 
-export function setTrack(renderTrack: p5.Graphics, trackMap: number[][], renderMap: p5.Graphics, p: p5, resolution: number, game: Game) {
+export function setTrack(game: Game, p: p5) {
 
     editor.remove()
     controls.remove()
 
-    // Removes the track builder
-    if (typeof buttons != "undefined") {
-        buttons.forEach(function (element) { element.remove() })
-    }
-
-    // Hides the grid, if it is showing
-    if (showGrid == true) { showGrid = false }
-
-    // Show additional buttons to control the visualization
-    const exibInputs = p.createButton("Show Inputs")
-    exibInputs.size(buttonWidth, buttonHeight)
-    // exibInputs.position(20, p.height - buttonHeight - 20)
-    exibInputs.style(`bottom: 20px; left: 20px; position: absolute;`)
-    exibInputs.mousePressed(() => game.toggleShowInputs())
-
-    const incrTime = p.createButton("Increase simul. time")
-    incrTime.size(buttonWidth, buttonHeight)
-    // incrTime.position(20 + (buttonWidth + 5) * 2, p.height - buttonHeight - 20)
-    incrTime.style(`bottom: 20px; left: ${2 * (buttonWidth + 5)}px; position: absolute;`)
-    incrTime.mousePressed(() => game.incrementMaxTicks(100))
-
-    const showGraph = p.createButton("Show graphs")
-    showGraph.size(buttonWidth, buttonHeight)
-    // showGraph.position(20 + (buttonWidth + 5) * 3, p.height - buttonHeight - 20)
-    showGraph.style(`bottom: 20px; left: ${3 * (buttonWidth + 5)}px; position: absolute;`)
-    showGraph.mousePressed(() => game.toggleDrawGraphs())
-
-    const followBest = p.createButton("Follow best car")
-    followBest.size(buttonWidth, buttonHeight)
-    // followBest.position(20 + (buttonWidth + 5) * 4, p.height - buttonHeight - 20)
-    followBest.style(`bottom: 20px; left: ${4 * (buttonWidth + 5)}px; position: absolute;`)
-    followBest.mousePressed(() => { game.followBestCar = !game.followBestCar })
+    buildGameMenu(game, p)
 
     game.setPhase("setup")
 }
