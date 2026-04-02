@@ -6,6 +6,7 @@ import Car from './Car';
 import { NeuralNet } from './NeuralNet';
 import Track, { TrackPieceType } from './Track';
 import { tooltip } from './utils/tooltip';
+import { buildMainMenu } from './ui/mainMenu';
 //---------- SMART RACE 2 ----------
 
 // Important objects
@@ -16,7 +17,7 @@ let playerDrive = false
 
 // Defines the current state of the simulator (setStart is the first one)
 // let phase = "generateTrack"
-let phase = "setStart"
+let phase = "menu"
 
 // Defines the width of the race track
 const trackWidth = 120
@@ -78,10 +79,17 @@ export default class Game {
 	private currentPosition: Vector //of the last section of the current track
 	private currentDirection: number //of the next track segment
 
+	// Simulation settings
+	/**
+	 * If true, the simulator will add some extra ticks to the maxTicks if the best car is still running at the end of the generation. 
+	 * This allows the best car to keep running and potentially get unstuck if it got stuck just before the maxTicks was reached, which can help it learn better and achieve higher fitness in the long run.
+	 */
+	increaseMaxTicksIfBestCarIsRunning = true
+
 	// Graphic overlays
 	private showGrid = true // Shows grid when building the track
 	private showMap = false // Shows collision map during runtime
-	private showInputs: "none" | "all" | "best" = "none" // Shows the sensor inputs of the cars during runtime. "all" shows for all cars, "best" only for the best car, and "none" for none.
+	public showInputs: "none" | "all" | "best" = "none" // Shows the sensor inputs of the cars during runtime. "all" shows for all cars, "best" only for the best car, and "none" for none.
 	private drawGraphs = false
 	private resolution = 3 // Get 1 out of [resolution] pixels to create the track collision map
 
@@ -204,6 +212,8 @@ export default class Game {
 		this.renderTrack = this.p.createGraphics(this.p.width, this.p.height)
 		this.renderCars = this.p.createGraphics(this.p.width, this.p.height)
 		this.grid = this.p.createGraphics(this.p.width, this.p.height)
+
+		buildMainMenu(this, this.p)
 	}
 
 	convertMousePositionToWorldCoordinates(mouseX: number, mouseY: number) {
@@ -285,7 +295,7 @@ export default class Game {
 
 				// Shows the track
 				// this.p.image(this.renderTrack, 0, 0)
-				this.track.draw(this.p, this.p)
+				this.track.draw(this.p)
 
 				// or the AI detection map
 				if (this.showMap == true) { this.p.image(this.renderMap, 0, 0) }
@@ -345,7 +355,7 @@ export default class Game {
 						if (this.showInputs === "none") {
 							car.showInputs(this.p)
 						}
-						const realLifeSpeed = car.speed * (1/60) / (1/30) * 60 / 10 * 3.6
+						const realLifeSpeed = car.speed * (1 / 60) / (1 / 30) * 60 / 10 * 3.6
 						tooltip(
 							this.p,
 							[`Fitness: ${car.neuralNet.fitness.toFixed(2)}`, `Gen: ${car.generation}`, `Speed: ${realLifeSpeed.toFixed(2)} km/h`],
@@ -374,14 +384,14 @@ export default class Game {
 
 				// Shows the track
 				// this.p.image(this.renderTrack, 0, 0)
-				this.track.draw(this.p, this.p)
+				this.track.draw(this.p)
 
 				// Sort the population by fitness
 				this.population.sort(function (a, b) { return b.neuralNet.fitness - a.neuralNet.fitness })
 
 				this.population.forEach(car => car.fadeColor())
 
-				if (this.population[0].speed > 0.01) {
+				if (this.increaseMaxTicksIfBestCarIsRunning && this.population[0].speed > 0.01) {
 					console.log("Best car is still moving, next generation will have more time to run")
 					// add some extra frames cause the best car hasn't actually stopped but just got very slow, so we give it some extra time to see if it can get unstuck and keep going
 					this.maxTicks += 100
@@ -589,13 +599,14 @@ export default class Game {
 
 	private drawPhaseSpecificUI() {
 		if (phase === "menu") {
-			if (!this.referenceImageButton) {
-				this.createReferenceImageButton()
-			}
-			// Show reference image button
-			if (this.referenceImageButton) {
-				this.referenceImageButton.show()
-			}
+			// if (!this.referenceImageButton) {
+			// 	this.createReferenceImageButton()
+			// }
+			// // Show reference image button
+			// if (this.referenceImageButton) {
+			// 	this.referenceImageButton.show()
+			// }
+
 			// Show reference image info if loaded
 			if (this.referenceImage) {
 				this.p.fill(0, 0, 0, 150)
@@ -612,12 +623,12 @@ export default class Game {
 				this.p.text("Press R to remove reference", 190, this.p.height - 20)
 			}
 		}
+
 		if (phase === "setStart") {
 			// Hide reference image button in other phases
 			if (this.referenceImageButton) {
 				this.referenceImageButton.hide()
 			}
-		} else {
 		}
 	}
 
@@ -879,7 +890,7 @@ export default class Game {
 	}
 
 	// Load game functionality
-	loadGame() {
+	loadGame(onLoad?: () => void) {
 		const input = document.createElement('input');
 		input.type = 'file';
 		input.accept = '.json';
@@ -892,6 +903,7 @@ export default class Game {
 						const saveData = JSON.parse(e.target?.result as string);
 						this.restoreGameState(saveData);
 						console.log(`Game loaded! Generation: ${this.generation}`);
+						if (onLoad) onLoad();
 					} catch (error) {
 						console.error('Error loading save file:', error);
 						alert('Error loading save file. Please check the file format.');
@@ -908,7 +920,7 @@ export default class Game {
 		this.track = Track.fromData(saveData.track);
 
 		// Regenerate track graphics
-		this.track.draw(this.p, this.p);
+		this.track.draw(this.p);
 
 		// Restore game state
 		this.generation = saveData.game.generation;

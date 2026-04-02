@@ -5,6 +5,7 @@ import { newVector, Vector } from "./Vector"
 import Game from "./main"
 import Track, { StraightPiece, TrackPieceType } from "./Track"
 import { style } from "./utils/css"
+import { containerStyle } from "./ui/styles"
 
 // Visual settings
 const buttonWidth = 60
@@ -36,12 +37,6 @@ const wideButtonStyle = style({
     width: `100%`,
     height: `${buttonHeight}px`
 })
-
-const containerStyle = {
-    background: 'rgba(255, 255, 255, 0.8)',
-    padding: '.5rem',
-    borderRadius: '.5rem',
-}
 
 export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirection: number, trackWidth: number, renderTrack: p5.Graphics, trackMap: number[][], renderMap: p5.Graphics, resolution: number, game: Game, track: Track) {
 

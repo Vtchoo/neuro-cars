@@ -61,6 +61,10 @@ export default class Track {
     startingPoint: Vector = new Vector(0, 0)
     startingDirection: number = 0
 
+    /**
+     * Array of track pieces to be build on command, similar to how it works in RollerCoaster Tycoon. 
+     * This allows for a more interactive track building experience, where the track can be previewed before being finalized and added to the main pieces array.
+     */
     previewTrackPieces: TrackPiece[] = []
 
     // debug
@@ -628,6 +632,8 @@ export default class Track {
         if (this.pieces.length === 0) {
             return
         }
+        this.previewTrackPieces = []
+
         this.pieces.pop()
 
         // regenerate analytic pieces from sratch since we can't be sure which piece was merged with the last piece
@@ -1115,6 +1121,32 @@ export default class Track {
                     end: new Vector(piece.end.x, piece.end.y),
                     width: piece.width
                 };
+        }
+    }
+
+    setPreviewTrackPieces(previewPieces: TrackPiece[]) {
+        this.previewTrackPieces = previewPieces
+    }
+
+    buildPreviewTrackPieces() {
+        if (!this.previewTrackPieces)
+            return
+
+        const nextTrackPieces = this.previewTrackPieces
+        this.previewTrackPieces = []
+
+        for (const piece of nextTrackPieces) {
+            switch (piece.type) {
+                case TrackPieceType.Straight:
+                    this.addStraight(piece.start, piece.end, piece.width)
+                    break;
+                case TrackPieceType.Arc:
+                    this.addArc(piece.start, piece.center, piece.end, piece.clockwise, piece.width)
+                    break;
+                case TrackPieceType.Spline:
+                    this.addSpline(piece.start, piece.control1, piece.control2, piece.end, piece.width)
+                    break;
+            }
         }
     }
 }
