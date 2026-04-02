@@ -339,6 +339,38 @@ export default class Track {
                         piece.end.x + piece.width * Math.sin(dir) / 2,
                         piece.end.y - piece.width * Math.cos(dir) / 2
                     )
+
+                    // draw curbs on each side with dashed lines
+                    p.strokeWeight(10)
+                    p.stroke("lightgray")
+                    p.line(
+                        piece.start.x - (piece.width + 10) * Math.sin(dir) / 2,
+                        piece.start.y + (piece.width + 10) * Math.cos(dir) / 2,
+                        piece.end.x - (piece.width + 10) * Math.sin(dir) / 2,
+                        piece.end.y + (piece.width + 10) * Math.cos(dir) / 2
+                    )
+                    p.line(
+                        piece.start.x + (piece.width + 10) * Math.sin(dir) / 2,
+                        piece.start.y - (piece.width + 10) * Math.cos(dir) / 2,
+                        piece.end.x + (piece.width + 10) * Math.sin(dir) / 2,
+                        piece.end.y - (piece.width + 10) * Math.cos(dir) / 2
+                    )
+                    p.stroke("darkred")
+                    p.drawingContext.setLineDash([10, 10])
+                    p.line(
+                        piece.start.x - (piece.width + 10) * Math.sin(dir) / 2,
+                        piece.start.y + (piece.width + 10) * Math.cos(dir) / 2,
+                        piece.end.x - (piece.width + 10) * Math.sin(dir) / 2,
+                        piece.end.y + (piece.width + 10) * Math.cos(dir) / 2
+                    )
+                    p.line(
+                        piece.start.x + (piece.width + 10) * Math.sin(dir) / 2,
+                        piece.start.y - (piece.width + 10) * Math.cos(dir) / 2,
+                        piece.end.x + (piece.width + 10) * Math.sin(dir) / 2,
+                        piece.end.y - (piece.width + 10) * Math.cos(dir) / 2
+                    )
+                    p.drawingContext.setLineDash([])
+
                     p.pop()
                     break
                 case TrackPieceType.Arc:
@@ -354,6 +386,18 @@ export default class Track {
                     p.stroke("white")
                     p.arc(piece.center.x, piece.center.y, (radius - piece.width / 2) * 2, (radius - piece.width / 2) * 2, actualAngleStart, actualAngleEnd, "open")
                     p.arc(piece.center.x, piece.center.y, (radius + piece.width / 2) * 2, (radius + piece.width / 2) * 2, actualAngleStart, actualAngleEnd, "open")
+                    
+                    // draw curbs on each side with dashed lines
+                    p.strokeWeight(10)
+                    p.stroke("lightgray")
+                    p.arc(piece.center.x, piece.center.y, (radius - piece.width / 2 - 5) * 2, (radius - piece.width / 2 - 5) * 2, actualAngleStart, actualAngleEnd, "open")
+                    p.arc(piece.center.x, piece.center.y, (radius + piece.width / 2 + 5) * 2, (radius + piece.width / 2 + 5) * 2, actualAngleStart, actualAngleEnd, "open")
+                    p.stroke("darkred")
+                    p.drawingContext.setLineDash([10, 10])
+                    p.arc(piece.center.x, piece.center.y, (radius - piece.width / 2 - 5) * 2, (radius - piece.width / 2 - 5) * 2, actualAngleStart, actualAngleEnd, "open")
+                    p.arc(piece.center.x, piece.center.y, (radius + piece.width / 2 + 5) * 2, (radius + piece.width / 2 + 5) * 2, actualAngleStart, actualAngleEnd, "open")
+                    p.drawingContext.setLineDash([])
+                    
                     p.pop()
                     break
                 case TrackPieceType.Spline:
