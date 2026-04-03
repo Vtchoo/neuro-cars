@@ -1,7 +1,7 @@
 import p5 from "p5"
 import { Vector } from "./Vector"
 import { closestPointOnArcSegment, closestPointOnLineSegment } from "./utils/track"
-import { add, arcLineIntersection, ArcSegment, calculateArcCenter, closestPointOnLine, distancePointToLine, length, lineLineIntersection, LineSegment, lineSegmentIntersection, segmentIntersection, sub, XY } from "./utils/math"
+import { add, arcLineIntersection, ArcSegment, calculateArcCenter, closestPointOnLine, cross, distancePointToLine, length, lineLineIntersection, LineSegment, lineSegmentIntersection, segmentIntersection, sub, XY } from "./utils/math"
 
 interface BoundingBox {
     minX: number
@@ -1284,58 +1284,116 @@ export default class Track {
         // we can try both orders and see if any of them results in a valid connection
         // use the previous center calculation as the candidate center for the arc piece, and calculate the required straight piece to connect the end of the arc to the starting point
         if (center) {
-            // first, check if the segment between the center intersects with the track end line
-            const intersection = lineSegmentIntersection(
-                startingPoint,
-                add(startingPoint, { x: Math.cos(startingDirection), y: Math.sin(startingDirection) }),
-                center,
-                endPoint
-            )
 
-            // it means the end point still did not cross the track end line, so we can connect it with an arc piece followed by a straight piece
-            if (!intersection.intersects) {
-                const distanceToLine = distancePointToLine(endPoint, startingPoint, add(startingPoint, { x: Math.cos(startingDirection), y: Math.sin(startingDirection) }))
-                const arcRadius = distanceToLine / (1 - Math.cos(startingDirection - endDirection))
-                // the arc center should sit along the line between the center and the end point
-                const endpointToCenterAngle = Math.atan2(center.y - endPoint.y, center.x - endPoint.x)
-                const arcCenter = {
-                    x: endPoint.x + arcRadius * Math.cos(endpointToCenterAngle),
-                    y: endPoint.y + arcRadius * Math.sin(endpointToCenterAngle)
-                }
-                // the arc end should sit in the infinite line of the starting direction
-                const closestPointOnStartLine = closestPointOnLine(
+            // check if track must go clockerwise or counter-clockwise around the center to connect the end point to the starting point
+            const crossProduct = cross(sub(startingPoint, center), sub(endPoint, center))
+            const turnIsClockwise = crossProduct < 0
+            alert(`crossProduct: ${crossProduct}, should be clockwise: ${turnIsClockwise}`)
+
+            const radius1 = length(sub(endPoint, center))
+            const radius2 = length(sub(startingPoint, center))
+
+            if (radius1 > radius2) {
+                // first, check if the segment between the center intersects with the track end line
+                const intersection = lineSegmentIntersection(
                     startingPoint,
                     add(startingPoint, { x: Math.cos(startingDirection), y: Math.sin(startingDirection) }),
+                    center,
                     endPoint
                 )
-                    
-                const projectionLength = arcRadius * Math.sin(startingDirection - endDirection)
-                const arcEnd = {
-                    x: closestPointOnStartLine.point.x + projectionLength * Math.cos(startingDirection),
-                    y: closestPointOnStartLine.point.y + projectionLength * Math.sin(startingDirection)
-                }
-                const clockwise = Track.isArcClockwise(endPoint, endDirection, arcEnd, startingDirection)
-                this.setPreviewTrackPieces([
-                    {
-                        type: TrackPieceType.Arc,
-                        start: endPoint,
-                        center: arcCenter,
-                        end: arcEnd,
-                        clockwise,
-                        width: firstPiece.width,
-                    },
-                    {
-                        type: TrackPieceType.Straight,
-                        start: arcEnd,
-                        end: startingPoint,
-                        width: firstPiece.width,
+
+                // it means the end point still did not cross the track end line, so we can connect it with an arc piece followed by a straight piece
+                if (!intersection.intersects) {
+                    const distanceToLine = distancePointToLine(endPoint, startingPoint, add(startingPoint, { x: Math.cos(startingDirection), y: Math.sin(startingDirection) }))
+                    const arcRadius = distanceToLine / (1 - Math.cos(startingDirection - endDirection))
+                    // the arc center should sit along the line between the center and the end point
+                    const endpointToCenterAngle = Math.atan2(center.y - endPoint.y, center.x - endPoint.x)
+                    const arcCenter = {
+                        x: endPoint.x + arcRadius * Math.cos(endpointToCenterAngle),
+                        y: endPoint.y + arcRadius * Math.sin(endpointToCenterAngle)
                     }
-                ])
-                return
+                    // the arc end should sit in the infinite line of the starting direction
+                    const closestPointOnStartLine = closestPointOnLine(
+                        startingPoint,
+                        add(startingPoint, { x: Math.cos(startingDirection), y: Math.sin(startingDirection) }),
+                        endPoint
+                    )
+
+                    const projectionLength = arcRadius * Math.sin(startingDirection - endDirection)
+                    const arcEnd = {
+                        x: closestPointOnStartLine.point.x + projectionLength * Math.cos(startingDirection),
+                        y: closestPointOnStartLine.point.y + projectionLength * Math.sin(startingDirection)
+                    }
+
+                    this.setPreviewTrackPieces([
+                        {
+                            type: TrackPieceType.Arc,
+                            start: endPoint,
+                            center: arcCenter,
+                            end: arcEnd,
+                            clockwise: turnIsClockwise,
+                            width: firstPiece.width,
+                        },
+                        {
+                            type: TrackPieceType.Straight,
+                            start: arcEnd,
+                            end: startingPoint,
+                            width: firstPiece.width,
+                        }
+                    ])
+                    return
+                }
+            } else {
+                // if the radius is smaller, we can try connecting with a straight piece followed by an arc piece
+                const intersection = lineSegmentIntersection(
+                    endPoint,
+                    add(endPoint, { x: Math.cos(endDirection), y: Math.sin(endDirection) }),
+                    center,
+                    startingPoint
+                )
+                if (!intersection.intersects) {
+                    const distanceToLine = distancePointToLine(startingPoint, endPoint, add(endPoint, { x: Math.cos(endDirection), y: Math.sin(endDirection) }))
+                    const arcRadius = distanceToLine / (1 - Math.cos(endDirection - startingDirection))
+                    // the arc center should sit along the line between the center and the starting point
+                    const startpointToCenterAngle = Math.atan2(center.y - startingPoint.y, center.x - startingPoint.x)
+                    const arcCenter = {
+                        x: startingPoint.x + arcRadius * Math.cos(startpointToCenterAngle),
+                        y: startingPoint.y + arcRadius * Math.sin(startpointToCenterAngle)
+                    }
+                    // the arc start should sit in the infinite line of the end direction
+                    const closestPointOnEndLine = closestPointOnLine(
+                        endPoint,
+                        add(endPoint, { x: Math.cos(endDirection), y: Math.sin(endDirection) }),
+                        startingPoint
+                    )
+                    const projectionLength = arcRadius * Math.sin(endDirection - startingDirection)
+                    const arcStart = {
+                        x: closestPointOnEndLine.point.x + projectionLength * Math.cos(endDirection),
+                        y: closestPointOnEndLine.point.y + projectionLength * Math.sin(endDirection)
+                    }
+
+                    this.setPreviewTrackPieces([
+                        {
+                            type: TrackPieceType.Straight,
+                            start: endPoint,
+                            end: arcStart,
+                            width: firstPiece.width,
+                        },
+                        {
+                            type: TrackPieceType.Arc,
+                            start: arcStart,
+                            center: arcCenter,
+                            end: startingPoint,
+                            clockwise: turnIsClockwise,
+                            width: firstPiece.width,
+                        }
+                    ])
+                    return
+                }
             }
         }
 
-        // if all attemps failed
+        // if all attempts failed
         alert("Failed to finish the track (at least nicely).")
     }
 
