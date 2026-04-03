@@ -100,7 +100,9 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
 
     const sqrt2Button = p.createButton("SQRT(2) units straight")
     sqrt2Button.style(wideButtonStyle)
-    sqrt2Button.mousePressed(() => { game.track.appendStraight(Math.sqrt(2) * trackWidth, trackWidth) })
+    sqrt2Button.mousePressed(() => {
+        game.track.appendStraight(Math.sqrt(2) * trackWidth, trackWidth)
+    })
     buttons.push(sqrt2Button)
     editor.child(sqrt2Button)
 
@@ -113,6 +115,22 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
     })
     buttons.push(deleteLastButton)
     editor.child(deleteLastButton)
+
+    const tryFinishTrackButton = p.createButton("Auto finish")
+    tryFinishTrackButton.style(wideButtonStyle)
+    tryFinishTrackButton.mousePressed(() => {
+        game.track.tryFinishTrack()
+    })
+    buttons.push(tryFinishTrackButton)
+    editor.child(tryFinishTrackButton)
+
+    const buildPreviewButton = p.createButton("Build")
+    buildPreviewButton.style(wideButtonStyle)
+    buildPreviewButton.mousePressed(() => {
+        game.track.buildPreviewTrackPieces()
+    })
+    buttons.push(buildPreviewButton)
+    editor.child(buildPreviewButton)
 
     controls = p.createElement("div")
     controls.style(style({

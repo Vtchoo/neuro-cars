@@ -1,7 +1,7 @@
 import p5 from "p5"
 import { Vector } from "./Vector"
 import { closestPointOnArcSegment, closestPointOnLineSegment } from "./utils/track"
-import { arcLineIntersection, ArcSegment, length, LineSegment, lineSegmentIntersection, sub, XY } from "./utils/math"
+import { add, arcLineIntersection, ArcSegment, calculateArcCenter, closestPointOnLine, distancePointToLine, length, lineLineIntersection, LineSegment, lineSegmentIntersection, segmentIntersection, sub, XY } from "./utils/math"
 
 interface BoundingBox {
     minX: number
@@ -106,7 +106,17 @@ export default class Track {
         return lastPiece.end
     }
 
-    addStraight(start: Vector, end: Vector, width: number) {
+    addStraight(start: Vector, end: Vector, width: number, preview: boolean = false) {
+        if (preview) {
+            this.previewTrackPieces = [{
+                type: TrackPieceType.Straight,
+                start,
+                end,
+                width,
+            }]
+            return
+        }
+
         this.pieces.push({
             type: TrackPieceType.Straight,
             start,
@@ -243,7 +253,7 @@ export default class Track {
         }
     }
 
-    appendStraight(length: number, width: number) {
+    appendStraight(length: number, width: number, preview?: boolean) {
         const lastPieceEnd = this.getLastPieceEnd()
         if (!lastPieceEnd) {
             throw new Error("Cannot append straight piece to an empty track. Please add a starting piece first.")
@@ -253,7 +263,7 @@ export default class Track {
             throw new Error("Cannot determine direction of the last piece. Please check the track pieces for consistency.")
         }
         const newEnd = new Vector(lastPieceEnd.x + length * Math.cos(lastPieceDirection), lastPieceEnd.y + length * Math.sin(lastPieceDirection))
-        this.addStraight(lastPieceEnd, newEnd, width)
+        this.addStraight(lastPieceEnd, newEnd, width, preview)
     }
 
     appendArc(radius: number, angle: number, clockwise: boolean, width: number) {
@@ -386,7 +396,7 @@ export default class Track {
                     p.stroke("white")
                     p.arc(piece.center.x, piece.center.y, (radius - piece.width / 2) * 2, (radius - piece.width / 2) * 2, actualAngleStart, actualAngleEnd, "open")
                     p.arc(piece.center.x, piece.center.y, (radius + piece.width / 2) * 2, (radius + piece.width / 2) * 2, actualAngleStart, actualAngleEnd, "open")
-                    
+
                     // draw curbs on each side with dashed lines
                     p.strokeWeight(10)
                     p.stroke("lightgray")
@@ -397,7 +407,7 @@ export default class Track {
                     p.arc(piece.center.x, piece.center.y, (radius - piece.width / 2 - 5) * 2, (radius - piece.width / 2 - 5) * 2, actualAngleStart, actualAngleEnd, "open")
                     p.arc(piece.center.x, piece.center.y, (radius + piece.width / 2 + 5) * 2, (radius + piece.width / 2 + 5) * 2, actualAngleStart, actualAngleEnd, "open")
                     p.drawingContext.setLineDash([])
-                    
+
                     p.pop()
                     break
                 case TrackPieceType.Spline:
@@ -409,6 +419,28 @@ export default class Track {
                     p.strokeWeight(piece.width)
                     p.bezier(piece.start.x, piece.start.y, piece.control1.x, piece.control1.y, piece.control2.x, piece.control2.y, piece.end.x, piece.end.y)
                     p.pop()
+                    break
+            }
+        }
+
+        for (let piece of this.previewTrackPieces) {
+            p.strokeWeight(piece.width)
+            p.stroke("rgba(0, 0, 255, 0.5)")
+            switch (piece.type) {
+                case TrackPieceType.Straight:
+                    p.line(piece.start.x, piece.start.y, piece.end.x, piece.end.y)
+                    break
+                case TrackPieceType.Arc:
+                    const radius = Math.sqrt((piece.center.x - piece.start.x) ** 2 + (piece.center.y - piece.start.y) ** 2)
+                    const angleStart = Math.atan2(piece.start.y - piece.center.y, piece.start.x - piece.center.x)
+                    const angleEnd = Math.atan2(piece.end.y - piece.center.y, piece.end.x - piece.center.x)
+                    // in p5, arcs are alays drawn clockwise, so we need to swap the start and end angles if the piece is counterclockwise
+                    const actualAngleStart = piece.clockwise ? angleStart : angleEnd
+                    const actualAngleEnd = piece.clockwise ? angleEnd : angleStart
+                    p.arc(piece.center.x, piece.center.y, radius * 2, radius * 2, actualAngleStart, actualAngleEnd)
+                    break
+                case TrackPieceType.Spline:
+                    p.bezier(piece.start.x, piece.start.y, piece.control1.x, piece.control1.y, piece.control2.x, piece.control2.y, piece.end.x, piece.end.y)
                     break
             }
         }
@@ -974,8 +1006,8 @@ export default class Track {
                 const line1End = { x: piece.end.x - offsetX, y: piece.end.y + offsetY };
                 const line2Start = { x: piece.start.x + offsetX, y: piece.start.y - offsetY };
                 const line2End = { x: piece.end.x + offsetX, y: piece.end.y - offsetY };
-                return lineSegmentIntersection(line1Start, line1End, lineStart, lineEnd).intersects ||
-                    lineSegmentIntersection(line2Start, line2End, lineStart, lineEnd).intersects;
+                return segmentIntersection(line1Start, line1End, lineStart, lineEnd).intersects ||
+                    segmentIntersection(line2Start, line2End, lineStart, lineEnd).intersects;
             }
             case TrackPieceType.Arc: {
                 // let's do the actual arc-line intersection check
@@ -1029,7 +1061,7 @@ export default class Track {
                     const p1 = this.evaluateBezier(piece, t1);
                     const p2 = this.evaluateBezier(piece, t2);
 
-                    if (lineSegmentIntersection(p1, p2, lineStart, lineEnd).intersects) {
+                    if (segmentIntersection(p1, p2, lineStart, lineEnd).intersects) {
                         return true;
                     }
                 }
@@ -1192,5 +1224,131 @@ export default class Track {
                     break;
             }
         }
+    }
+
+    /**
+     * Try adding pieces that connect the ends of the track to make it a closed loop.
+     */
+    tryFinishTrack() {
+
+        if (this.pieces.length === 0) {
+            return
+        }
+
+        // try first if we can connect the end to the start with a single straight piece
+        const firstPiece = this.pieces[0]
+        const lastPiece = this.pieces[this.pieces.length - 1]
+
+        const startingPoint = firstPiece.start
+        const startingDirection = Track.getTrackPieceStartDirection(firstPiece)
+
+        const endPoint = lastPiece.end
+        const endDirection = Track.getTrackPieceEndDirection(lastPiece)
+
+        const angleDiff = Math.abs(startingDirection - endDirection)
+        const candidateTrackDirection = Math.atan2(startingPoint.y - endPoint.y, startingPoint.x - endPoint.x)
+        const candidateAngleDiff = Math.abs(candidateTrackDirection - endDirection)
+        // the directions must be the same for a straight piece to connect them
+        if (angleDiff < 0.01 && candidateAngleDiff < 0.01) {
+            this.setPreviewTrackPieces([{
+                type: TrackPieceType.Straight,
+                start: endPoint,
+                end: startingPoint,
+                width: firstPiece.width
+            }])
+            return
+        }
+
+        // if that doesn't work, try connecting with a single arc piece
+        const center = calculateArcCenter(endPoint, endDirection, startingPoint, startingDirection)
+        // the radii must be similar for a single arc to connect them nicely
+        if (center) {
+            const radius1 = length(sub(endPoint, center))
+            const radius2 = length(sub(startingPoint, center))
+
+            if (Math.abs(radius1 - radius2) < 0.01) {
+                const clockwise = Track.isArcClockwise(endPoint, endDirection, startingPoint, startingDirection)
+                this.setPreviewTrackPieces([{
+                    type: TrackPieceType.Arc,
+                    start: endPoint,
+                    center,
+                    end: startingPoint,
+                    clockwise,
+                    width: firstPiece.width
+                }])
+                return
+            }
+        }
+
+        // now let's try with two pieces: an arc piece followed by a straight piece or vice versa
+        // we can try both orders and see if any of them results in a valid connection
+        // use the previous center calculation as the candidate center for the arc piece, and calculate the required straight piece to connect the end of the arc to the starting point
+        if (center) {
+            // first, check if the segment between the center intersects with the track end line
+            const intersection = lineSegmentIntersection(
+                startingPoint,
+                add(startingPoint, { x: Math.cos(startingDirection), y: Math.sin(startingDirection) }),
+                center,
+                endPoint
+            )
+
+            // it means the end point still did not cross the track end line, so we can connect it with an arc piece followed by a straight piece
+            if (!intersection.intersects) {
+                const distanceToLine = distancePointToLine(endPoint, startingPoint, add(startingPoint, { x: Math.cos(startingDirection), y: Math.sin(startingDirection) }))
+                const arcRadius = distanceToLine / (1 - Math.cos(startingDirection - endDirection))
+                // the arc center should sit along the line between the center and the end point
+                const endpointToCenterAngle = Math.atan2(center.y - endPoint.y, center.x - endPoint.x)
+                const arcCenter = {
+                    x: endPoint.x + arcRadius * Math.cos(endpointToCenterAngle),
+                    y: endPoint.y + arcRadius * Math.sin(endpointToCenterAngle)
+                }
+                // the arc end should sit in the infinite line of the starting direction
+                const closestPointOnStartLine = closestPointOnLine(
+                    startingPoint,
+                    add(startingPoint, { x: Math.cos(startingDirection), y: Math.sin(startingDirection) }),
+                    endPoint
+                )
+                    
+                const projectionLength = arcRadius * Math.sin(startingDirection - endDirection)
+                const arcEnd = {
+                    x: closestPointOnStartLine.point.x + projectionLength * Math.cos(startingDirection),
+                    y: closestPointOnStartLine.point.y + projectionLength * Math.sin(startingDirection)
+                }
+                const clockwise = Track.isArcClockwise(endPoint, endDirection, arcEnd, startingDirection)
+                this.setPreviewTrackPieces([
+                    {
+                        type: TrackPieceType.Arc,
+                        start: endPoint,
+                        center: arcCenter,
+                        end: arcEnd,
+                        clockwise,
+                        width: firstPiece.width,
+                    },
+                    {
+                        type: TrackPieceType.Straight,
+                        start: arcEnd,
+                        end: startingPoint,
+                        width: firstPiece.width,
+                    }
+                ])
+                return
+            }
+        }
+
+        // if all attemps failed
+        alert("Failed to finish the track (at least nicely).")
+    }
+
+    static isArcClockwise(start: XY, startDir: number, end: XY, endDir: number): boolean {
+        // Calculate the candidate center
+        const center = calculateArcCenter(start, startDir, end, endDir);
+        if (!center) {
+            return false; // Lines are parallel, can't determine direction
+        }
+        // Determine if the arc from start to end around the center is clockwise
+        const startAngle = Math.atan2(start.y - center.y, start.x - center.x);
+        const endAngle = Math.atan2(end.y - center.y, end.x - center.x);
+        const angleDiff = endAngle - startAngle;
+        return angleDiff > 0; // If the angle difference is positive, it's clockwise
     }
 }
