@@ -116,7 +116,7 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
     buttons.push(deleteLastButton)
     editor.child(deleteLastButton)
 
-    const tryFinishTrackButton = p.createButton("Auto finish")
+    const tryFinishTrackButton = p.createButton("Auto complete")
     tryFinishTrackButton.style(wideButtonStyle)
     tryFinishTrackButton.mousePressed(() => {
         game.track.tryFinishTrack()
