@@ -2,6 +2,7 @@ import p5 from "p5"
 import { Vector } from "./Vector"
 import { closestPointOnArcSegment, closestPointOnLineSegment } from "./utils/track"
 import { add, arcLineIntersection, ArcSegment, calculateArcCenter, closestPointOnLine, cross, distancePointToLine, length, lineLineIntersection, LineSegment, lineSegmentIntersection, segmentIntersection, sub, XY } from "./utils/math"
+import Game from "./main"
 
 interface BoundingBox {
     minX: number
@@ -306,15 +307,17 @@ export default class Track {
             }
 
             const drawQuadTreeNode = (node: QuadTreeNode) => {
-                p.push()
-                if (node.hasTrack) {
-                    p.stroke("rgba(255, 0, 0, 0.5)")
-                } else {
-                    p.stroke("rgba(0, 0, 255, 0.5)")
+                if (node.isLeaf) {
+                    p.push()
+                    if (node.hasTrack) {
+                        p.stroke("rgba(255, 0, 0, 0.5)")
+                    } else {
+                        p.stroke("rgba(0, 0, 255, 0.5)")
+                    }
+                    p.noFill()
+                    p.rect(node.bounds.minX, node.bounds.minY, node.bounds.maxX - node.bounds.minX, node.bounds.maxY - node.bounds.minY)
+                    p.pop()
                 }
-                p.noFill()
-                p.rect(node.bounds.minX, node.bounds.minY, node.bounds.maxX - node.bounds.minX, node.bounds.maxY - node.bounds.minY)
-                p.pop()
                 if (!node.isLeaf && node.children) {
                     for (let child of node.children) {
                         drawQuadTreeNode(child)
@@ -475,6 +478,16 @@ export default class Track {
             p.noFill()
             p.rect(boundingBox.minX, boundingBox.minY, boundingBox.maxX - boundingBox.minX, boundingBox.maxY - boundingBox.minY)
             p.pop()
+
+            for (let piece of this.analyticPieces) {
+                const pieceBounds = this.getPieceBounds(piece)
+                p.push()
+                p.strokeWeight(1)
+                p.stroke("orange")
+                p.noFill()
+                p.rect(pieceBounds.minX, pieceBounds.minY, pieceBounds.maxX - pieceBounds.minX, pieceBounds.maxY - pieceBounds.minY)
+                p.pop()
+            }
         }
 
         p.pop()
