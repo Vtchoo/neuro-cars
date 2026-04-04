@@ -101,7 +101,7 @@ export default class Game {
 	// Graphic overlays
 	private showGrid = true // Shows grid when building the track
 	private showMap = false // Shows collision map during runtime
-	public showInputs: "none" | "all" | "best" = "none" // Shows the sensor inputs of the cars during runtime. "all" shows for all cars, "best" only for the best car, and "none" for none.
+	public showInputs: "none" | "all" | "best" | "bestActive" = "none" // Shows the sensor inputs of the cars during runtime. "all" shows for all cars, "best" only for the best car, and "none" for none.
 	public drawGraphs = false
 	private resolution = 3 // Get 1 out of [resolution] pixels to create the track collision map
 
@@ -122,7 +122,7 @@ export default class Game {
 		this.showMap = !this.showMap
 	}
 	toggleShowInputs() {
-		const options = ["none", "all", "best"] as const
+		const options = ["none", "all", "best", "bestActive"] as const
 		const currentIndex = options.indexOf(this.showInputs)
 		const nextIndex = (currentIndex + 1) % options.length
 		this.showInputs = options[nextIndex]
@@ -242,6 +242,11 @@ export default class Game {
 		return { x: worldX, y: worldY }
 	}
 
+	getViewportBounds() {
+		const min = this.convertMousePositionToWorldCoordinates(0, 0)
+		const max = this.convertMousePositionToWorldCoordinates(this.p.width, this.p.height)
+		return { min, max }
+	}
 
 	draw() {
 		this.p.push()
@@ -337,7 +342,7 @@ export default class Game {
 
 				const bestCar = this.population.reduce((best, car) => car.neuralNet.fitness > best.neuralNet.fitness ? car : best, this.population[0])
 				const bestActiveCar = this.population
-					.filter(car => car.speed > 0.01)
+					.filter(car => car.speed > 0.1)
 					.reduce((best, car) => (car.neuralNet.fitness > best.neuralNet.fitness) ? car : best, this.population[0])
 
 				switch (this.showInputs) {
@@ -346,6 +351,9 @@ export default class Game {
 						break
 					case "best":
 						bestCar?.showInputs(this.p)
+						break
+					case "bestActive":
+						bestActiveCar?.showInputs(this.p)
 						break
 				}
 
