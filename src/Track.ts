@@ -1313,17 +1313,11 @@ export default class Track {
                         y: endPoint.y + arcRadius * Math.sin(endpointToCenterAngle)
                     }
                     // the arc end should sit in the infinite line of the starting direction
-                    const closestPointOnStartLine = closestPointOnLine(
+                    const arcEnd = closestPointOnLine(
                         startingPoint,
                         add(startingPoint, { x: Math.cos(startingDirection), y: Math.sin(startingDirection) }),
-                        endPoint
-                    )
-
-                    const projectionLength = arcRadius * Math.sin(startingDirection - endDirection)
-                    const arcEnd = {
-                        x: closestPointOnStartLine.point.x + projectionLength * Math.cos(startingDirection),
-                        y: closestPointOnStartLine.point.y + projectionLength * Math.sin(startingDirection)
-                    }
+                        arcCenter
+                    ).point
 
                     this.setPreviewTrackPieces([
                         {
@@ -1361,16 +1355,12 @@ export default class Track {
                         y: startingPoint.y + arcRadius * Math.sin(startpointToCenterAngle)
                     }
                     // the arc start should sit in the infinite line of the end direction
-                    const closestPointOnEndLine = closestPointOnLine(
+
+                    const arcStart = closestPointOnLine(
                         endPoint,
                         add(endPoint, { x: Math.cos(endDirection), y: Math.sin(endDirection) }),
-                        startingPoint
-                    )
-                    const projectionLength = arcRadius * Math.sin(endDirection - startingDirection)
-                    const arcStart = {
-                        x: closestPointOnEndLine.point.x + projectionLength * Math.cos(endDirection),
-                        y: closestPointOnEndLine.point.y + projectionLength * Math.sin(endDirection)
-                    }
+                        arcCenter
+                    ).point
 
                     this.setPreviewTrackPieces([
                         {
