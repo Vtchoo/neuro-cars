@@ -391,7 +391,7 @@ export default class Game {
 						if (this.showInputs === "none") {
 							car.showInputs(this.p)
 						}
-						const realLifeSpeed = car.speed / 10 * 3.6
+						const realLifeSpeed = car.speed * 3.6
 						tooltip(
 							this.p,
 							[`Fitness: ${car.neuralNet.fitness.toFixed(2)}`, `Gen: ${car.generation}`, `Speed: ${realLifeSpeed.toFixed(2)} km/h`],
@@ -404,7 +404,7 @@ export default class Game {
 				}
 
 				if (mouseWorldX > this.player.pos.x - 10 && mouseWorldX < this.player.pos.x + 10 && mouseWorldY > this.player.pos.y - 10 && mouseWorldY < this.player.pos.y + 10) {
-					const realLifeSpeed = this.player.speed / 10 * 3.6
+					const realLifeSpeed = this.player.speed * 3.6
 					tooltip(
 						this.p,
 						[`Player Car`, `Speed: ${realLifeSpeed.toFixed(2)} km/h`],

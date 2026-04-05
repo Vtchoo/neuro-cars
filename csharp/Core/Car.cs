@@ -89,7 +89,7 @@ namespace SmartRace.Core
         public double DrivingWheelForce = 0.05;
 
         // Ackermann steering properties
-        public double Wheelbase = 30; // pixels (3 meters at 10px/meter scale)
+        public double Wheelbase = 3; // 3 meters
         public double SteeringAngle = 0; // Current front wheel angle in radians
         public double MaxSteeringAngle = Math.PI / 6; // 30 degrees maximum steering
 
@@ -157,16 +157,16 @@ namespace SmartRace.Core
         public void Update(ITrack track)
         {
             // Apply acceleration
-            this.Speed += this.Acceleration;
+            this.Speed += this.Acceleration * avgDeltaTime;
 
             // Apply drag and rolling resistance for realistic physics
-            var speedMPS = this.Speed / Constants.UNITS_PER_METER; // Convert to m/s
+            var speedMPS = this.Speed; // m/s
             var dragForce = 0.5 * 1.225 * 0.35 * 2.0 * speedMPS * speedMPS; // Air resistance (ρ * Cd * A * v²/2)
             var rollingForce = 0.015 * this.Mass * 9.81; // Rolling resistance
             var totalResistanceForce = dragForce + rollingForce;
 
             // Convert resistance back to simulation units and apply
-            var resistanceAcceleration = totalResistanceForce / this.Mass * Constants.UNITS_PER_METER / 60;
+            var resistanceAcceleration = totalResistanceForce / this.Mass * avgDeltaTime;
             if (this.Speed > 0)
             {
                 this.Speed = Math.Max(0, this.Speed - resistanceAcceleration);
@@ -201,8 +201,8 @@ namespace SmartRace.Core
 
             // Update position with consistent time scaling
             this.Position.Add(
-                this.Speed * Math.Cos(this.Direction) * avgDeltaTime,
-                this.Speed * Math.Sin(this.Direction) * avgDeltaTime
+                this.Speed * Math.Cos(this.Direction) * avgDeltaTime * Constants.UNITS_PER_METER,
+                this.Speed * Math.Sin(this.Direction) * avgDeltaTime * Constants.UNITS_PER_METER
             );
         }
 
@@ -217,13 +217,13 @@ namespace SmartRace.Core
             {
                 // Forward acceleration
                 var accelerationMPS2 = throttleInput * this.MaxAcceleration;
-                this.Acceleration = accelerationMPS2 * Constants.UNITS_PER_METER / 60; // Convert to simulation units
+                this.Acceleration = accelerationMPS2; // Convert to simulation units
             }
             else
             {
                 // Braking (negative throttle)
                 var brakingMPS2 = Math.Abs(throttleInput) * this.MaxBraking;
-                this.Acceleration = -brakingMPS2 * Constants.UNITS_PER_METER / 60; // Convert to simulation units
+                this.Acceleration = -brakingMPS2; // Convert to simulation units
             }
 
             // Calculate target steering angle from input (-1 to 1)
@@ -244,7 +244,7 @@ namespace SmartRace.Core
         private double GetMaxEffectiveSteeringAngle()
         {
             // Convert speed from pixels/frame to m/s using consistent scaling
-            var speedMPS = Math.Abs(this.Speed) / Constants.UNITS_PER_METER;
+            var speedMPS = Math.Abs(this.Speed);
 
             // At very low speeds, full steering is available
             if (speedMPS < 0.5)
@@ -261,7 +261,7 @@ namespace SmartRace.Core
             var maxTurningRadius = (speedMPS * speedMPS) / maxLateralAcceleration;
 
             // Convert turning radius back to steering angle using wheelbase in meters
-            var wheelbaseMeters = this.Wheelbase / Constants.UNITS_PER_METER;
+            var wheelbaseMeters = this.Wheelbase;
             var maxEffectiveAngle = Math.Atan(wheelbaseMeters / maxTurningRadius);
 
             // Return the minimum of physical steering limit and slip-limited angle
@@ -357,7 +357,7 @@ namespace SmartRace.Core
             // in this mode, the car gets as input the points of the track that are in front of it, at a certain distance and angle from the car
 
             int totalQueryPoints = totalLookAheadPoints;
-            double singleFrameDistance = Speed * avgDeltaTime;
+            double singleFrameDistance = Speed * avgDeltaTime * Constants.UNITS_PER_METER;
             double maxLookaheadDistance = singleFrameDistance * 60 * 6; // lookahead distance is 6 seconds at max speed, which allows the car to see far enough ahead to make informed decisions without overwhelming it with too much information. This also helps to keep the neural network inputs manageable and focused on relevant track information.
 
             // Convert track pieces to segments for querying

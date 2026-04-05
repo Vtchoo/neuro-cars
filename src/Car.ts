@@ -62,7 +62,7 @@ export default class Car {
     lastDrivingWheelDirection = 0
     
     // Ackermann steering properties
-    wheelbase = 30 // pixels (3 meters at 10px/meter scale)
+    wheelbase = 3 // 3 meters
     steeringAngle = 0 // Current front wheel angle in radians
     maxSteeringAngle = Math.PI / 6 // 30 degrees maximum steering
     
@@ -139,16 +139,16 @@ export default class Car {
     // Updates car position
     update(trackMap: number[][], resolution: number, track: Track) {
         // Apply acceleration
-        this.speed += this.acceleration
+        this.speed += this.acceleration * avgDeltaTime
         
         // Apply drag and rolling resistance for realistic physics
-        const speedMPS = this.speed / UNITS_PER_METER // Convert to m/s
+        const speedMPS = this.speed // Convert to m/s
         const dragForce = 0.5 * 1.225 * 0.35 * 2.0 * speedMPS * speedMPS // Air resistance (ρ * Cd * A * v²/2)
         const rollingForce = 0.015 * this.mass * 9.81 // Rolling resistance
         const totalResistanceForce = dragForce + rollingForce
         
         // Convert resistance back to simulation units and apply
-        const resistanceAcceleration = totalResistanceForce / this.mass * UNITS_PER_METER / 60
+        const resistanceAcceleration = totalResistanceForce / this.mass * avgDeltaTime
         if (this.speed > 0) {
             this.speed = Math.max(0, this.speed - resistanceAcceleration)
         } else if (this.speed < 0) {
@@ -176,8 +176,8 @@ export default class Car {
 
         // Update position with consistent time scaling
         this.pos.add(
-            this.speed * Math.cos(this.direction) * avgDeltaTime,
-            this.speed * Math.sin(this.direction) * avgDeltaTime
+            this.speed * Math.cos(this.direction) * avgDeltaTime * UNITS_PER_METER,
+            this.speed * Math.sin(this.direction) * avgDeltaTime * UNITS_PER_METER
         )
     }
 
@@ -208,7 +208,7 @@ export default class Car {
     // Calculate maximum effective steering angle based on tire slip physics
     private getMaxEffectiveSteeringAngle(): number {
         // Convert speed from pixels/frame to m/s using consistent scaling
-        const speedMPS = Math.abs(this.speed) / UNITS_PER_METER
+        const speedMPS = Math.abs(this.speed)
         
         // At very low speeds, full steering is available
         if (speedMPS < 0.5) {
@@ -224,7 +224,7 @@ export default class Car {
         const maxTurningRadius = (speedMPS * speedMPS) / maxLateralAcceleration
         
         // Convert turning radius back to steering angle using wheelbase in meters
-        const wheelbaseMeters = this.wheelbase / UNITS_PER_METER
+        const wheelbaseMeters = this.wheelbase
         const maxEffectiveAngle = Math.atan(wheelbaseMeters / maxTurningRadius)
         
         // Return the minimum of physical steering limit and slip-limited angle
@@ -239,11 +239,11 @@ export default class Car {
         if (throttleInput >= 0) {
             // Forward acceleration
             const accelerationMPS2 = throttleInput * this.maxAcceleration
-            this.acceleration = accelerationMPS2 * UNITS_PER_METER / 60 // Convert to simulation units
+            this.acceleration = accelerationMPS2 // Convert to simulation units
         } else {
             // Braking (negative throttle)
             const brakingMPS2 = Math.abs(throttleInput) * this.maxBraking
-            this.acceleration = -brakingMPS2 * UNITS_PER_METER / 60 // Convert to simulation units
+            this.acceleration = -brakingMPS2 // Convert to simulation units
         }
         
         // Calculate target steering angle from input (-1 to 1)
@@ -319,7 +319,7 @@ export default class Car {
         // in this mode, the car gets as input the points of the track that are in front of it, at a certain distance and angle from the car
 
         const totalqueryPoints = this.totalLookAheadPoints
-        const singleFrameDistance = this.speed * avgDeltaTime
+        const singleFrameDistance = this.speed * avgDeltaTime * UNITS_PER_METER
         const maxLookaheadDistance = singleFrameDistance * 60 * 6 // look ahead up to 6 seconds in the future at current speed
 
         const currentCarPositionInTrack = queryTrack(track.analyticPieces.map(convertToTrackSegment), this.pos, this.direction)
