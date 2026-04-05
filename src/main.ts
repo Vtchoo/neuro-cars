@@ -343,7 +343,7 @@ export default class Game {
 
 				const bestCar = this.population.reduce((best, car) => car.neuralNet.fitness > best.neuralNet.fitness ? car : best, this.population[0])
 				const activeCars = this.population
-					.filter(car => car.speed > 0.01)
+					.filter(car => car.speed > 0.001)
 				const bestActiveCar = activeCars.length ?
 					activeCars
 						.reduce((best, car) => (car.neuralNet.fitness > best.neuralNet.fitness) ? car : best, activeCars[0])
@@ -416,8 +416,8 @@ export default class Game {
 
 				// Draws the graph data
 
-				const everyCarIsStopped = this.population.every(car => car.speed < 0.01)
-				if (everyCarIsStopped && this.ticks > 10) {
+				const everyCarIsStopped = this.population.every(car => car.speed < 0.0001)
+				if (everyCarIsStopped && this.ticks > 100) {
 					phase = "breeding"
 				}
 
