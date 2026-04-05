@@ -342,9 +342,12 @@ export default class Game {
 				})
 
 				const bestCar = this.population.reduce((best, car) => car.neuralNet.fitness > best.neuralNet.fitness ? car : best, this.population[0])
-				const bestActiveCar = this.population
-					.filter(car => car.speed > 0.1)
-					.reduce((best, car) => (car.neuralNet.fitness > best.neuralNet.fitness) ? car : best, this.population[0])
+				const activeCars = this.population
+					.filter(car => car.speed > 0.01)
+				const bestActiveCar = activeCars.length ?
+					activeCars
+						.reduce((best, car) => (car.neuralNet.fitness > best.neuralNet.fitness) ? car : best, activeCars[0])
+					: null
 
 				switch (this.showInputs) {
 					case "all":
@@ -388,7 +391,7 @@ export default class Game {
 						if (this.showInputs === "none") {
 							car.showInputs(this.p)
 						}
-						const realLifeSpeed = car.speed * (1 / 60) / (1 / 30) * 60 / 10 * 3.6
+						const realLifeSpeed = car.speed / 10 * 3.6
 						tooltip(
 							this.p,
 							[`Fitness: ${car.neuralNet.fitness.toFixed(2)}`, `Gen: ${car.generation}`, `Speed: ${realLifeSpeed.toFixed(2)} km/h`],
@@ -398,6 +401,17 @@ export default class Game {
 						)
 						break
 					}
+				}
+
+				if (mouseWorldX > this.player.pos.x - 10 && mouseWorldX < this.player.pos.x + 10 && mouseWorldY > this.player.pos.y - 10 && mouseWorldY < this.player.pos.y + 10) {
+					const realLifeSpeed = this.player.speed / 10 * 3.6
+					tooltip(
+						this.p,
+						[`Player Car`, `Speed: ${realLifeSpeed.toFixed(2)} km/h`],
+						this.player.pos.x + 20 / this.cameraZoom,
+						this.player.pos.y + 15 / this.cameraZoom,
+						1 / this.cameraZoom
+					)
 				}
 
 				// Draws the graph data

@@ -8,6 +8,7 @@ import { signedLog, softsign } from "./utils/activationFunctions"
 import { XY } from "./utils/math"
 
 let avgDeltaTime = 1 / 60 // 0.016807703080427727
+const UNITS_PER_METER = 10 // 10 pixels = 1 meter scale
 
 // Neural net settings
 const nnLayers = 1
@@ -59,6 +60,21 @@ export default class Car {
     acceleration = 0
     direction = 0
     lastDrivingWheelDirection = 0
+    
+    // Ackermann steering properties
+    wheelbase = 30 // pixels (3 meters at 10px/meter scale)
+    steeringAngle = 0 // Current front wheel angle in radians
+    maxSteeringAngle = Math.PI / 6 // 30 degrees maximum steering
+    
+    // Tire slip simulation properties
+    tireGripCoefficient = 1.2 // Tire grip coefficient (sports car)
+    mass = 1600 // kg equivalent for simulation
+    maxSlipAngle = Math.PI / 24 // 7.5 degrees - angle where tires start to slip significantly
+    
+    // Realistic acceleration values (converted to simulation units)
+    maxAcceleration = 8.0 // m/s² - typical sports car acceleration
+    maxBraking = 10.0 // m/s² - sports car braking capability
+    
     /**
      * The force applied to the driving wheel from the input.
      * 1 = instant wheel turning
@@ -122,19 +138,46 @@ export default class Car {
 
     // Updates car position
     update(trackMap: number[][], resolution: number, track: Track) {
+        // Apply acceleration
         this.speed += this.acceleration
-        if (this.speed < -2) { this.speed = -2 }
-        // if (trackMap[Math.floor(this.pos.x / resolution)][Math.floor(this.pos.y / resolution)] == 0) { this.speed = 0 }
+        
+        // Apply drag and rolling resistance for realistic physics
+        const speedMPS = this.speed / UNITS_PER_METER // Convert to m/s
+        const dragForce = 0.5 * 1.225 * 0.35 * 2.0 * speedMPS * speedMPS // Air resistance (ρ * Cd * A * v²/2)
+        const rollingForce = 0.015 * this.mass * 9.81 // Rolling resistance
+        const totalResistanceForce = dragForce + rollingForce
+        
+        // Convert resistance back to simulation units and apply
+        const resistanceAcceleration = totalResistanceForce / this.mass * UNITS_PER_METER / 60
+        if (this.speed > 0) {
+            this.speed = Math.max(0, this.speed - resistanceAcceleration)
+        } else if (this.speed < 0) {
+            this.speed = Math.min(0, this.speed + resistanceAcceleration)
+        }
+        
+        // Ackermann steering: calculate turning based on wheelbase and steering angle
+        if (Math.abs(this.steeringAngle) > 0.001 && Math.abs(this.speed) > 0.1) {
+            // Calculate turning radius using Ackermann geometry
+            const turningRadius = this.wheelbase / Math.tan(Math.abs(this.steeringAngle))
+            
+            // Calculate angular velocity (rad/s)
+            const angularVelocity = this.speed / turningRadius
+            
+            // Apply direction change with consistent time scaling
+            const directionChange = angularVelocity * Math.sign(this.steeringAngle) * Math.sign(this.speed) * avgDeltaTime
+            this.direction += directionChange
+        }
+        
         if (!track.isInsideTrack(this.pos.x, this.pos.y)) {
             this.speed = 0
-            // this.neuralNet.addFitness(-Math.abs(this.speed) * 10)
         } else {
             this.neuralNet.addFitness(this.speed > 0 ? this.speed : 10 * this.speed)
         }
 
+        // Update position with consistent time scaling
         this.pos.add(
-            this.speed * Math.cos(this.direction) * avgDeltaTime / (1 / 30),
-            this.speed * Math.sin(this.direction) * avgDeltaTime / (1 / 30)
+            this.speed * Math.cos(this.direction) * avgDeltaTime,
+            this.speed * Math.sin(this.direction) * avgDeltaTime
         )
     }
 
@@ -162,14 +205,59 @@ export default class Car {
         p.pop();
     }
 
-    // Inputs for driving the car
-    drive(input: number[]) {
-        this.acceleration = (input[0] > 0 && this.speed >= 0) || this.speed < 0 ? input[0] * .05 : input[0] * .15
-        //this.acceleration = input[0] * .05
-        const newDrivingWheelPosition = this.lastDrivingWheelDirection * (1 - this.drivingWheelForce) + input[1] * this.drivingWheelForce
+    // Calculate maximum effective steering angle based on tire slip physics
+    private getMaxEffectiveSteeringAngle(): number {
+        // Convert speed from pixels/frame to m/s using consistent scaling
+        const speedMPS = Math.abs(this.speed) / UNITS_PER_METER
         
-        this.direction += newDrivingWheelPosition * .05 * (1 - 1 / (1 + Math.abs(this.speed))) * Math.sign(this.speed) * avgDeltaTime / (1 / 30)
-        this.lastDrivingWheelDirection = newDrivingWheelPosition
+        // At very low speeds, full steering is available
+        if (speedMPS < 0.5) {
+            return this.maxSteeringAngle
+        }
+        
+        // Calculate maximum lateral acceleration the tires can provide
+        // Based on tire grip coefficient and gravity
+        const maxLateralAcceleration = this.tireGripCoefficient * 9.81 // m/s²
+        
+        // Calculate the maximum turning radius before tire slip occurs
+        // Using the relationship: lateral_accel = v²/R
+        const maxTurningRadius = (speedMPS * speedMPS) / maxLateralAcceleration
+        
+        // Convert turning radius back to steering angle using wheelbase in meters
+        const wheelbaseMeters = this.wheelbase / UNITS_PER_METER
+        const maxEffectiveAngle = Math.atan(wheelbaseMeters / maxTurningRadius)
+        
+        // Return the minimum of physical steering limit and slip-limited angle
+        return Math.min(this.maxSteeringAngle, maxEffectiveAngle)
+    }
+
+    // Inputs for driving the car with Ackermann steering and tire slip simulation
+    drive(input: number[]) {
+        // Calculate realistic acceleration based on throttle input (-1 to 1)
+        const throttleInput = input[0] // -1 to 1
+        
+        if (throttleInput >= 0) {
+            // Forward acceleration
+            const accelerationMPS2 = throttleInput * this.maxAcceleration
+            this.acceleration = accelerationMPS2 * UNITS_PER_METER / 60 // Convert to simulation units
+        } else {
+            // Braking (negative throttle)
+            const brakingMPS2 = Math.abs(throttleInput) * this.maxBraking
+            this.acceleration = -brakingMPS2 * UNITS_PER_METER / 60 // Convert to simulation units
+        }
+        
+        // Calculate target steering angle from input (-1 to 1)
+        const targetSteeringInput = input[1] // -1 to 1
+        const targetSteeringAngle = targetSteeringInput * this.maxSteeringAngle
+        
+        // Apply tire slip limitation - limit actual steering angle based on current speed
+        const maxEffectiveAngle = this.getMaxEffectiveSteeringAngle()
+        
+        // Clamp the steering angle to what the tires can actually provide
+        this.steeringAngle = Math.sign(targetSteeringAngle) * Math.min(Math.abs(targetSteeringAngle), maxEffectiveAngle)
+        
+        // Keep lastDrivingWheelDirection for neural network input consistency
+        this.lastDrivingWheelDirection = targetSteeringInput
     }
 
     // Gets sensors' data
@@ -231,8 +319,8 @@ export default class Car {
         // in this mode, the car gets as input the points of the track that are in front of it, at a certain distance and angle from the car
 
         const totalqueryPoints = this.totalLookAheadPoints
-        const singleFrameDistance = this.speed * avgDeltaTime / (1 / 60)
-        const maxLookaheadDistance = singleFrameDistance * 120
+        const singleFrameDistance = this.speed * avgDeltaTime
+        const maxLookaheadDistance = singleFrameDistance * 60 * 6 // look ahead up to 6 seconds in the future at current speed
 
         const currentCarPositionInTrack = queryTrack(track.analyticPieces.map(convertToTrackSegment), this.pos, this.direction)
         this.lastCurrentCarPositionInTrack = new Vector(currentCarPositionInTrack.point.x, currentCarPositionInTrack.point.y)
@@ -321,6 +409,7 @@ export default class Car {
         this.direction = startDir
         this.speed = 0
         this.acceleration = 0
+        this.steeringAngle = 0
         this.lastDrivingWheelDirection = 0
         this.lastRayCastDistances = null
         this.lastCurrentCarPositionInTrack = null

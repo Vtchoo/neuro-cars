@@ -1,8 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using SmartRace.Core;
 using SmartRace.Utils;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.TrackBar;
 
 namespace SmartRace.Core
 {
@@ -86,6 +88,20 @@ namespace SmartRace.Core
         public double LastDrivingWheelDirection { get; set; } = 0;
         public double DrivingWheelForce = 0.05;
 
+        // Ackermann steering properties
+        public double Wheelbase = 30; // pixels (3 meters at 10px/meter scale)
+        public double SteeringAngle = 0; // Current front wheel angle in radians
+        public double MaxSteeringAngle = Math.PI / 6; // 30 degrees maximum steering
+
+        // Tire slip simulation properties
+        public double TireGripCoefficient = 1.2; // Tire grip coefficient (sports car)
+        public double Mass = 1600; // kg
+        public double MaxSlipAngle = Math.PI / 24; // 7.5 degrees - angle where tires start to slip significantly
+
+        // Realistic acceleration values (converted to simulation units)
+        public double MaxAcceleration = 8.0; // m/s² - typical sports car acceleration
+        public double MaxBraking = 10.0; // m/s² - sports car braking capability
+
         // The brain inside the car
         public NeuralNet NeuralNet { get; set; }
 
@@ -140,34 +156,116 @@ namespace SmartRace.Core
         // Updates car position
         public void Update(ITrack track)
         {
-            Speed += Acceleration;
-            if (Speed < -2) Speed = -2;
+            // Apply acceleration
+            this.Speed += this.Acceleration;
 
-            // Skip track collision check if no track available
-            if (track != null && !track.IsInsideTrack(Position.X, Position.Y))
+            // Apply drag and rolling resistance for realistic physics
+            var speedMPS = this.Speed / Constants.UNITS_PER_METER; // Convert to m/s
+            var dragForce = 0.5 * 1.225 * 0.35 * 2.0 * speedMPS * speedMPS; // Air resistance (ρ * Cd * A * v²/2)
+            var rollingForce = 0.015 * this.Mass * 9.81; // Rolling resistance
+            var totalResistanceForce = dragForce + rollingForce;
+
+            // Convert resistance back to simulation units and apply
+            var resistanceAcceleration = totalResistanceForce / this.Mass * Constants.UNITS_PER_METER / 60;
+            if (this.Speed > 0)
             {
-                Speed = 0;
+                this.Speed = Math.Max(0, this.Speed - resistanceAcceleration);
             }
-            else if (track != null)
+            else if (this.Speed < 0)
             {
-                NeuralNet.AddFitness(Speed > 0 ? Speed : 10 * Speed);
+                this.Speed = Math.Min(0, this.Speed + resistanceAcceleration);
             }
 
-            Position.Add(
-                Speed * Math.Cos(Direction) * avgDeltaTime / (1.0 / 30.0),
-                Speed * Math.Sin(Direction) * avgDeltaTime / (1.0 / 30.0)
+            // Ackermann steering: calculate turning based on wheelbase and steering angle
+            if (Math.Abs(this.SteeringAngle) > 0.001 && Math.Abs(this.Speed) > 0.1)
+            {
+                // Calculate turning radius using Ackermann geometry
+                var turningRadius = this.Wheelbase / Math.Tan(Math.Abs(this.SteeringAngle));
+
+                // Calculate angular velocity (rad/s)
+                var angularVelocity = this.Speed / turningRadius;
+
+                // Apply direction change with consistent time scaling
+                var directionChange = angularVelocity * Math.Sign(this.SteeringAngle) * Math.Sign(this.Speed) * avgDeltaTime;
+                this.Direction += directionChange;
+            }
+
+            if (!track.IsInsideTrack(this.Position.X, this.Position.Y))
+            {
+                this.Speed = 0;
+            }
+            else
+            {
+                this.NeuralNet.AddFitness(this.Speed > 0 ? this.Speed : 10 * this.Speed);
+            }
+
+            // Update position with consistent time scaling
+            this.Position.Add(
+                this.Speed * Math.Cos(this.Direction) * avgDeltaTime,
+                this.Speed * Math.Sin(this.Direction) * avgDeltaTime
             );
         }
 
-        // Inputs for driving the car
+        // Inputs for driving the car with Ackermann steering and tire slip simulation
         public void Drive(double[] input)
         {
-            Acceleration = (input[0] > 0 && Speed >= 0) || Speed < 0 ? input[0] * 0.05 : input[0] * 0.15;
-                
-            var newDrivingWheelPosition = LastDrivingWheelDirection * (1 - DrivingWheelForce) + input[1] * DrivingWheelForce;
+            // Calculate realistic acceleration based on throttle input (-1 to 1)
+            var throttleInput = input[0]; // -1 to 1
 
-            Direction += newDrivingWheelPosition * 0.05 * (1 - 1 / (1 + Math.Abs(Speed))) * Math.Sign(Speed) * avgDeltaTime / (1.0 / 30.0);
-            LastDrivingWheelDirection = newDrivingWheelPosition;
+
+            if (throttleInput >= 0)
+            {
+                // Forward acceleration
+                var accelerationMPS2 = throttleInput * this.MaxAcceleration;
+                this.Acceleration = accelerationMPS2 * Constants.UNITS_PER_METER / 60; // Convert to simulation units
+            }
+            else
+            {
+                // Braking (negative throttle)
+                var brakingMPS2 = Math.Abs(throttleInput) * this.MaxBraking;
+                this.Acceleration = -brakingMPS2 * Constants.UNITS_PER_METER / 60; // Convert to simulation units
+            }
+
+            // Calculate target steering angle from input (-1 to 1)
+            var targetSteeringInput = input[1]; // -1 to 1
+            var targetSteeringAngle = targetSteeringInput * this.MaxSteeringAngle;
+
+            // Apply tire slip limitation - limit actual steering angle based on current speed
+            var maxEffectiveAngle = this.GetMaxEffectiveSteeringAngle();
+
+            // Clamp the steering angle to what the tires can actually provide
+            this.SteeringAngle = Math.Sign(targetSteeringAngle) * Math.Min(Math.Abs(targetSteeringAngle), maxEffectiveAngle);
+
+            // Keep lastDrivingWheelDirection for neural network input consistency
+            this.LastDrivingWheelDirection = targetSteeringInput;
+        }
+
+        // Calculate maximum effective steering angle based on tire slip physics
+        private double GetMaxEffectiveSteeringAngle()
+        {
+            // Convert speed from pixels/frame to m/s using consistent scaling
+            var speedMPS = Math.Abs(this.Speed) / Constants.UNITS_PER_METER;
+
+            // At very low speeds, full steering is available
+            if (speedMPS < 0.5)
+            {
+                return this.MaxSteeringAngle;
+            }
+
+            // Calculate maximum lateral acceleration the tires can provide
+            // Based on tire grip coefficient and gravity
+            var maxLateralAcceleration = this.TireGripCoefficient * 9.81; // m/s²
+
+            // Calculate the maximum turning radius before tire slip occurs
+            // Using the relationship: lateral_accel = v²/R
+            var maxTurningRadius = (speedMPS * speedMPS) / maxLateralAcceleration;
+
+            // Convert turning radius back to steering angle using wheelbase in meters
+            var wheelbaseMeters = this.Wheelbase / Constants.UNITS_PER_METER;
+            var maxEffectiveAngle = Math.Atan(wheelbaseMeters / maxTurningRadius);
+
+            // Return the minimum of physical steering limit and slip-limited angle
+            return Math.Min(this.MaxSteeringAngle, maxEffectiveAngle);
         }
 
         // Gets sensors' data
@@ -259,8 +357,8 @@ namespace SmartRace.Core
             // in this mode, the car gets as input the points of the track that are in front of it, at a certain distance and angle from the car
 
             int totalQueryPoints = totalLookAheadPoints;
-            double singleFrameDistance = Speed * avgDeltaTime / (1.0 / 60.0);
-            double maxLookaheadDistance = singleFrameDistance * 120;
+            double singleFrameDistance = Speed * avgDeltaTime;
+            double maxLookaheadDistance = singleFrameDistance * 60 * 6; // lookahead distance is 6 seconds at max speed, which allows the car to see far enough ahead to make informed decisions without overwhelming it with too much information. This also helps to keep the neural network inputs manageable and focused on relevant track information.
 
             // Convert track pieces to segments for querying
             TrackSegment[] trackSegments = track.AnalyticPieces.Select(ConvertToTrackSegment).ToArray();
@@ -398,6 +496,7 @@ namespace SmartRace.Core
             Speed = 0;
             Acceleration = 0;
             LastDrivingWheelDirection = 0;
+            SteeringAngle = 0;
             LastRayCastDistances = null;
             LastCurrentCarPositionInTrack = null;
             LastLookAheadPoints = null;
