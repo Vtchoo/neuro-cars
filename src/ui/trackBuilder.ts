@@ -144,19 +144,19 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
 
     const resetButton = p.createButton("Reset")
     resetButton.size(buttonWidth, buttonHeight)
-    resetButton.mousePressed(() => resetTrack(game))
+    resetButton.mouseClicked(() => resetTrack(game))
     buttons.push(resetButton)
     controls.child(resetButton)
 
     const doneButton = p.createButton("Done!")
     doneButton.size(buttonWidth, buttonHeight)
-    doneButton.mousePressed(() => setTrack(game, p))
+    doneButton.mouseClicked(() => setTrack(game, p))
     buttons.push(doneButton)
     controls.child(doneButton)
 
     const loadTrackButton = p.createButton("Load Track")
     loadTrackButton.size(buttonWidth, buttonHeight)
-    loadTrackButton.mousePressed(() => loadTrackInEditor(p, game))
+    loadTrackButton.mouseClicked(() => loadTrackInEditor(p, game))
     buttons.push(loadTrackButton)
     controls.child(loadTrackButton)
 }
