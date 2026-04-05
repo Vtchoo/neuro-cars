@@ -84,6 +84,7 @@ namespace SmartRace.Core
         public double Acceleration { get; set; } = 0;
         public double Direction { get; set; } = 0;
         public double LastDrivingWheelDirection { get; set; } = 0;
+        public double DrivingWheelForce = 0.05;
 
         // The brain inside the car
         public NeuralNet NeuralNet { get; set; }
@@ -162,8 +163,11 @@ namespace SmartRace.Core
         public void Drive(double[] input)
         {
             Acceleration = (input[0] > 0 && Speed >= 0) || Speed < 0 ? input[0] * 0.05 : input[0] * 0.15;
-            Direction += input[1] * 0.05 * (1 - 1 / (1 + Math.Abs(Speed))) * Math.Sign(Speed) * avgDeltaTime / (1.0 / 30.0);
-            LastDrivingWheelDirection = input[1];
+                
+            var newDrivingWheelPosition = LastDrivingWheelDirection * (1 - DrivingWheelForce) + input[1] * DrivingWheelForce;
+
+            Direction += newDrivingWheelPosition * 0.05 * (1 - 1 / (1 + Math.Abs(Speed))) * Math.Sign(Speed) * avgDeltaTime / (1.0 / 30.0);
+            LastDrivingWheelDirection = newDrivingWheelPosition;
         }
 
         // Gets sensors' data

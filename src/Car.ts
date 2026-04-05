@@ -5,6 +5,7 @@ import Track, { TrackPiece, TrackPieceType } from "./Track"
 import { queryTrack, TrackSegment } from "./utils/track"
 import { convertHSLToRGB } from "./utils/colors"
 import { signedLog, softsign } from "./utils/activationFunctions"
+import { XY } from "./utils/math"
 
 let avgDeltaTime = 1 / 60 // 0.016807703080427727
 
@@ -58,6 +59,13 @@ export default class Car {
     acceleration = 0
     direction = 0
     lastDrivingWheelDirection = 0
+    /**
+     * The force applied to the driving wheel from the input.
+     * 1 = instant wheel turning
+     * 0 = no wheel turning
+     * values < 1 create a more realistic driving experience, where the car takes some time to turn the wheel and doesn't instantly reach the desired direction. This makes the learning process more challenging, but also more rewarding, as the car has to learn to anticipate turns and adjust its speed accordingly.
+     */
+    drivingWheelForce = 0.05
 
     // The brain inside the car
     neuralNet: NeuralNet
@@ -158,8 +166,10 @@ export default class Car {
     drive(input: number[]) {
         this.acceleration = (input[0] > 0 && this.speed >= 0) || this.speed < 0 ? input[0] * .05 : input[0] * .15
         //this.acceleration = input[0] * .05
-        this.direction += input[1] * .05 * (1 - 1 / (1 + Math.abs(this.speed))) * Math.sign(this.speed) * avgDeltaTime / (1 / 30)
-        this.lastDrivingWheelDirection = input[1]
+        const newDrivingWheelPosition = this.lastDrivingWheelDirection * (1 - this.drivingWheelForce) + input[1] * this.drivingWheelForce
+        
+        this.direction += newDrivingWheelPosition * .05 * (1 - 1 / (1 + Math.abs(this.speed))) * Math.sign(this.speed) * avgDeltaTime / (1 / 30)
+        this.lastDrivingWheelDirection = newDrivingWheelPosition
     }
 
     // Gets sensors' data
@@ -187,6 +197,7 @@ export default class Car {
 
     private getRaycastInputs(showInputs: boolean, p: p5, track: Track) {
         const inputs = new Array(this.totalRayCastRays).fill(0)
+        const rayCastPoints: XY[] = new Array(this.totalRayCastRays)
         const maxIncrements = 30
 
         for (let i = 0; i < this.totalRayCastRays; i++) {
@@ -207,13 +218,12 @@ export default class Car {
                     y = prevy
 
                     inputs[i] = Math.sqrt(Math.pow(x - this.pos.x, 2) + Math.pow(y - this.pos.y, 2))
-                    if (showInputs) {
-                        p.stroke(255); p.line(this.pos.x, this.pos.y, x, y)
-                    }
+                    rayCastPoints[i] = { x, y }
                     break
                 }
             }
         }
+        this.lastRayCastPoints = rayCastPoints
         return inputs
     }
 

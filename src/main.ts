@@ -13,8 +13,6 @@ import { buildGameMenu } from './ui/gameMenu';
 // Important objects
 let carSprite: p5.Image
 
-// Will the player be allowed to drive a car?
-let playerDrive = false
 
 // Defines the current state of the simulator (setStart is the first one)
 // let phase = "generateTrack"
@@ -46,9 +44,12 @@ const offspring = 20
 // elite
 const eliteSize = 7
 
-let player: Car
 
 export default class Game {
+
+	// Will the player be allowed to drive a car?
+	playerDrive = false
+	player: Car
 
 	private p: p5
 	private canvas: p5.Renderer
@@ -311,7 +312,7 @@ export default class Game {
 					return car
 				})
 
-				player = new Car(this.start.x, this.start.y, this.direction)
+				this.player = new Car(this.start.x, this.start.y, this.direction)
 
 				this.setPhase("running")
 				break
@@ -362,7 +363,7 @@ export default class Game {
 				}
 
 				// Follow best car camera logic
-				if (this.followBestCar !== 'off' && this.population.length > 0 && !playerDrive) {
+				if (this.followBestCar !== 'off' && this.population.length > 0 && !this.playerDrive) {
 					const carToFollow = (this.followBestCar === 'best' || !bestActiveCar) ? bestCar : bestActiveCar
 					// Center camera on the best car
 					this.cameraOffsetX = -carToFollow.pos.x
@@ -370,12 +371,12 @@ export default class Game {
 				}
 
 				// Allows the player to drive a car
-				if (playerDrive) {
-					// getUserInput()
-					this.cameraOffsetX = -player.pos.x
-					this.cameraOffsetY = -player.pos.y
-					// player.update()
-					// player.show()
+				if (this.playerDrive) {
+					this.getUserInput()
+					this.cameraOffsetX = -this.player.pos.x
+					this.cameraOffsetY = -this.player.pos.y
+					this.player.update(this.trackMap, this.resolution, this.track)
+					this.player.show(this.p, carSprite)
 				}
 
 				// if mouse is over some car, show that car's inputs (only if showInputs is not "all" or "best")
@@ -521,11 +522,11 @@ export default class Game {
 					individual.neuralNet.resetFitness()
 				}
 
-				if (playerDrive) {
+				if (this.playerDrive) {
 					// Resets player's car
-					player.pos = new Vector(this.start.x, this.start.y)
-					player.speed = 0
-					player.direction = this.direction
+					this.player.pos = new Vector(this.start.x, this.start.y)
+					this.player.speed = 0
+					this.player.direction = this.direction
 				}
 
 				this.ticks = 0
@@ -821,7 +822,7 @@ export default class Game {
 			playerinput[1] = 0
 		}
 
-		player.drive(playerinput)
+		this.player.drive(playerinput)
 
 	}
 
@@ -839,8 +840,8 @@ export default class Game {
 				if (this.p.keyIsDown(this.p.CONTROL)) {
 					this.saveGame();
 				} else {
-					this.showInputs = this.toggleShowInputs()
-					console.log(`Show inputs: ${this.showInputs}`)
+					// this.showInputs = this.toggleShowInputs()
+					// console.log(`Show inputs: ${this.showInputs}`)
 				}
 				break
 			case 'l':
@@ -985,6 +986,8 @@ export default class Game {
 		this.start = this.track.startingPoint;
 		this.direction = this.track.startingDirection;
 
+		this.player = new Car(this.start.x, this.start.y, this.direction)
+
 		// Set phase to running
 		this.setPhase("running");
 	}
@@ -992,7 +995,7 @@ export default class Game {
 
 window.game = new Game()
 window.letPlayerDrive = function (letPlayerDrive = true) {
-	playerDrive = letPlayerDrive
+	game.playerDrive = letPlayerDrive
 }
 
 // console.log('Large weights (>1.5):', game.population.reduce((sum, car) => { return sum + [...car.neuralNet.weightMatrices.flat().flat(), ...car.neuralNet.biasMatrices.flat().flat()].filter(w => Math.abs(w) > 1.5).length }, 0));
