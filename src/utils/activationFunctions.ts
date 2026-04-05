@@ -25,5 +25,5 @@ export function softsign(value: number) {
 export function signedLog(value: number) {
     if (value === 0) return 0;
     const sign = Math.sign(value);
-    return sign * Math.log1p(Math.abs(value));
+    return sign * Math.log10(1 + Math.abs(value));
 }

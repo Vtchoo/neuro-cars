@@ -25,7 +25,7 @@ namespace SmartRace.Utils
         {
             if (value == 0) return 0;
             double sign = Math.Sign(value);
-            return sign * Math.Log(1 + Math.Abs(value));
+            return sign * Math.Log10(1 + Math.Abs(value));
         }
     }
 }
