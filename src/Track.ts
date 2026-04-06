@@ -4,6 +4,66 @@ import { closestPointOnArcSegment, closestPointOnLineSegment } from "./utils/tra
 import { add, arcLineIntersection, ArcSegment, calculateArcCenter, closestPointOnLine, cross, distancePointToLine, length, lineLineIntersection, LineSegment, lineSegmentIntersection, segmentIntersection, sub, XY } from "./utils/math"
 import Game from "./main"
 
+interface ITrackPiece {
+    type: TrackPieceType
+    width: number
+    start: XY
+    end: XY
+    length: number
+}
+
+export class StraightTrackPiece implements ITrackPiece {
+    type = TrackPieceType.Straight
+    length: number
+
+    constructor(public start: XY, public end: XY, public width: number) {
+        this.length = Math.sqrt((end.x - start.x) ** 2 + (end.y - start.y) ** 2)
+    }
+}
+
+export class ArcTrackPiece implements ITrackPiece {
+    type = TrackPieceType.Arc
+    length: number
+
+    constructor(public start: XY, public end: XY, public center: XY, public clockwise: boolean, public width: number) {
+        const radius = Math.sqrt((start.x - center.x) ** 2 + (start.y - center.y) ** 2)
+        const angleStart = Math.atan2(start.y - center.y, start.x - center.x)
+        const angleEnd = Math.atan2(end.y - center.y, end.x - center.x)
+        let angleDiff = angleEnd - angleStart
+        if (clockwise && angleDiff > 0) {
+            angleDiff -= 2 * Math.PI
+        } else if (!clockwise && angleDiff < 0) {
+            angleDiff += 2 * Math.PI
+        }
+        this.length = Math.abs(angleDiff) * radius
+    }
+}
+
+export class SplineTrackPiece implements ITrackPiece {
+    type = TrackPieceType.Spline
+    length: number
+
+    constructor(public start: XY, public control1: XY, public control2: XY, public end: XY, public width: number) {
+        // Approximate length by sampling points along the curve
+        const sampleCount = 10
+        let length = 0
+        let prevPoint = start
+        for (let i = 1; i <= sampleCount; i++) {
+            const t = i / sampleCount
+            const point = this.getPointAtT(t)
+            length += Math.sqrt((point.x - prevPoint.x) ** 2 + (point.y - prevPoint.y) ** 2)
+            prevPoint = point
+        }
+        this.length = length
+    }
+
+    private getPointAtT(t: number): XY {
+        const x = (1 - t) ** 3 * this.start.x + 3 * (1 - t) ** 2 * t * this.control1.x + 3 * (1 - t) * t ** 2 * this.control2.x + t ** 3 * this.end.x
+        const y = (1 - t) ** 3 * this.start.y + 3 * (1 - t) ** 2 * t * this.control1.y + 3 * (1 - t) * t ** 2 * this.control2.y + t ** 3 * this.end.y
+        return { x, y }
+    }
+}
+
 interface BoundingBox {
     minX: number
     minY: number
