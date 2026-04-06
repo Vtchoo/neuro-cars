@@ -2,7 +2,7 @@ import p5 from "p5"
 import { ActivationFunction, NeuralNet } from "./NeuralNet"
 import { newVector, Vector } from "./Vector"
 import Track, { TrackPiece, TrackPieceType } from "./Track"
-import { queryTrack, TrackSegment } from "./utils/track"
+import { queryTrack, TrackQueryResult, TrackSegment } from "./utils/track"
 import { convertHSLToRGB } from "./utils/colors"
 import { signedLog, softsign } from "./utils/activationFunctions"
 import { XY } from "./utils/math"
@@ -12,27 +12,33 @@ let avgDeltaTime = 1 / 60 // 0.016807703080427727
 const UNITS_PER_METER = 10 // 10 pixels = 1 meter scale
 
 const randomNames = [
-    ["Ayrton", "Senna"],
-    ["Michael", "Schumacher"],
-    ["Lewis", "Hamilton"],
-    ["Sebastian", "Vettel"],
-    ["Alain", "Prost"],
-    ["Niki", "Lauda"],
-    ["Jim", "Clark"],
-    ["Jackie", "Stewart"],
-    ["Fernando", "Alonso"],
-    ["Kimi", "Raikkonen"],
-    ["Juan Manuel", "Fangio"],
-    ["Alberto", "Ascari"],
-    ["Jim", "Hawkins"],
-    ["Eleanor", "Arroway"],
-    ["Tony", "Stark"],
-    ["Felipe", "Massa"],
-    ["Gilles", "Villeneuve"],
-    ["Dale", "Earnhardt"],
-    ["Colin", "McRae"],
-    ["Travis", "Pastrana"],
-    ["Ken", "Block"],
+    ["Ayrton", "Senna"], // Greatest of all time, the legend himself
+    ["Michael", "Schumacher"], // The original GOAT, 7-time world champion and dominant force in the 90s and early 2000s
+    ["Lewis", "Hamilton"], // Modern GOAT, 7-time world champion, known for his consistency and racecraft
+    ["Sebastian", "Vettel"], // 4-time world champion, dominant in the early 2010s with Red Bull
+    ["Alain", "Prost"], // 4-time world champion, known as "The Professor" for his calculated driving style
+    ["Niki", "Lauda"], // 3-time world champion, known for his incredible comeback after a near-fatal crash
+    ["Jim", "Clark"], // 2-time world champion, dominant in the 60s with Lotus
+    ["Jackie", "Stewart"], // 3-time world champion, known for his smooth driving style and safety advocacy
+    ["Fernando", "Alonso"], // 2-time world champion, known for his versatility and racecraft
+    ["Kimi", "Raikkonen"], // 1-time world champion, known as "The Iceman" for his cool demeanor and raw speed
+    ["Juan Manuel", "Fangio"], // 5-time world champion in the 50s, known for his skill and dominance in the early years of F1
+    ["Alberto", "Ascari"], // 2-time world champion in the 50s, known for his smooth driving style
+    ["Tony", "Stark"], // Fictional character from Marvel Comics, known for his genius and charisma
+    ["Felipe", "Massa"], // 1-time world champion, known for his speed and near miss of the 2008 title
+    ["Gilles", "Villeneuve"], // Known for his fearless driving style and incredible car control, a true legend of the sport
+    ["Dale", "Earnhardt"], // NASCAR legend, known for his aggressive driving style and 7 championships in the top-tier NASCAR series
+    ["Colin", "McRae"], // Rally legend, known for his incredible car control and 1995 World Rally Championship title
+    ["Travis", "Pastrana"], // Known for his versatility across motorsports, including motocross, rally, and NASCAR, as well as his daring stunts in the Nitro Circus
+    ["Ken", "Block"], // Known for his Gymkhana series of videos showcasing his incredible car control and stunts, as well as his success in rally and rallycross
+    ["Richard", "Petty"], // NASCAR legend, known as "The King" for his record 200 race wins and 7 championships in the top-tier NASCAR series
+    ["Oscar", "Piastri"], // Young talent and 2021 Formula 2 champion, currently racing in Formula 1 with McLaren
+    ["Lando", "Norris"], // Rising star in Formula 1, known for his speed and personality, currently racing with McLaren
+    ["George", "Russell"], // Young talent in Formula 1, known for his speed and consistency, currently racing with Mercedes
+    ["Mick", "Schumacher"], // Son of Michael Schumacher, showing promise in Formula 2 and currently racing in Formula 1 with Haas
+    ["Charlie", "Leclerc"], // Young talent in Formula 1, known for his speed and racecraft, currently racing with Ferrari
+    ["Max", "Verstappen"], // Current dominant force in Formula 1, known for his aggressive driving style and multiple world championships with Red Bull
+    ["Ruben", "Barrichello"], // Known for his long career in Formula 1, including being a teammate to Michael Schumacher during his dominant years at Ferrari
 ]
 
 const [names, surnames] = [randomNames.map(name => name[0]), randomNames.map(name => name[1])]
@@ -89,21 +95,21 @@ export default class Car {
     acceleration = 0
     direction = 0
     lastDrivingWheelDirection = 0
-    
+
     // Ackermann steering properties
     wheelbase = 3 // 3 meters
     steeringAngle = 0 // Current front wheel angle in radians
     maxSteeringAngle = Math.PI / 6 // 30 degrees maximum steering
-    
+
     // Tire slip simulation properties
     tireGripCoefficient = 1.2 // Tire grip coefficient (sports car)
     mass = 1600 // kg equivalent for simulation
     maxSlipAngle = Math.PI / 24 // 7.5 degrees - angle where tires start to slip significantly
-    
+
     // Realistic acceleration values (converted to simulation units)
     maxAcceleration = 8.0 // m/s² - typical sports car acceleration
     maxBraking = 10.0 // m/s² - sports car braking capability
-    
+
     /**
      * The force applied to the driving wheel from the input.
      * 1 = instant wheel turning
@@ -117,10 +123,11 @@ export default class Car {
 
     private totalRayCastRays = 7
     lastRayCastDistances: number[] | null = null
-    
+
     private totalLookAheadPoints = 10
     lastCurrentCarPositionInTrack: Vector | null = null
     lastLookAheadPoints: Vector[] | null = null
+    private lastCarPositionInTrack: TrackQueryResult | null = null
 
     fadeColor() {
         const fadedColor = { ...this.color }
@@ -171,13 +178,13 @@ export default class Car {
     update(trackMap: number[][], resolution: number, track: Track) {
         // Apply acceleration
         this.speed += this.acceleration * avgDeltaTime
-        
+
         // Apply drag and rolling resistance for realistic physics
         const speedMPS = this.speed // Convert to m/s
         const dragForce = 0.5 * 1.225 * 0.35 * 2.0 * speedMPS * speedMPS // Air resistance (ρ * Cd * A * v²/2)
         const rollingForce = 0.015 * this.mass * 9.81 // Rolling resistance
         const totalResistanceForce = dragForce + rollingForce
-        
+
         // Convert resistance back to simulation units and apply
         const resistanceAcceleration = totalResistanceForce / this.mass * avgDeltaTime
         if (this.speed > 0) {
@@ -185,24 +192,27 @@ export default class Car {
         } else if (this.speed < 0) {
             this.speed = Math.min(0, this.speed + resistanceAcceleration)
         }
-        
+
         // Ackermann steering: calculate turning based on wheelbase and steering angle
         if (Math.abs(this.steeringAngle) > 0.001 && Math.abs(this.speed) > 0.1) {
             // Calculate turning radius using Ackermann geometry
             const turningRadius = this.wheelbase / Math.tan(Math.abs(this.steeringAngle))
-            
+
             // Calculate angular velocity (rad/s)
             const angularVelocity = this.speed / turningRadius
-            
+
             // Apply direction change with consistent time scaling
             const directionChange = angularVelocity * Math.sign(this.steeringAngle) * Math.sign(this.speed) * avgDeltaTime
             this.direction += directionChange
         }
-        
+
         if (!track.isInsideTrack(this.pos.x, this.pos.y)) {
             this.speed = 0
         } else {
-            this.neuralNet.addFitness(this.speed > 0 ? this.speed : 10 * this.speed)
+            if (this.lastCarPositionInTrack) {
+                const angle = this.lastCarPositionInTrack.headingAngle
+                this.neuralNet.addFitness(this.speed > 0 ? this.speed * Math.cos(0) : 10 * this.speed * Math.cos(0))
+            }
         }
 
         // Update position with consistent time scaling
@@ -240,24 +250,24 @@ export default class Car {
     private getMaxEffectiveSteeringAngle(): number {
         // Convert speed from pixels/frame to m/s using consistent scaling
         const speedMPS = Math.abs(this.speed)
-        
+
         // At very low speeds, full steering is available
         if (speedMPS < 0.5) {
             return this.maxSteeringAngle
         }
-        
+
         // Calculate maximum lateral acceleration the tires can provide
         // Based on tire grip coefficient and gravity
         const maxLateralAcceleration = this.tireGripCoefficient * 9.81 // m/s²
-        
+
         // Calculate the maximum turning radius before tire slip occurs
         // Using the relationship: lateral_accel = v²/R
         const maxTurningRadius = (speedMPS * speedMPS) / maxLateralAcceleration
-        
+
         // Convert turning radius back to steering angle using wheelbase in meters
         const wheelbaseMeters = this.wheelbase
         const maxEffectiveAngle = Math.atan(wheelbaseMeters / maxTurningRadius)
-        
+
         // Return the minimum of physical steering limit and slip-limited angle
         return Math.min(this.maxSteeringAngle, maxEffectiveAngle)
     }
@@ -266,7 +276,7 @@ export default class Car {
     drive(input: number[]) {
         // Calculate realistic acceleration based on throttle input (-1 to 1)
         const throttleInput = input[0] // -1 to 1
-        
+
         if (throttleInput >= 0) {
             // Forward acceleration
             const accelerationMPS2 = throttleInput * this.maxAcceleration
@@ -276,17 +286,17 @@ export default class Car {
             const brakingMPS2 = Math.abs(throttleInput) * this.maxBraking
             this.acceleration = -brakingMPS2 // Convert to simulation units
         }
-        
+
         // Calculate target steering angle from input (-1 to 1)
         const targetSteeringInput = input[1] // -1 to 1
         const targetSteeringAngle = targetSteeringInput * this.maxSteeringAngle
-        
+
         // Apply tire slip limitation - limit actual steering angle based on current speed
         const maxEffectiveAngle = this.getMaxEffectiveSteeringAngle()
-        
+
         // Clamp the steering angle to what the tires can actually provide
         this.steeringAngle = Math.sign(targetSteeringAngle) * Math.min(Math.abs(targetSteeringAngle), maxEffectiveAngle)
-        
+
         // Keep lastDrivingWheelDirection for neural network input consistency
         this.lastDrivingWheelDirection = targetSteeringInput
     }
@@ -354,6 +364,7 @@ export default class Car {
         const maxLookaheadDistance = singleFrameDistance * 60 * 6 // look ahead up to 6 seconds in the future at current speed
 
         const currentCarPositionInTrack = queryTrack(track.analyticPieces.map(convertToTrackSegment), this.pos, this.direction)
+        this.lastCarPositionInTrack = currentCarPositionInTrack
         this.lastCurrentCarPositionInTrack = new Vector(currentCarPositionInTrack.point.x, currentCarPositionInTrack.point.y)
 
         const lookAheadPoints: Vector[] = []

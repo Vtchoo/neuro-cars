@@ -139,6 +139,7 @@ namespace SmartRace.Core
         public double[] LastRayCastDistances { get; private set; }
 
         private int totalLookAheadPoints = 10;
+        public TrackQueryResult? LastCarPositionInTrack { get; private set; }
         public Vector LastCurrentCarPositionInTrack { get; private set; }
         public Vector[] LastLookAheadPoints { get; private set; }
 
@@ -228,7 +229,11 @@ namespace SmartRace.Core
             }
             else
             {
-                this.NeuralNet.AddFitness(this.Speed > 0 ? this.Speed : 10 * this.Speed);
+                if (LastCarPositionInTrack is not null)
+                {
+                    var angle = LastCarPositionInTrack.Value.HeadingAngle;
+                    this.NeuralNet.AddFitness(this.Speed > 0 ? this.Speed * Math.Cos(0) : 10 * this.Speed * Math.Cos(0));
+                }
             }
 
             // Update position with consistent time scaling
@@ -397,6 +402,7 @@ namespace SmartRace.Core
             TrackQueryResult currentCarPositionInTrack = TrackMath.QueryTrack(trackSegments, 
                 new XY(Position.X, Position.Y), Direction);
             
+            LastCarPositionInTrack = currentCarPositionInTrack;
             LastCurrentCarPositionInTrack = new Vector(currentCarPositionInTrack.Point.X, currentCarPositionInTrack.Point.Y);
 
             List<Vector> lookAheadPoints = new List<Vector>();

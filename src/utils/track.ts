@@ -14,7 +14,7 @@ type ClosestPointOnTrackResult = ClosestPointResult & {
     segmentIndex: number;
 };
 
-type TrackQueryResult = ClosestPointResult & {
+export type TrackQueryResult = ClosestPointResult & {
     segmentIndex: number;
     lateralOffset: number; // right positive, left negative
     headingAngle: number;  // signed angle from track tangent to car heading, in [-PI, PI]
