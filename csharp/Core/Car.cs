@@ -50,6 +50,36 @@ namespace SmartRace.Core
 
     public class Car
     {
+        private static readonly string[][] RandomNames = new string[][]
+        {
+            new string[] { "Ayrton", "Senna" },
+            new string[] { "Michael", "Schumacher" },
+            new string[] { "Lewis", "Hamilton" },
+            new string[] { "Sebastian", "Vettel" },
+            new string[] { "Alain", "Prost" },
+            new string[] { "Niki", "Lauda" },
+            new string[] { "Jim", "Clark" },
+            new string[] { "Jackie", "Stewart" },
+            new string[] { "Fernando", "Alonso" },
+            new string[] { "Kimi", "Raikkonen" },
+            new string[] { "Juan Manuel", "Fangio" },
+            new string[] { "Alberto", "Ascari" },
+            new string[] { "Jim", "Hawkins" },
+            new string[] { "Eleanor", "Arroway" },
+            new string[] { "Tony", "Stark" },
+            new string[] { "Felipe", "Massa" },
+            new string[] { "Gilles", "Villeneuve" },
+            new string[] { "Dale", "Earnhardt" },
+            new string[] { "Colin", "McRae" },
+            new string[] { "Travis", "Pastrana" },
+            new string[] { "Ken", "Block" }
+        };
+
+        private static readonly string[] Names = RandomNames.Select(name => name[0]).ToArray();
+        private static readonly string[] Surnames = RandomNames.Select(name => name[1]).ToArray();
+
+        public string DriverName { get; set; }
+
         // Neural net settings
         private const int nnLayers = 1;
         private const int nnNeurons = 10;
@@ -125,6 +155,8 @@ namespace SmartRace.Core
 
             HSL color = new HSL(Generation % 360, 100, 50);
             ColorHSL = color;
+
+            DriverName = $"{Names[random.Next(Names.Length)]} {Surnames[random.Next(Surnames.Length)]}";
         }
 
         public void FadeColor()

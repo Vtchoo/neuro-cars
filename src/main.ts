@@ -394,7 +394,7 @@ export default class Game {
 						const realLifeSpeed = car.speed * 3.6
 						tooltip(
 							this.p,
-							[`Fitness: ${car.neuralNet.fitness.toFixed(2)}`, `Gen: ${car.generation}`, `Speed: ${realLifeSpeed.toFixed(2)} km/h`],
+							[car.driverName || "Unknown Driver", `Fitness: ${car.neuralNet.fitness.toFixed(2)}`, `Gen: ${car.generation}`, `Speed: ${realLifeSpeed.toFixed(2)} km/h`],
 							car.pos.x + 20 / this.cameraZoom,
 							car.pos.y + 15 / this.cameraZoom,
 							1 / this.cameraZoom
@@ -922,7 +922,8 @@ export default class Game {
 				direction: car.direction,
 				acceleration: car.acceleration,
 				lastDrivingWheelDirection: car.lastDrivingWheelDirection,
-				paintRGB: car.paintRGB
+				paintRGB: car.paintRGB,
+				driverName: car.driverName,
 			}))
 		};
 
@@ -992,6 +993,7 @@ export default class Game {
 			car.speed = carData.speed;
 			car.acceleration = carData.acceleration;
 			car.paintRGB = carData.paintRGB;
+			car.driverName = carData.driverName;
 			car.lastDrivingWheelDirection = carData.lastDrivingWheelDirection || 0;
 			return car;
 		});

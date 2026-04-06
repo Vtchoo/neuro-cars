@@ -6,9 +6,36 @@ import { queryTrack, TrackSegment } from "./utils/track"
 import { convertHSLToRGB } from "./utils/colors"
 import { signedLog, softsign } from "./utils/activationFunctions"
 import { XY } from "./utils/math"
+import { random } from "./utils/array"
 
 let avgDeltaTime = 1 / 60 // 0.016807703080427727
 const UNITS_PER_METER = 10 // 10 pixels = 1 meter scale
+
+const randomNames = [
+    ["Ayrton", "Senna"],
+    ["Michael", "Schumacher"],
+    ["Lewis", "Hamilton"],
+    ["Sebastian", "Vettel"],
+    ["Alain", "Prost"],
+    ["Niki", "Lauda"],
+    ["Jim", "Clark"],
+    ["Jackie", "Stewart"],
+    ["Fernando", "Alonso"],
+    ["Kimi", "Raikkonen"],
+    ["Juan Manuel", "Fangio"],
+    ["Alberto", "Ascari"],
+    ["Jim", "Hawkins"],
+    ["Eleanor", "Arroway"],
+    ["Tony", "Stark"],
+    ["Felipe", "Massa"],
+    ["Gilles", "Villeneuve"],
+    ["Dale", "Earnhardt"],
+    ["Colin", "McRae"],
+    ["Travis", "Pastrana"],
+    ["Ken", "Block"],
+]
+
+const [names, surnames] = [randomNames.map(name => name[0]), randomNames.map(name => name[1])]
 
 // Neural net settings
 const nnLayers = 1
@@ -38,6 +65,8 @@ interface HSL {
 }
 
 export default class Car {
+    public driverName: string
+
     // Car paint (helps to keep track of individuals)
     private color: HSL
     private colorRGB: RGB
@@ -134,6 +163,8 @@ export default class Car {
         const color = { h: this.generation % 360, s: 100, l: 50 } // getRandomColor()
         this.color = color
         this.colorRGB = convertHSLToRGB(color.h, color.s, color.l)
+
+        this.driverName = `${random(names)} ${random(surnames)}`
     }
 
     // Updates car position

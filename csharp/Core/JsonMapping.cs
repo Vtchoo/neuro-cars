@@ -80,6 +80,9 @@ namespace SmartRace.Core
         // Note: JavaScript version doesn't save paintRGB consistently, so making it optional
         [JsonPropertyName("paintRGB")]
         public object PaintRGB { get; set; }
+
+        [JsonPropertyName("driverName")]
+        public string DriverName { get; set; }
     }
 
     public class NeuralNetDataJson
@@ -274,6 +277,7 @@ namespace SmartRace.Core
                 Direction = car.Direction,
                 Acceleration = car.Acceleration,
                 LastDrivingWheelDirection = car.LastDrivingWheelDirection,
+                DriverName = car.DriverName
             };
         }
 
@@ -291,6 +295,7 @@ namespace SmartRace.Core
             car.Speed = jsonData.Speed;
             car.Acceleration = jsonData.Acceleration;
             car.LastDrivingWheelDirection = jsonData.LastDrivingWheelDirection;
+            car.DriverName = jsonData.DriverName;
 
             return car;
         }
