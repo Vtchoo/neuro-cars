@@ -83,11 +83,42 @@ export function buildGameMenu(game: Game, p: p5) {
         showInputsButton.html(`Show Inputs: ${currentMode}`)
     })
 
+    const followButtonsContainer = p.createElement("div")
+    followButtonsContainer.style(style({
+        display: 'flex',
+        flexDirection: 'row',
+        gap: '.25rem',
+    }))
+    followButtonsContainer.parent(menu)
+
+    const followPreviousCarButton = p.createButton("<")
+    followPreviousCarButton.style(style({
+        padding: '0 .5rem',
+    }))
+    followPreviousCarButton.parent(followButtonsContainer)
+    followPreviousCarButton.mouseClicked(() => {
+        const car = game.followPreviousCar()
+        followBestCarButton.html(`Follow: ${car.driverName}`)
+    })
+
     const followBestCarButton = p.createButton(`Follow Best Car: ${game.followBestCar}`)
-    followBestCarButton.parent(menu)
+    followBestCarButton.style(style({
+        flex: 1,
+    }))
+    followBestCarButton.parent(followButtonsContainer)
     followBestCarButton.mouseClicked(() => {
         const nextMode = game.toggleFollowBestCar()
-        followBestCarButton.html(`Follow Best Car: ${nextMode}`)
+        followBestCarButton.html(`Follow best: ${nextMode}`)
+    })
+    
+    const followNextCarButton = p.createButton(">")
+    followNextCarButton.style(style({
+        padding: '0 .5rem',
+    }))
+    followNextCarButton.parent(followButtonsContainer)
+    followNextCarButton.mouseClicked(() => {
+        const car = game.followNextCar()
+        followBestCarButton.html(`Follow: ${car.driverName}`)
     })
 
     return menu

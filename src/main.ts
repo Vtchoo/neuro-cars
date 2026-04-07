@@ -83,6 +83,7 @@ export default class Game {
 	population: Car[] = []
 
 	followBestCar: 'off' | 'best' | 'bestActive' = 'off'
+	followCar: Car | null = null
 
 	private readonly decisionsPerSecond = 10
 	private lastDecisionTime = 0
@@ -130,13 +131,52 @@ export default class Game {
 		this.showInputs = options[nextIndex]
 		return this.showInputs
 	}
+
 	toggleFollowBestCar() {
 		const options = ['off', 'best', 'bestActive'] as const
 		const currentIndex = options.indexOf(this.followBestCar)
 		const nextIndex = (currentIndex + 1) % options.length
 		this.followBestCar = options[nextIndex]
+		this.followCar = null
 		return this.followBestCar
 	}
+
+	followNextCar() {
+		// sort in alphabetical order
+		const cars = [...this.population].sort((a, b) => {
+			const nameA = a.driverName || ""
+			const nameB = b.driverName || ""
+			return nameA.localeCompare(nameB)
+		})
+		if (!this.followCar) {
+			this.followCar = cars[0]
+		} else {
+			const currentIndex = cars.indexOf(this.followCar)
+			const nextIndex = (currentIndex + 1) % cars.length
+			this.followCar = cars[nextIndex]
+		}
+		this.followBestCar = 'off'
+		return this.followCar
+	}
+
+	followPreviousCar() {
+		// sort in alphabetical order
+		const cars = [...this.population].sort((a, b) => {
+			const nameA = a.driverName || ""
+			const nameB = b.driverName || ""
+			return nameA.localeCompare(nameB)
+		})
+		if (!this.followCar) {
+			this.followCar = cars[cars.length - 1]
+		} else {
+			const currentIndex = cars.indexOf(this.followCar)
+			const previousIndex = (currentIndex - 1 + cars.length) % cars.length
+			this.followCar = cars[previousIndex]
+		}
+		this.followBestCar = 'off'
+		return this.followCar
+	}
+
 	toggleDrawGraphs() {
 		this.drawGraphs = !this.drawGraphs
 	}
@@ -375,8 +415,9 @@ export default class Game {
 				}
 
 				// Follow best car camera logic
-				if (this.followBestCar !== 'off' && this.population.length > 0 && !this.playerDrive) {
-					const carToFollow = (this.followBestCar === 'best' || !bestActiveCar) ? bestCar : bestActiveCar
+				const followCar = !!this.followCar || this.followBestCar !== 'off'
+				if (followCar && this.population.length > 0 && !this.playerDrive) {
+					const carToFollow = this.followCar ?? ((this.followBestCar === 'best' || !bestActiveCar) ? bestCar : bestActiveCar)
 					// Center camera on the best car
 					this.cameraOffsetX = -carToFollow.pos.x
 					this.cameraOffsetY = -carToFollow.pos.y
