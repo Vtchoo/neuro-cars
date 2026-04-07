@@ -104,6 +104,10 @@ export function buildGameMenu(game: Game, p: p5) {
     const followBestCarButton = p.createButton(`Follow Best Car: ${game.followBestCar}`)
     followBestCarButton.style(style({
         flex: 1,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        padding: '0 .5rem',
     }))
     followBestCarButton.parent(followButtonsContainer)
     followBestCarButton.mouseClicked(() => {
