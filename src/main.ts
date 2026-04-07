@@ -227,6 +227,12 @@ export default class Game {
 		// carSprite = this.p.loadImage("https://raw.githubusercontent.com/Vtchoo/smartRace2/master/images/car.png")
 		const lightningMcQueenSprite = this.p.loadImage("./images/cars/mcqueen.png")
 		this.otherSprites.set("Lightning McQueen", lightningMcQueenSprite)
+		const theKingSprite = this.p.loadImage("./images/cars/king.png")
+		this.otherSprites.set("The King", theKingSprite)
+		const chickHicksSprite = this.p.loadImage("./images/cars/chickhicks2.png")
+		this.otherSprites.set("Chick Hicks", chickHicksSprite)
+		const ayrtonSennaSprite = this.p.loadImage("./images/cars/senna2.png")
+		this.otherSprites.set("Ayrton Senna", ayrtonSennaSprite)
 	}
 
 	setup() {
@@ -1010,11 +1016,27 @@ export default class Game {
 		// Set phase to running
 		this.setPhase("running");
 	}
+
+	pistonCup() {
+		const cars = [
+			"Lightning McQueen",
+			"The King",
+			"Chick Hicks",
+		]
+
+		this.population.forEach(car => {
+			car.driverName = cars[Math.floor(Math.random() * cars.length)];
+		});
+	}
 }
 
-window.game = new Game()
+const game = new Game()
+window.game = game
 window.letPlayerDrive = function (letPlayerDrive = true) {
 	game.playerDrive = letPlayerDrive
+}
+window.pistonCup = function () {
+	game.pistonCup()
 }
 
 // console.log('Large weights (>1.5):', game.population.reduce((sum, car) => { return sum + [...car.neuralNet.weightMatrices.flat().flat(), ...car.neuralNet.biasMatrices.flat().flat()].filter(w => Math.abs(w) > 1.5).length }, 0));
