@@ -10,8 +10,6 @@ import { buildMainMenu } from './ui/mainMenu';
 import { buildGameMenu } from './ui/gameMenu';
 //---------- SMART RACE 2 ----------
 
-// Important objects
-let carSprite: p5.Image
 
 
 // Defines the current state of the simulator (setStart is the first one)
@@ -77,6 +75,9 @@ export default class Game {
 
 	trackMap: number[][]
 	renderMap: p5.Graphics
+
+	carSprite: p5.Image
+	otherSprites: Map<string, p5.Image> = new Map()
 
 	track = new Track()
 	population: Car[] = []
@@ -220,10 +221,12 @@ export default class Game {
 	// The simulation itself
 
 	preload() {
-		carSprite = this.p.loadImage("./images/car.png")
+		this.carSprite = this.p.loadImage("./images/car.png")
 		this.backgroundImage = this.p.loadImage("./images/grass.jpg")
 		//carSprite = loadImage("car.png")
 		// carSprite = this.p.loadImage("https://raw.githubusercontent.com/Vtchoo/smartRace2/master/images/car.png")
+		const lightningMcQueenSprite = this.p.loadImage("./images/cars/mcqueen.png")
+		this.otherSprites.set("Lightning McQueen", lightningMcQueenSprite)
 	}
 
 	setup() {
@@ -362,7 +365,7 @@ export default class Game {
 				}
 
 				for (const car of this.population) {
-					car.show(this.p, carSprite)
+					car.show(this.p, this.carSprite, this.otherSprites)
 				}
 
 				// Follow best car camera logic
@@ -379,7 +382,7 @@ export default class Game {
 					this.cameraOffsetX = -this.player.pos.x
 					this.cameraOffsetY = -this.player.pos.y
 					this.player.update(this.trackMap, this.resolution, this.track)
-					this.player.show(this.p, carSprite)
+					this.player.show(this.p, this.carSprite, this.otherSprites)
 				}
 
 				// if mouse is over some car, show that car's inputs (only if showInputs is not "all" or "best")

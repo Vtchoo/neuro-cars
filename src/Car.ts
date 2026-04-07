@@ -38,7 +38,10 @@ const randomNames = [
     ["Mick", "Schumacher"], // Son of Michael Schumacher, showing promise in Formula 2 and currently racing in Formula 1 with Haas
     ["Charlie", "Leclerc"], // Young talent in Formula 1, known for his speed and racecraft, currently racing with Ferrari
     ["Max", "Verstappen"], // Current dominant force in Formula 1, known for his aggressive driving style and multiple world championships with Red Bull
-    ["Ruben", "Barrichello"], // Known for his long career in Formula 1, including being a teammate to Michael Schumacher during his dominant years at Ferrari
+    ["Rubens", "Barrichello"], // Known for his long career in Formula 1, including being a teammate to Michael Schumacher during his dominant years at Ferrari
+    ["Gabriel", "Bortoleto"], // Brazilian driver known for his success in junior formulas and currently racing in Formula 1
+    ["Franco", "Colapinto"], // Argentine driver known for his success in junior formulas and currently racing in Formula 1
+    ["Lightning", "McQueen"], // Fictional character from the Cars movie franchise, known for his speed and racing spirit
 ]
 
 const [names, surnames] = [randomNames.map(name => name[0]), randomNames.map(name => name[1])]
@@ -235,14 +238,22 @@ export default class Car {
     }
 
     // Renders car on canvas
-    show(p: p5, carSprite: p5.Image) {
+    show(p: p5, carSprite: p5.Image, extraSprites?: Map<string, p5.Image>) {
+
+        const customSprite = extraSprites && extraSprites.get(this.driverName)
+
         p.push();
         p.translate(this.pos.x, this.pos.y);
         p.rotate(this.direction);
         p.imageMode(p.CENTER)
-        carSprite.resize(40, 20)
-        p.tint(this.paint)
-        p.image(carSprite, 0, 0)
+        if (!customSprite) {
+            carSprite.resize(40, 20)
+            p.tint(this.paint)
+            p.image(carSprite, 0, 0)
+        } else {
+            customSprite.resize(40, 20)
+            p.image(customSprite, 0, 0)
+        }
         p.pop();
     }
 

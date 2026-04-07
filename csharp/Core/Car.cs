@@ -72,7 +72,16 @@ namespace SmartRace.Core
             new string[] { "Dale", "Earnhardt" },
             new string[] { "Colin", "McRae" },
             new string[] { "Travis", "Pastrana" },
-            new string[] { "Ken", "Block" }
+            new string[] { "Ken", "Block" },
+            new string[] { "Richard", "Petty" },
+            new string[] { "Oscar", "Piastri" },
+            new string[] { "Lando", "Norris" },
+            new string[] { "George", "Russell" },
+            new string[] { "Mick", "Schumacher" },
+            new string[] { "Charlie", "Leclerc" },
+            new string[] { "Max", "Verstappen" },
+            new string[] { "Rubens", "Barrichello" },
+            new string[] { "Lightning", "McQueen" },
         };
 
         private static readonly string[] Names = RandomNames.Select(name => name[0]).ToArray();
