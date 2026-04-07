@@ -139,7 +139,7 @@ export function closestPointOnArcSegment(seg: ArcSegment, q: XY): ClosestPointRe
 
     // Forward tangent follows arc direction.
     const radial = normalize(sub(point, center));
-    const tangent = seg.clockwise
+    const tangent = !seg.clockwise
         ? { x: radial.y, y: -radial.x }   // rotate radial by -90°
         : { x: -radial.y, y: radial.x };  // rotate radial by +90°
 

@@ -329,7 +329,7 @@ namespace SmartRace.Utils
 
             // Forward tangent follows arc direction.
             XY radial = Normalize(Sub(point, seg.Center));
-            XY tangent = seg.Clockwise
+            XY tangent = !seg.Clockwise
                 ? new XY(radial.Y, -radial.X)   // rotate radial by -90°
                 : new XY(-radial.Y, radial.X);  // rotate radial by +90°
 
