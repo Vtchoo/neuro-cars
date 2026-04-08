@@ -27,6 +27,7 @@ namespace SmartRace.Core
         Vector Start { get; }
         Vector End { get; }
         double Width { get; }
+        double Length { get; }
     }
 
     public interface IStraightPiece : ITrackPiece
@@ -148,7 +149,7 @@ namespace SmartRace.Core
         public double[] LastRayCastDistances { get; private set; }
 
         private int totalLookAheadPoints = 10;
-        public TrackQueryResult? LastCarPositionInTrack { get; private set; }
+        public TrackQueryResult? LastCarPositionInTrack { get; set; }
         public Vector LastCurrentCarPositionInTrack { get; private set; }
         public Vector[] LastLookAheadPoints { get; private set; }
 
@@ -232,24 +233,74 @@ namespace SmartRace.Core
                 this.Direction += directionChange;
             }
 
-            if (!track.IsInsideTrack(this.Position.X, this.Position.Y))
+            bool isInsideTrack = track.IsInsideTrack(this.Position.X, this.Position.Y);
+            if (!isInsideTrack)
             {
                 this.Speed = 0;
             }
-            else
-            {
-                if (LastCarPositionInTrack is not null)
-                {
-                    var angle = LastCarPositionInTrack.Value.HeadingAngle;
-                    this.NeuralNet.AddFitness(this.Speed > 0 ? this.Speed * Math.Cos(0) : 10 * this.Speed * Math.Cos(0));
-                }
-            }
+
+            var previousCarPositionInTrack = this.LastCarPositionInTrack;
 
             // Update position with consistent time scaling
             this.Position.Add(
                 this.Speed * Math.Cos(this.Direction) * avgDeltaTime * Constants.UNITS_PER_METER,
                 this.Speed * Math.Sin(this.Direction) * avgDeltaTime * Constants.UNITS_PER_METER
             );
+
+            var currentCarPositionInTrack = TrackMath.QueryTrack(track.AnalyticPieces.Select(ConvertToTrackSegment).ToArray(), new XY(Position.X, Position.Y), this.Direction);
+            this.LastCarPositionInTrack = currentCarPositionInTrack;
+
+            var fitnessReward = CalculateFitnessReward(track, previousCarPositionInTrack, currentCarPositionInTrack);
+
+            if (isInsideTrack)
+                this.NeuralNet.AddFitness(fitnessReward);
+        }
+
+
+        private double CalculateFitnessReward(ITrack track, TrackQueryResult? previousCarPositionInTrack, TrackQueryResult? currentCarPositionInTrack)
+        {
+            if (previousCarPositionInTrack is null || currentCarPositionInTrack is null)
+            {
+                return 0;
+            }
+            var previousPosition = previousCarPositionInTrack.Value;
+            var currentPosition = currentCarPositionInTrack.Value;
+
+            // if the index difference is 2 or bigger, let's ignore, also check for lap completion (index goes from last to 0)
+            var indexDifference = previousPosition.SegmentIndex - currentPosition.SegmentIndex;
+            if (Math.Abs(indexDifference) > 1 && !(currentPosition.SegmentIndex == 0 && previousPosition.SegmentIndex == track.AnalyticPieces.Length - 1))
+            {
+                return 0;
+            }
+
+            // there are 3 situations:
+            // 1. the car is in the same track piece, so we reward it based on the distance it advanced in that piece
+            // 2. the car advanced to the next piece, so we reward it based on the distance to the end of the previous piece and the distance from the start of the new piece
+            // 3. the car went backward, so we penalize it based on the distance it moved backward
+            // the car can also complete a lap, in that case the index resets to 0, so we also check for that and reward the car for completing a lap
+
+            if (currentPosition.SegmentIndex == previousPosition.SegmentIndex)
+            {
+                // case 1
+                return currentPosition.DistanceFromTrackPieceStart - previousPosition.DistanceFromTrackPieceStart;
+            }
+            else if (currentPosition.SegmentIndex == 0 && previousPosition.SegmentIndex == track.AnalyticPieces.Length - 1)
+            {
+                // case 3 - lap completed
+                var piece1Length = track.AnalyticPieces[previousPosition.SegmentIndex].Length;
+                return (piece1Length - previousPosition.DistanceFromTrackPieceStart) + currentPosition.DistanceFromTrackPieceStart;
+            }
+            else if (currentPosition.SegmentIndex > previousPosition.SegmentIndex)
+            {
+                // case 2 - advanced to next piece
+                var piece1Length = track.AnalyticPieces[previousPosition.SegmentIndex].Length;
+                return (piece1Length - previousPosition.DistanceFromTrackPieceStart) + currentPosition.DistanceFromTrackPieceStart;
+            }
+            else
+            {
+                // case 4 - went backward
+                return currentPosition.DistanceFromTrackPieceStart - previousPosition.DistanceFromTrackPieceStart;
+            }
         }
 
         // Inputs for driving the car with Ackermann steering and tire slip simulation
@@ -331,6 +382,9 @@ namespace SmartRace.Core
             inputs[0] = ActivationFunctions.SignedLog(Speed);
             inputs[1] = LastDrivingWheelDirection;
 
+            if (LastCarPositionInTrack is null)
+                LastCarPositionInTrack = TrackMath.QueryTrack(track.AnalyticPieces.Select(ConvertToTrackSegment).ToArray(), new XY(Position.X, Position.Y), Direction);
+
             switch (inputFormat)
             {
                 case InputFormat.Raycast:
@@ -407,11 +461,13 @@ namespace SmartRace.Core
             double maxLookaheadDistance = singleFrameDistance * 60 * 6; // lookahead distance is 6 seconds at max speed, which allows the car to see far enough ahead to make informed decisions without overwhelming it with too much information. This also helps to keep the neural network inputs manageable and focused on relevant track information.
 
             // Convert track pieces to segments for querying
-            TrackSegment[] trackSegments = track.AnalyticPieces.Select(ConvertToTrackSegment).ToArray();
-            TrackQueryResult currentCarPositionInTrack = TrackMath.QueryTrack(trackSegments, 
-                new XY(Position.X, Position.Y), Direction);
+            //TrackSegment[] trackSegments = track.AnalyticPieces.Select(ConvertToTrackSegment).ToArray();
+            //TrackQueryResult currentCarPositionInTrack = TrackMath.QueryTrack(trackSegments, 
+            //    new XY(Position.X, Position.Y), Direction);
             
-            LastCarPositionInTrack = currentCarPositionInTrack;
+            //LastCarPositionInTrack = currentCarPositionInTrack;
+            var currentCarPositionInTrack = LastCarPositionInTrack ?? TrackMath.QueryTrack(track.AnalyticPieces.Select(ConvertToTrackSegment).ToArray(), new XY(Position.X, Position.Y), Direction);
+
             LastCurrentCarPositionInTrack = new Vector(currentCarPositionInTrack.Point.X, currentCarPositionInTrack.Point.Y);
 
             List<Vector> lookAheadPoints = new List<Vector>();

@@ -583,6 +583,7 @@ export default class Game {
 					individual.direction = startingDirection
 					individual.acceleration = 0
 					individual.lastDrivingWheelDirection = 0
+					individual.lastCarPositionInTrack = null
 					individual.neuralNet.resetFitness()
 				}
 
@@ -591,6 +592,7 @@ export default class Game {
 					this.player.pos = new Vector(this.start.x, this.start.y)
 					this.player.speed = 0
 					this.player.direction = this.direction
+					this.player.lastCarPositionInTrack = null
 				}
 
 				this.ticks = 0

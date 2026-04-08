@@ -23,6 +23,7 @@ namespace SmartRace.Utils
         public double Distance { get; set; }
         public double DistanceSq { get; set; }
         public double T { get; set; }         // local segment parameter [0,1]
+        public double DistanceFromTrackPieceStart { get; set; }
     }
 
     public struct LineSegment
@@ -117,6 +118,7 @@ namespace SmartRace.Utils
         public double DistanceSq { get; set; }
         public double T { get; set; }
         public int SegmentIndex { get; set; }
+        public double DistanceFromTrackPieceStart { get; set; }
     }
 
     public struct TrackQueryResult
@@ -129,6 +131,7 @@ namespace SmartRace.Utils
         public int SegmentIndex { get; set; }
         public double LateralOffset { get; set; }    // right positive, left negative
         public double HeadingAngle { get; set; }     // signed angle from track tangent to car heading, in [-PI, PI]
+        public double DistanceFromTrackPieceStart { get; set; }
     }
 
     public static class TrackMath
@@ -234,6 +237,7 @@ namespace SmartRace.Utils
                     DistanceSq = (double)DistanceSq(q, a),
                     Distance = Math.Sqrt((double)DistanceSq(q, a)),
                     T = 0,
+                    DistanceFromTrackPieceStart = 0,
                 };
             }
 
@@ -249,6 +253,7 @@ namespace SmartRace.Utils
                 DistanceSq = d2,
                 Distance = Math.Sqrt(d2),
                 T = t,
+                DistanceFromTrackPieceStart = t * Math.Sqrt(abLenSq),
             };
         }
 
@@ -335,6 +340,8 @@ namespace SmartRace.Utils
 
             double d2 = DistanceSq(q, point);
 
+            double distanceFromTrackPieceStart = t * Math.Abs(totalDelta) * radius;
+
             return new ClosestPointResult
             {
                 Point = point,
@@ -342,6 +349,7 @@ namespace SmartRace.Utils
                 DistanceSq = d2,
                 Distance = Math.Sqrt(d2),
                 T = Clamp(t, 0, 1),
+                DistanceFromTrackPieceStart = distanceFromTrackPieceStart,
             };
         }
 
@@ -395,7 +403,8 @@ namespace SmartRace.Utils
                         Distance = r.Distance,
                         DistanceSq = r.DistanceSq,
                         T = r.T,
-                        SegmentIndex = i
+                        SegmentIndex = i,
+                        DistanceFromTrackPieceStart = r.DistanceFromTrackPieceStart,
                     };
                 }
             }
@@ -421,6 +430,7 @@ namespace SmartRace.Utils
                 SegmentIndex = best.Value.SegmentIndex,
                 LateralOffset = lateralOffset,
                 HeadingAngle = headingAngle,
+                DistanceFromTrackPieceStart = best.Value.DistanceFromTrackPieceStart,
             };
         }
     }

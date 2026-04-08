@@ -6,6 +6,7 @@ export type ClosestPointResult = {
     distance: number;
     distanceSq: number;
     t: number;          // local segment parameter [0,1]
+    distanceFromTrackPieceStart: number;
 };
 
 export type TrackSegment = LineSegment | ArcSegment | BezierSegment;
@@ -52,6 +53,7 @@ export function closestPointOnLineSegment(seg: LineSegment, q: XY): ClosestPoint
             distanceSq: d2,
             distance: Math.sqrt(d2),
             t: 0,
+            distanceFromTrackPieceStart: 0,
         };
     }
 
@@ -60,12 +62,15 @@ export function closestPointOnLineSegment(seg: LineSegment, q: XY): ClosestPoint
     const tangent = normalize(ab);
     const d2 = distanceSq(q, point);
 
+    const distanceFromTrackPieceStart = t * Math.sqrt(abLenSq);
+
     return {
         point,
         tangent,
         distanceSq: d2,
         distance: Math.sqrt(d2),
         t,
+        distanceFromTrackPieceStart,
     };
 }
 
@@ -145,12 +150,15 @@ export function closestPointOnArcSegment(seg: ArcSegment, q: XY): ClosestPointRe
 
     const d2 = distanceSq(q, point);
 
+    const distanceFromTrackPieceStart = t * Math.abs(totalDelta) * radius;
+
     return {
         point,
         tangent: normalize(tangent),
         distanceSq: d2,
         distance: Math.sqrt(d2),
         t: clamp(t, 0, 1),
+        distanceFromTrackPieceStart,
     };
 }
 

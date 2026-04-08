@@ -30,9 +30,9 @@ export class ArcTrackPiece implements ITrackPiece {
         const angleStart = Math.atan2(start.y - center.y, start.x - center.x)
         const angleEnd = Math.atan2(end.y - center.y, end.x - center.x)
         let angleDiff = angleEnd - angleStart
-        if (clockwise && angleDiff > 0) {
+        if (!clockwise && angleDiff > 0) {
             angleDiff -= 2 * Math.PI
-        } else if (!clockwise && angleDiff < 0) {
+        } else if (clockwise && angleDiff < 0) {
             angleDiff += 2 * Math.PI
         }
         this.length = Math.abs(angleDiff) * radius
@@ -1471,5 +1471,26 @@ export default class Track {
         const endAngle = Math.atan2(end.y - center.y, end.x - center.x);
         const angleDiff = endAngle - startAngle;
         return angleDiff > 0; // If the angle difference is positive, it's clockwise
+    }
+
+    static getTrackPieceLength(piece: TrackPiece): number {
+        switch (piece.type) {
+            case TrackPieceType.Straight:
+                return length(sub(piece.end, piece.start));
+            case TrackPieceType.Arc:
+                const radius = Math.sqrt((piece.center.x - piece.start.x) ** 2 + (piece.center.y - piece.start.y) ** 2);
+                const startAngle = Math.atan2(piece.start.y - piece.center.y, piece.start.x - piece.center.x);
+                const endAngle = Math.atan2(piece.end.y - piece.center.y, piece.end.x - piece.center.x);
+                let angleDiff = endAngle - startAngle;
+                if (!piece.clockwise && angleDiff > 0) {
+                    angleDiff -= 2 * Math.PI;
+                } else if (piece.clockwise && angleDiff < 0) {
+                    angleDiff += 2 * Math.PI;
+                }
+                return Math.abs(angleDiff) * radius;
+            case TrackPieceType.Spline:
+            default:
+                throw new Error("Length calculation not implemented for this piece type");
+        }
     }
 }

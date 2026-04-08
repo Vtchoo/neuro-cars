@@ -130,7 +130,7 @@ export default class Car {
     private totalLookAheadPoints = 10
     lastCurrentCarPositionInTrack: Vector | null = null
     lastLookAheadPoints: Vector[] | null = null
-    private lastCarPositionInTrack: TrackQueryResult | null = null
+    lastCarPositionInTrack: TrackQueryResult | null = null
 
     fadeColor() {
         const fadedColor = { ...this.color }
@@ -209,20 +209,62 @@ export default class Car {
             this.direction += directionChange
         }
 
-        if (!track.isInsideTrack(this.pos.x, this.pos.y)) {
+        const isInsideTrack = track.isInsideTrack(this.pos.x, this.pos.y)
+        if (!isInsideTrack) {
             this.speed = 0
-        } else {
-            if (this.lastCarPositionInTrack) {
-                const angle = this.lastCarPositionInTrack.headingAngle
-                this.neuralNet.addFitness(this.speed > 0 ? this.speed * Math.cos(0) : 10 * this.speed * Math.cos(0))
-            }
-        }
+        } 
+        
+        const previousCarPositionInTrack = this.lastCarPositionInTrack
 
         // Update position with consistent time scaling
         this.pos.add(
             this.speed * Math.cos(this.direction) * avgDeltaTime * UNITS_PER_METER,
             this.speed * Math.sin(this.direction) * avgDeltaTime * UNITS_PER_METER
         )
+
+        const currentCarPositionInTrack = queryTrack(track.analyticPieces.map(convertToTrackSegment), this.pos, this.direction)
+        this.lastCarPositionInTrack = currentCarPositionInTrack
+
+        if (isInsideTrack) {
+            const fitnessReward = this.calculateFitnessReward(track, previousCarPositionInTrack, currentCarPositionInTrack)
+            this.neuralNet.addFitness(fitnessReward)
+            // this.neuralNet.addFitness(this.speed > 0 ? this.speed : 10 * this.speed)
+        }
+    }
+
+    calculateFitnessReward(track: Track, previousCarPositionInTrack: TrackQueryResult | null, currentCarPositionInTrack: TrackQueryResult): number {
+        if (!previousCarPositionInTrack || !currentCarPositionInTrack) {
+            return 0
+        }
+
+        // if the index difference is 2 or bigger, let's ignore, also check for lap completion (index goes from last to 0)
+        const indexDifference = currentCarPositionInTrack.segmentIndex - previousCarPositionInTrack.segmentIndex
+        if (Math.abs(indexDifference) > 1 && !(currentCarPositionInTrack.segmentIndex === 0 && previousCarPositionInTrack.segmentIndex === track.analyticPieces.length - 1)) {
+            return 0
+        }
+
+
+        // there are 3 situations:
+        // 1. the car is in the same track piece, so we reward it based on the distance it advanced in that piece
+        // 2. the car advanced to the next piece, so we reward it based on the distance to the end of the previous piece and the distance from the start of the new piece
+        // 3. the car went backward, so we penalize it based on the distance it moved backward
+        // the car can also complete a lap, in that case the index resets to 0, so we also check for that and reward the car for completing a lap
+
+        if (currentCarPositionInTrack.segmentIndex === previousCarPositionInTrack.segmentIndex) {
+            // case 1
+            return currentCarPositionInTrack.distanceFromTrackPieceStart - previousCarPositionInTrack.distanceFromTrackPieceStart
+        } else if (currentCarPositionInTrack.segmentIndex === 0 && previousCarPositionInTrack.segmentIndex === track.analyticPieces.length - 1) {
+            // case 3 - lap completed
+            const piece1Length = Track.getTrackPieceLength(track.analyticPieces[previousCarPositionInTrack.segmentIndex])
+            return (piece1Length - previousCarPositionInTrack.distanceFromTrackPieceStart) + currentCarPositionInTrack.distanceFromTrackPieceStart
+        } else if (currentCarPositionInTrack.segmentIndex > previousCarPositionInTrack.segmentIndex) {
+            // case 2 - advanced to next piece
+            const piece1Length = Track.getTrackPieceLength(track.analyticPieces[previousCarPositionInTrack.segmentIndex])
+            return (piece1Length - previousCarPositionInTrack.distanceFromTrackPieceStart) + currentCarPositionInTrack.distanceFromTrackPieceStart
+        } else {
+            // case 4 - went backward
+            return currentCarPositionInTrack.distanceFromTrackPieceStart - previousCarPositionInTrack.distanceFromTrackPieceStart
+        }
     }
 
     showInputs(p: p5) {
@@ -319,6 +361,9 @@ export default class Car {
             this.lastDrivingWheelDirection,
         ]
 
+        if (!this.lastCarPositionInTrack)
+            this.lastCarPositionInTrack = queryTrack(track.analyticPieces.map(convertToTrackSegment), this.pos, this.direction)
+
         switch (this.inputFormat) {
             case "raycast": {
                 const raycastInputs = this.getRaycastInputs(showInputs, p, track)
@@ -374,8 +419,8 @@ export default class Car {
         const singleFrameDistance = this.speed * avgDeltaTime * UNITS_PER_METER
         const maxLookaheadDistance = singleFrameDistance * 60 * 6 // look ahead up to 6 seconds in the future at current speed
 
-        const currentCarPositionInTrack = queryTrack(track.analyticPieces.map(convertToTrackSegment), this.pos, this.direction)
-        this.lastCarPositionInTrack = currentCarPositionInTrack
+        // const currentCarPositionInTrack = queryTrack(track.analyticPieces.map(convertToTrackSegment), this.pos, this.direction)
+        const currentCarPositionInTrack = this.lastCarPositionInTrack || queryTrack(track.analyticPieces.map(convertToTrackSegment), this.pos, this.direction)
         this.lastCurrentCarPositionInTrack = new Vector(currentCarPositionInTrack.point.x, currentCarPositionInTrack.point.y)
 
         const lookAheadPoints: Vector[] = []

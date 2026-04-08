@@ -437,6 +437,7 @@ namespace SmartRace.Core
                 car.Direction = direction;
                 car.Acceleration = 0;
                 car.LastDrivingWheelDirection = 0;
+                car.LastCarPositionInTrack = null;
                 car.NeuralNet.ResetFitness();
             });
         }

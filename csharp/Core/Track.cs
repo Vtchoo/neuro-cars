@@ -14,11 +14,14 @@ namespace SmartRace.Core
         public Vector End { get; set; }
         public double Width { get; set; }
 
+        public double Length { get; private set; }
+
         public StraightPiece(Vector start, Vector end, double width)
         {
             Start = start;
             End = end;
             Width = width;
+            Length = Math.Sqrt((end.X - start.X) * (end.X - start.X) + (end.Y - start.Y) * (end.Y - start.Y));
         }
     }
 
@@ -31,6 +34,8 @@ namespace SmartRace.Core
         public Vector Center { get; set; }
         public bool Clockwise { get; set; }
 
+        public double Length { get; private set; }
+
         public ArcPiece(Vector start, Vector end, Vector center, bool clockwise, double width)
         {
             Start = start;
@@ -38,6 +43,20 @@ namespace SmartRace.Core
             Center = center;
             Clockwise = clockwise;
             Width = width;
+
+            var radius = Math.Sqrt((start.X - center.X) * (start.X - center.X) + (start.Y - center.Y) * (start.Y - center.Y));
+            var angleStart = Math.Atan2(start.Y - center.Y, start.X - center.X);
+            var angleEnd = Math.Atan2(end.Y - center.Y, end.X - center.X);
+            var angleDiff = angleEnd - angleStart;
+            if (!clockwise && angleDiff > 0)
+            {
+                angleDiff -= 2 * Math.PI;
+            }
+            else if (clockwise && angleDiff < 0)
+            {
+                angleDiff += 2 * Math.PI;
+            }
+            Length = Math.Abs(angleDiff) * radius;
         }
     }
 
