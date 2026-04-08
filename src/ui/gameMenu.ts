@@ -101,7 +101,7 @@ export function buildGameMenu(game: Game, p: p5) {
         followBestCarButton.html(`Follow: ${car.driverName}`)
     })
 
-    const followBestCarButton = p.createButton(`Follow Best Car: ${game.followBestCar}`)
+    const followBestCarButton = p.createButton(`Follow best: ${game.followBestCar}`)
     followBestCarButton.style(style({
         flex: 1,
         overflow: 'hidden',
