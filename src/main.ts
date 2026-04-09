@@ -687,7 +687,7 @@ export default class Game {
 	}
 
 	private drawReferenceImage() {
-		if (this.referenceImage && (phase === "setStart" || phase === "rotateStart" || phase === "buildTrack")) {
+		if (this.referenceImage) {// && (phase === "setStart" || phase === "rotateStart" || phase === "buildTrack")) {
 			this.p.push()
 			this.p.tint(255, this.referenceImageOpacity * 255)
 			// Draw reference image centered at origin with proper scale
@@ -947,8 +947,8 @@ export default class Game {
 			case 'R':
 				// Remove reference image (only in setStart, rotateStart, or buildTrack phase)
 				if ((phase === "setStart" || phase === "rotateStart" || phase === "buildTrack") && this.referenceImage) {
-					this.referenceImage = null
-					console.log("Reference image removed")
+					// this.referenceImage = null
+					// console.log("Reference image removed")
 				}
 				break
 		}
