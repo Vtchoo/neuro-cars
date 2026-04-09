@@ -178,7 +178,7 @@ export default class Car {
     }
 
     // Updates car position
-    update(trackMap: number[][], resolution: number, track: Track) {
+    update(trackMap: number[][], resolution: number, track: Track, IsPlayerCar?: boolean) {
         // Apply acceleration
         this.speed += this.acceleration * avgDeltaTime
 
@@ -211,7 +211,12 @@ export default class Car {
 
         const isInsideTrack = track.isInsideTrack(this.pos.x, this.pos.y)
         if (!isInsideTrack) {
-            this.speed = 0
+            if (!IsPlayerCar) {
+                this.speed = 0
+            } else {
+                // For player car, we allow it to go outside the track, but we could also choose to stop it or apply a penalty
+                this.speed *= 0.98 // Apply a penalty to speed when outside the track
+            }
         } 
         
         const previousCarPositionInTrack = this.lastCarPositionInTrack

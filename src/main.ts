@@ -428,7 +428,7 @@ export default class Game {
 					this.getUserInput()
 					this.cameraOffsetX = -this.player.pos.x
 					this.cameraOffsetY = -this.player.pos.y
-					this.player.update(this.trackMap, this.resolution, this.track)
+					this.player.update(this.trackMap, this.resolution, this.track, true)
 					this.player.show(this.p, this.carSprite, this.otherSprites)
 				}
 
@@ -589,10 +589,10 @@ export default class Game {
 
 				if (this.playerDrive) {
 					// Resets player's car
-					this.player.pos = new Vector(this.start.x, this.start.y)
-					this.player.speed = 0
-					this.player.direction = this.direction
-					this.player.lastCarPositionInTrack = null
+					// this.player.pos = new Vector(this.start.x, this.start.y)
+					// this.player.speed = 0
+					// this.player.direction = this.direction
+					// this.player.lastCarPositionInTrack = null
 				}
 
 				this.ticks = 0
