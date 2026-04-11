@@ -66,6 +66,40 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
     console.log(game.track.pieces)
     buttons = []
 
+    let angleIncrement = Math.PI / 16
+    
+    const angleIncrementButtons = p.createElement("div")
+    angleIncrementButtons.style(style({
+        display: 'flex',
+        gap: '.5rem',
+        width: '100%',
+        alignItems: 'center',
+    }))
+    const decreaseAngleIncrementButton = p.createButton("- angle")
+    decreaseAngleIncrementButton.style(style({
+        flex: 1,
+        whiteSpace: 'nowrap',
+    }))
+    decreaseAngleIncrementButton.mouseClicked(() => {
+        angleIncrement = Math.max(angleIncrement - Math.PI / 64, Math.PI / 64)
+        angleIncrementLabel.html(`${(angleIncrement * 180 / Math.PI).toFixed(1)}°`)
+    })
+    const angleIncrementLabel = p.createElement("div")
+    angleIncrementLabel.html(`${(angleIncrement * 180 / Math.PI).toFixed(1)}°`)
+    const increaseAngleIncrementButton = p.createButton("+ angle")
+    increaseAngleIncrementButton.style(style({
+        flex: 1,
+        whiteSpace: 'nowrap',
+    }))
+    increaseAngleIncrementButton.mouseClicked(() => {
+        angleIncrement = Math.min(angleIncrement + Math.PI / 64, Math.PI / 4)
+        angleIncrementLabel.html(`${(angleIncrement * 180 / Math.PI).toFixed(1)}°`)
+    })
+    angleIncrementButtons.child(decreaseAngleIncrementButton)
+    angleIncrementButtons.child(angleIncrementLabel)
+    angleIncrementButtons.child(increaseAngleIncrementButton)
+    editor.child(angleIncrementButtons)
+
     for (let i = 0; i < 5; i++) {
         const row = p.createElement("div")
         row.style(style({
@@ -81,8 +115,8 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
             button.style(style({
                 flex: 1,
             }))
-            button.mousePressed(() => {
-                game.track.appendArc(turnInfo.radius * trackWidth, Math.PI / 16, turnInfo.direction === "right", trackWidth)
+            button.mouseClicked(() => {
+                game.track.appendArc(turnInfo.radius * trackWidth, angleIncrement, turnInfo.direction === "right", trackWidth)
             })
             buttons.push(button)
             row.child(button)
@@ -92,7 +126,7 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
 
     const straightButton = p.createButton("1 unit Straight")
     straightButton.style(wideButtonStyle)
-    straightButton.mousePressed(() => {
+    straightButton.mouseClicked(() => {
         game.track.appendStraight(trackWidth, trackWidth)
     })
     buttons.push(straightButton)
@@ -100,7 +134,7 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
 
     const sqrt2Button = p.createButton("SQRT(2) units straight")
     sqrt2Button.style(wideButtonStyle)
-    sqrt2Button.mousePressed(() => {
+    sqrt2Button.mouseClicked(() => {
         game.track.appendStraight(Math.sqrt(2) * trackWidth, trackWidth)
     })
     buttons.push(sqrt2Button)
@@ -108,7 +142,7 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
 
     const deleteLastButton = p.createButton("Delete Last")
     deleteLastButton.style(wideButtonStyle)
-    deleteLastButton.mousePressed(() => {
+    deleteLastButton.mouseClicked(() => {
         if (game.track.pieces.length > 1) {
             game.track.deleteLastPiece()
         }
@@ -118,7 +152,7 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
 
     const tryFinishTrackButton = p.createButton("Auto complete")
     tryFinishTrackButton.style(wideButtonStyle)
-    tryFinishTrackButton.mousePressed(() => {
+    tryFinishTrackButton.mouseClicked(() => {
         game.track.tryFinishTrack()
     })
     buttons.push(tryFinishTrackButton)
@@ -126,7 +160,7 @@ export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirect
 
     const buildPreviewButton = p.createButton("Build")
     buildPreviewButton.style(wideButtonStyle)
-    buildPreviewButton.mousePressed(() => {
+    buildPreviewButton.mouseClicked(() => {
         game.track.buildPreviewTrackPieces()
     })
     buttons.push(buildPreviewButton)

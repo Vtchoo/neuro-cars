@@ -221,7 +221,8 @@ export default class Track {
 
         // If last piece is also an arc with the same center, direction, and width, we can merge them into one piece for easier calculations
         const lastAnalyticPiece = this.analyticPieces.length > 0 ? this.analyticPieces[this.analyticPieces.length - 1] : null
-        if (lastAnalyticPiece && lastAnalyticPiece.type === TrackPieceType.Arc && lastAnalyticPiece.center.x === center.x && lastAnalyticPiece.center.y === center.y && lastAnalyticPiece.clockwise === clockwise && lastAnalyticPiece.width === width) {
+        const tolerance = 0.001
+        if (lastAnalyticPiece && lastAnalyticPiece.type === TrackPieceType.Arc && Math.abs(lastAnalyticPiece.center.x - center.x) < tolerance && Math.abs(lastAnalyticPiece.center.y - center.y) < tolerance && lastAnalyticPiece.clockwise === clockwise && lastAnalyticPiece.width === width) {
             this.analyticPieces[this.analyticPieces.length - 1] = {
                 type: TrackPieceType.Arc,
                 start: lastAnalyticPiece.start,

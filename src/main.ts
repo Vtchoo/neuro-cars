@@ -8,9 +8,15 @@ import Track, { TrackPieceType } from './Track';
 import { tooltip } from './utils/tooltip';
 import { buildMainMenu } from './ui/mainMenu';
 import { buildGameMenu } from './ui/gameMenu';
+import grassImage from '../images/grass.jpg'
+import carImage from '../images/car.png'
+import mcQueenImage from '../images/cars/mcqueen.png'
+import theKingImage from '../images/cars/king.png'
+import chickHicksImage from '../images/cars/chickhicks2.png'
+import sennaImage from '../images/cars/senna2.png'
+
+
 //---------- SMART RACE 2 ----------
-
-
 
 // Defines the current state of the simulator (setStart is the first one)
 // let phase = "generateTrack"
@@ -261,17 +267,17 @@ export default class Game {
 	// The simulation itself
 
 	preload() {
-		this.carSprite = this.p.loadImage("./images/car.png")
-		this.backgroundImage = this.p.loadImage("./images/grass.jpg")
+		this.carSprite = this.p.loadImage(carImage)
+		this.backgroundImage = this.p.loadImage(grassImage)
 		//carSprite = loadImage("car.png")
 		// carSprite = this.p.loadImage("https://raw.githubusercontent.com/Vtchoo/smartRace2/master/images/car.png")
-		const lightningMcQueenSprite = this.p.loadImage("./images/cars/mcqueen.png")
+		const lightningMcQueenSprite = this.p.loadImage(mcQueenImage)
 		this.otherSprites.set("Lightning McQueen", lightningMcQueenSprite)
-		const theKingSprite = this.p.loadImage("./images/cars/king.png")
+		const theKingSprite = this.p.loadImage(theKingImage)
 		this.otherSprites.set("The King", theKingSprite)
-		const chickHicksSprite = this.p.loadImage("./images/cars/chickhicks2.png")
+		const chickHicksSprite = this.p.loadImage(chickHicksImage)
 		this.otherSprites.set("Chick Hicks", chickHicksSprite)
-		const ayrtonSennaSprite = this.p.loadImage("./images/cars/senna2.png")
+		const ayrtonSennaSprite = this.p.loadImage(sennaImage)
 		this.otherSprites.set("Ayrton Senna", ayrtonSennaSprite)
 	}
 
