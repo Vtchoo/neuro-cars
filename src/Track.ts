@@ -487,6 +487,50 @@ export default class Track {
             }
         }
 
+        // draw finish line
+        if (this.pieces.length > 0) {
+            const firstPiece = this.pieces[0]
+            const finishLineLength = firstPiece.width / 2
+            const finishLineDirection = Track.getTrackPieceStartDirection(firstPiece)
+            const start = firstPiece.start
+            p.push()
+            p.strokeWeight(10)
+            p.stroke("black")
+            p.line(
+                (start.x - Math.cos(finishLineDirection) * 5) + finishLineLength * Math.cos(finishLineDirection + Math.PI / 2),
+                (start.y - Math.sin(finishLineDirection) * 5) + finishLineLength * Math.sin(finishLineDirection + Math.PI / 2),
+                (start.x - Math.cos(finishLineDirection) * 5) + finishLineLength * Math.cos(finishLineDirection - Math.PI / 2),
+                (start.y - Math.sin(finishLineDirection) * 5) + finishLineLength * Math.sin(finishLineDirection - Math.PI / 2)
+            )
+            p.drawingContext.setLineDash([10, 10])
+            p.stroke("white")
+            p.line(
+                (start.x - Math.cos(finishLineDirection) * 5) + finishLineLength * Math.cos(finishLineDirection + Math.PI / 2),
+                (start.y - Math.sin(finishLineDirection) * 5) + finishLineLength * Math.sin(finishLineDirection + Math.PI / 2),
+                (start.x - Math.cos(finishLineDirection) * 5) + finishLineLength * Math.cos(finishLineDirection - Math.PI / 2),
+                (start.y - Math.sin(finishLineDirection) * 5) + finishLineLength * Math.sin(finishLineDirection - Math.PI / 2)
+            )
+            p.drawingContext.setLineDash([])
+            // draw another line 10px further
+            p.stroke("white")
+            p.line(
+                (start.x + Math.cos(finishLineDirection) * 5) + finishLineLength * Math.cos(finishLineDirection + Math.PI / 2),
+                (start.y + Math.sin(finishLineDirection) * 5) + finishLineLength * Math.sin(finishLineDirection + Math.PI / 2),
+                (start.x + Math.cos(finishLineDirection) * 5) + finishLineLength * Math.cos(finishLineDirection - Math.PI / 2),
+                (start.y + Math.sin(finishLineDirection) * 5) + finishLineLength * Math.sin(finishLineDirection - Math.PI / 2)
+            )
+            p.drawingContext.setLineDash([10, 10])
+            p.stroke("black")
+            p.line(
+                (start.x + Math.cos(finishLineDirection) * 5) + finishLineLength * Math.cos(finishLineDirection + Math.PI / 2),
+                (start.y + Math.sin(finishLineDirection) * 5) + finishLineLength * Math.sin(finishLineDirection + Math.PI / 2),
+                (start.x + Math.cos(finishLineDirection) * 5) + finishLineLength * Math.cos(finishLineDirection - Math.PI / 2),
+                (start.y + Math.sin(finishLineDirection) * 5) + finishLineLength * Math.sin(finishLineDirection - Math.PI / 2)
+            )
+            p.drawingContext.setLineDash([])
+            p.pop()
+        }
+
         for (let piece of this.previewTrackPieces) {
             p.strokeWeight(piece.width)
             p.stroke("rgba(0, 0, 255, 0.5)")
