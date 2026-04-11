@@ -1,5 +1,6 @@
 csharp-project/
 node_modules/
+dist/
 
 .env
 
