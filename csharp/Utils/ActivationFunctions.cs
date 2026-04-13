@@ -10,6 +10,7 @@ namespace SmartRace.Utils
     internal static class ActivationFunctions
     {
         public static double Identity(double value) => value;
+        public static double IdentityCapped(double value) => Math.Max(-1, Math.Min(1, value));
 
         public static double Binary(double value) => value > 0 ? 1 : 0;
 

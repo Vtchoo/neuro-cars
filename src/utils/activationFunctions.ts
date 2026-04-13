@@ -2,6 +2,10 @@ export function identity(value: number) {
     return value;
 }
 
+export function identityCapped(value: number) {
+    return Math.max(-1, Math.min(1, value));
+}
+
 export function binary(value: number) {
     return value > 0 ? 1 : 0;
 }

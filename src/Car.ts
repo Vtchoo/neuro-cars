@@ -48,11 +48,11 @@ const [names, surnames] = [randomNames.map(name => name[0]), randomNames.map(nam
 
 // Neural net settings
 const nnLayers = 1
-const nnNeurons = 10
+const nnNeurons = 20
 const nnOutputs = 2
 const nnRange = 1.5
 const nnMutationRate = 0.01
-const nnActivation: ActivationFunction = "softsign"
+const nnActivation: ActivationFunction = "relu"
 
 export type InputFormat = "raycast" | "lookahead"
 

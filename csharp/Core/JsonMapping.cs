@@ -168,6 +168,7 @@ namespace SmartRace.Core
                 "relu" => ActivationFunction.ReLU,
                 "tanh" => ActivationFunction.Tanh,
                 "sigmoid" => ActivationFunction.Sigmoid,
+                "identitycapped" => ActivationFunction.IdentityCapped,
                 _ => ActivationFunction.Identity
             };
         }
@@ -182,6 +183,7 @@ namespace SmartRace.Core
                 ActivationFunction.ReLU => "relu",  
                 ActivationFunction.Tanh => "tanh",
                 ActivationFunction.Sigmoid => "sigmoid",
+                ActivationFunction.IdentityCapped => "identityCapped",
                 _ => "identity"
             };
         }

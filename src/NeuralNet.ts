@@ -1,7 +1,7 @@
 // Matrix-based Neural Network Implementation for Smart Race
 // TypeScript class implementation with efficient matrix operations
 
-export type ActivationFunction = "identity" | "binary" | "softsign" | "relu" | "tanh" | "sigmoid";
+export type ActivationFunction = "identity" | "identityCapped" | "binary" | "softsign" | "relu" | "tanh" | "sigmoid";
 
 export interface NeuralNetConfig {
     layers: number;
@@ -20,6 +20,7 @@ export class NeuralNet {
     public inputs: number;
     public outputs: number;
     public activation: ActivationFunction;
+    public outputActivation: ActivationFunction = "softsign";
     public mutationRate: number;
     public fitness: number = 0;
 
@@ -131,7 +132,8 @@ export class NeuralNet {
             // Matrix multiplication: weights * input + bias
             currentLayer = this.matrixMultiply(this.weightMatrices[i], currentLayer);
             currentLayer = this.matrixAdd(currentLayer, this.biasMatrices[i]);
-            currentLayer = this.applyActivation(currentLayer, this.activation);
+            const activationFunction = (i === this.weightMatrices.length - 1) ? this.outputActivation : this.activation;
+            currentLayer = this.applyActivation(currentLayer, activationFunction);
         }
 
         // Convert result back to flat array format
@@ -359,6 +361,8 @@ export function activate(value: number, activation: ActivationFunction): number 
             return Math.tanh(value);
         case "sigmoid":
             return 1 / (1 + Math.exp(-value));
+        case "identityCapped":
+            return Math.max(-1, Math.min(1, value));
         default:
             console.log("No valid activation function selected");
             return value;

@@ -48,6 +48,7 @@ namespace SmartRace.Core
         public int Generation { get; private set; } = 0;
         public int Ticks { get; private set; } = 0;
         public int MaxTicks { get; private set; } = 1000;
+        public int CapTicks { get; private set; } = 15000;
         
         // Track and population
         private ITrack track;
@@ -56,8 +57,8 @@ namespace SmartRace.Core
         private double direction;
 
         // Training progress tracking
-        public List<double> MaxFitness { get; private set; } = new List<double> { 0 };
-        public List<double> AvgFitness { get; private set; } = new List<double> { 0 };
+        public List<double> MaxFitness { get; private set; } = [0];
+        public List<double> AvgFitness { get; private set; } = [0];
 
         // Start point cycling for robust training
         public CycleStartPoint CycleStartPoint 
@@ -245,7 +246,7 @@ namespace SmartRace.Core
             Array.Sort(population, (a, b) => b.NeuralNet.Fitness.CompareTo(a.NeuralNet.Fitness));
 
             // Check if best car is still moving - extend time if needed
-            if (population[0].Speed > 0.01)
+            if (population[0].Speed > 0.01 && Ticks < CapTicks)
             {
                 MaxTicks += 100;
                 StatusUpdated?.Invoke("Best car is still moving, next generation will have more time to run");

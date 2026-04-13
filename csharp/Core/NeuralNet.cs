@@ -1,3 +1,4 @@
+using SmartRace.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,6 +8,7 @@ namespace SmartRace.Core
     public enum ActivationFunction
     {
         Identity,
+        IdentityCapped,
         Binary,
         Softsign,
         ReLU,
@@ -54,6 +56,7 @@ namespace SmartRace.Core
         public int Inputs { get; private set; }
         public int Outputs { get; private set; }
         public ActivationFunction Activation { get; private set; }
+        public ActivationFunction OutputActivation { get; private set; } = ActivationFunction.Softsign;
         public double MutationRate { get; private set; }
         public double Fitness { get; set; } = 0;
 
@@ -187,7 +190,8 @@ namespace SmartRace.Core
                 // Matrix multiplication: weights * input + bias
                 currentLayer = MatrixMultiply(weightMatrices[i], currentLayer);
                 currentLayer = MatrixAdd(currentLayer, biasMatrices[i]);
-                currentLayer = ApplyActivation(currentLayer, Activation);
+                var activationFunction = (i == weightMatrices.Length - 1) ? OutputActivation : Activation;
+                currentLayer = ApplyActivation(currentLayer, activationFunction);
             }
 
             // Convert result back to flat array format
@@ -452,6 +456,8 @@ namespace SmartRace.Core
                     return Math.Tanh(value);
                 case ActivationFunction.Sigmoid:
                     return 1.0 / (1.0 + Math.Exp(-value));
+                case ActivationFunction.IdentityCapped:
+                    return ActivationFunctions.IdentityCapped(value);
                 default:
                     Console.WriteLine("No valid activation function selected");
                     return value;
