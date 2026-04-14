@@ -20,7 +20,7 @@ export class NeuralNet {
     public inputs: number;
     public outputs: number;
     public activation: ActivationFunction;
-    public outputActivation: ActivationFunction = "softsign";
+    public outputActivation: ActivationFunction = "tanh";
     public mutationRate: number;
     public fitness: number = 0;
 

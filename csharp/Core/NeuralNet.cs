@@ -56,7 +56,7 @@ namespace SmartRace.Core
         public int Inputs { get; private set; }
         public int Outputs { get; private set; }
         public ActivationFunction Activation { get; private set; }
-        public ActivationFunction OutputActivation { get; private set; } = ActivationFunction.Softsign;
+        public ActivationFunction OutputActivation { get; private set; } = ActivationFunction.Tanh;
         public double MutationRate { get; private set; }
         public double Fitness { get; set; } = 0;
 
