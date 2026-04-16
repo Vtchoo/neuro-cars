@@ -1,6 +1,6 @@
 
 import p5 from 'p5';
-import { createTrackBuilder, setTrack } from "./ui/trackBuilder"
+import { createTrackBuilder, setTrack, drawTrackSelection, handleTrackBuilderKeyPress } from "./ui/trackBuilder"
 import { newVector, Vector } from './Vector';
 import Car from './Car';
 import { NeuralNet } from './NeuralNet';
@@ -351,6 +351,7 @@ export default class Game {
 			case "buildTrack": {
 
 				this.track.draw(this.p)
+				drawTrackSelection(this.p, this.track)
 				// this.p.image(this.renderTrack, 0, 0)
 				if (this.showGrid == true) { this.p.image(this.grid, 0, 0) }
 				break
@@ -957,6 +958,11 @@ export default class Game {
 					// console.log("Reference image removed")
 				}
 				break
+		}
+
+		// Track builder specific controls
+		if (phase === "buildTrack") {
+			handleTrackBuilderKeyPress(this.p.key, this.track)
 		}
 	}
 

@@ -209,7 +209,19 @@ export default class Track {
         // }
     }
 
-    addArc(start: Vector, center: Vector, end: Vector, clockwise: boolean, width: number) {
+    addArc(start: Vector, center: Vector, end: Vector, clockwise: boolean, width: number, preview: boolean = false) {
+        if (preview) {
+            this.previewTrackPieces = [{
+                type: TrackPieceType.Arc,
+                start,
+                center,
+                end,
+                clockwise,
+                width,
+            }]
+            return
+        }
+
         this.pieces.push({
             type: TrackPieceType.Arc,
             start,
@@ -328,7 +340,7 @@ export default class Track {
         this.addStraight(lastPieceEnd, newEnd, width, preview)
     }
 
-    appendArc(radius: number, angle: number, clockwise: boolean, width: number) {
+    appendArc(radius: number, angle: number, clockwise: boolean, width: number, preview: boolean = false) {
         const lastPieceEnd = this.getLastPieceEnd()
         if (!lastPieceEnd) {
             throw new Error("Cannot append arc piece to an empty track. Please add a starting piece first.")
@@ -342,7 +354,7 @@ export default class Track {
         const center = new Vector(lastPieceEnd.x - radius * Math.cos(startAngle), lastPieceEnd.y - radius * Math.sin(startAngle))
         const endAngle = startAngle + (clockwise ? angle : -angle)
         const end = new Vector(center.x + radius * Math.cos(endAngle), center.y + radius * Math.sin(endAngle))
-        this.addArc(lastPieceEnd, center, end, clockwise, width)
+        this.addArc(lastPieceEnd, center, end, clockwise, width, preview)
     }
 
     appendSpline(control1: Vector, control2: Vector, end: Vector, width: number) {
