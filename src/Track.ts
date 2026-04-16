@@ -1363,18 +1363,28 @@ export default class Track {
         const endPoint = lastPiece.end
         const endDirection = Track.getTrackPieceEndDirection(lastPiece)
 
+        const trackPieces = Track.connectPoints(startingPoint, startingDirection, endPoint, endDirection, firstPiece.width)
+        if (trackPieces) {
+            this.setPreviewTrackPieces(trackPieces)
+            return
+        }
+        // if all attempts failed
+        alert("Failed to finish the track (at least nicely).")
+    }
+
+    static connectPoints(startingPoint: XY, startingDirection: number, endPoint: XY, endDirection: number, width: number) {
+
         const angleDiff = Math.abs(startingDirection - endDirection)
         const candidateTrackDirection = Math.atan2(startingPoint.y - endPoint.y, startingPoint.x - endPoint.x)
         const candidateAngleDiff = Math.abs(candidateTrackDirection - endDirection)
         // the directions must be the same for a straight piece to connect them
         if (angleDiff < 0.01 && candidateAngleDiff < 0.01) {
-            this.setPreviewTrackPieces([{
+            return [{
                 type: TrackPieceType.Straight,
                 start: endPoint,
                 end: startingPoint,
-                width: firstPiece.width
-            }])
-            return
+                width: width
+            }]
         }
 
         // if that doesn't work, try connecting with a single arc piece
@@ -1386,15 +1396,14 @@ export default class Track {
 
             if (Math.abs(radius1 - radius2) < 0.01) {
                 const clockwise = Track.isArcClockwise(endPoint, endDirection, startingPoint, startingDirection)
-                this.setPreviewTrackPieces([{
+                return [{
                     type: TrackPieceType.Arc,
                     start: endPoint,
                     center,
                     end: startingPoint,
                     clockwise,
-                    width: firstPiece.width
-                }])
-                return
+                    width: width
+                }]
             }
         }
 
@@ -1437,23 +1446,22 @@ export default class Track {
                         arcCenter
                     ).point
 
-                    this.setPreviewTrackPieces([
+                    return [
                         {
                             type: TrackPieceType.Arc,
                             start: endPoint,
                             center: arcCenter,
                             end: arcEnd,
                             clockwise: turnIsClockwise,
-                            width: firstPiece.width,
+                            width: width,
                         },
                         {
                             type: TrackPieceType.Straight,
                             start: arcEnd,
                             end: startingPoint,
-                            width: firstPiece.width,
+                            width: width,
                         }
-                    ])
-                    return
+                    ]
                 }
             } else {
                 // if the radius is smaller, we can try connecting with a straight piece followed by an arc piece
@@ -1480,12 +1488,12 @@ export default class Track {
                         arcCenter
                     ).point
 
-                    this.setPreviewTrackPieces([
+                    return [
                         {
                             type: TrackPieceType.Straight,
                             start: endPoint,
                             end: arcStart,
-                            width: firstPiece.width,
+                            width: width,
                         },
                         {
                             type: TrackPieceType.Arc,
@@ -1493,16 +1501,14 @@ export default class Track {
                             center: arcCenter,
                             end: startingPoint,
                             clockwise: turnIsClockwise,
-                            width: firstPiece.width,
+                            width: width,
                         }
-                    ])
-                    return
+                    ]
                 }
             }
         }
 
-        // if all attempts failed
-        alert("Failed to finish the track (at least nicely).")
+        // TODO: connect by 2 arcs of the same radius
     }
 
     static isArcClockwise(start: XY, startDir: number, end: XY, endDir: number): boolean {
