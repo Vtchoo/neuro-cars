@@ -3,8 +3,9 @@ import p5 from 'p5';
 import { createTrackBuilder, setTrack, drawTrackSelection, handleTrackBuilderKeyPress } from "./ui/trackBuilder"
 import { newVector, Vector } from './Vector';
 import Car from './Car';
-import { NeuralNet } from './NeuralNet';
+import { NeuralNet, NeuralNetTrace } from './NeuralNet';
 import Track, { TrackPieceType } from './Track';
+import { drawNeuralNet } from './ui/neuralNetViz';
 import { tooltip } from './utils/tooltip';
 import { buildMainMenu } from './ui/mainMenu';
 import { buildGameMenu } from './ui/gameMenu';
@@ -112,6 +113,8 @@ export default class Game {
 	private showMap = false // Shows collision map during runtime
 	public showInputs: "none" | "all" | "best" | "bestActive" = "none" // Shows the sensor inputs of the cars during runtime. "all" shows for all cars, "best" only for the best car, and "none" for none.
 	public drawGraphs = false
+	public showNeuralNet = false
+	private lastNNTrace: NeuralNetTrace | null = null
 	private resolution = 3 // Get 1 out of [resolution] pixels to create the track collision map
 
 	setShowGrid(show: boolean) {
@@ -185,6 +188,23 @@ export default class Game {
 
 	toggleDrawGraphs() {
 		this.drawGraphs = !this.drawGraphs
+	}
+
+	toggleShowNeuralNet() {
+		this.showNeuralNet = !this.showNeuralNet
+		return this.showNeuralNet
+	}
+
+	/** Returns the car currently being followed by the camera, or null. */
+	getFollowedCar(): Car | null {
+		if (this.followCar) return this.followCar
+		if (this.followBestCar === 'off' || this.population.length === 0) return null
+		const bestCar = this.population.reduce((b, c) => c.neuralNet.fitness > b.neuralNet.fitness ? c : b, this.population[0])
+		const activeCars = this.population.filter(c => c.speed > 0.001)
+		const bestActiveCar = activeCars.length
+			? activeCars.reduce((b, c) => c.neuralNet.fitness > b.neuralNet.fitness ? c : b, activeCars[0])
+			: null
+		return (this.followBestCar === 'best' || !bestActiveCar) ? bestCar : bestActiveCar
 	}
 
 	ticks = 0
@@ -396,6 +416,17 @@ export default class Game {
 					// }
 					individual.update(this.trackMap, this.resolution, this.track)
 				})
+
+				// Compute neural-net trace for the followed car (used by the visualizer)
+				if (this.showNeuralNet) {
+					const followed = this.getFollowedCar()
+					if (followed) {
+						const tracedInputs = followed.getInputs(this.trackMap, false, this.p, this.resolution, this.track)
+						this.lastNNTrace = followed.neuralNet.forwardWithTrace(tracedInputs)
+					} else {
+						this.lastNNTrace = null
+					}
+				}
 
 				const bestCar = this.population.reduce((best, car) => car.neuralNet.fitness > best.neuralNet.fitness ? car : best, this.population[0])
 				const activeCars = this.population
@@ -665,6 +696,15 @@ export default class Game {
 		this.p.text("Ctrl+S - Save game", 20, 110)
 		this.p.text("Ctrl+L - Load game", 20, 125)
 		this.p.text(`Generation: ${this.generation}`, 20, 140)
+
+		// Neural-net visualization (screen-space)
+		if (this.showNeuralNet && phase === 'running') {
+			const followed = this.getFollowedCar()
+			const net = followed?.neuralNet
+			if (net) {
+				drawNeuralNet(this.p, net, this.lastNNTrace)
+			}
+		}
 
 		if (this.drawGraphs) {
 			if (maxFitness.length > 1) {

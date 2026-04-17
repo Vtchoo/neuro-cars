@@ -3,6 +3,13 @@
 
 export type ActivationFunction = "identity" | "identityCapped" | "binary" | "softsign" | "relu" | "tanh" | "sigmoid";
 
+export interface NeuralNetTrace {
+    /** Post-activation values for every layer: [0]=inputs, [1..layers]=hidden, [last]=outputs */
+    layerActivations: number[][]
+    /** For each weight-matrix transition t: [targetNeuron][sourceNeuron] = weight * sourceActivation */
+    weightedContributions: number[][][]
+}
+
 export interface NeuralNetConfig {
     layers: number;
     neurons: number;
@@ -143,6 +150,40 @@ export class NeuralNet {
         }
 
         return outputArray;
+    }
+
+    /**
+     * Forward pass that also records per-neuron activations and per-connection weighted contributions.
+     * Used for the neural-net visualizer.
+     */
+    public forwardWithTrace(input: number[]): NeuralNetTrace {
+        let currentLayer: number[][] = input.map(v => [v])
+        const layerActivations: number[][] = [input.slice()]
+        const weightedContributions: number[][][] = []
+
+        for (let i = 0; i < this.weightMatrices.length; i++) {
+            const W = this.weightMatrices[i]
+            const src = currentLayer
+
+            // weight[j][k] * src[k]  — contribution of source neuron k to target neuron j
+            const contributions: number[][] = []
+            for (let j = 0; j < W.length; j++) {
+                contributions[j] = []
+                for (let k = 0; k < W[j].length; k++) {
+                    contributions[j][k] = W[j][k] * src[k][0]
+                }
+            }
+            weightedContributions.push(contributions)
+
+            currentLayer = this.matrixMultiply(W, currentLayer)
+            currentLayer = this.matrixAdd(currentLayer, this.biasMatrices[i])
+            const activationFn = (i === this.weightMatrices.length - 1) ? this.outputActivation : this.activation
+            currentLayer = this.applyActivation(currentLayer, activationFn)
+
+            layerActivations.push(currentLayer.map(row => row[0]))
+        }
+
+        return { layerActivations, weightedContributions }
     }
 
     // Fitness management

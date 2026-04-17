@@ -83,6 +83,14 @@ export function buildGameMenu(game: Game, p: p5) {
         showInputsButton.html(`Show Inputs: ${currentMode}`)
     })
 
+    const showNeuralNetButton = p.createButton(`Show Neural Net: ${game.showNeuralNet ? 'On' : 'Off'}`)
+    showNeuralNetButton.parent(menu)
+    showNeuralNetButton.attribute("title", "Show a live visualization of the followed car's neural network on the left side of the screen.")
+    showNeuralNetButton.mouseClicked(() => {
+        const isOn = game.toggleShowNeuralNet()
+        showNeuralNetButton.html(`Show Neural Net: ${isOn ? 'On' : 'Off'}`)
+    })
+
     const followButtonsContainer = p.createElement("div")
     followButtonsContainer.style(style({
         display: 'flex',
