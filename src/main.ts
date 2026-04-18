@@ -681,21 +681,17 @@ export default class Game {
 
 	private drawUI() {
 		// Controls help panel
-		this.p.fill(0, 0, 0, 150)
-		this.p.noStroke()
-		this.p.rect(10, 10, 250, 140)
-
-		this.p.fill(255)
-		this.p.textAlign(this.p.LEFT)
-		this.p.textSize(12)
-		this.p.text("Controls:", 20, 30)
-		this.p.text("F - Toggle follow best car", 20, 50)
-		this.p.text("S - Toggle sensor inputs", 20, 65)
-		this.p.text("M - Toggle track map", 20, 80)
-		this.p.text("G - Toggle graphs", 20, 95)
-		this.p.text("Ctrl+S - Save game", 20, 110)
-		this.p.text("Ctrl+L - Load game", 20, 125)
-		this.p.text(`Generation: ${this.generation}`, 20, 140)
+		tooltip(
+			this.p,
+			[
+				"Controls:",
+				"S - Save game",
+				"L - Load game",
+				`Generation: ${this.generation}`,
+			],
+			20,
+			30,
+		)
 
 		// Neural-net visualization (screen-space)
 		if (this.showNeuralNet && phase === 'running') {
@@ -941,38 +937,13 @@ export default class Game {
 
 	keyPressed() {
 		switch (this.p.key) {
-			case 'f':
-			case 'F':
-				// Toggle follow best car
-				const nextMode = this.toggleFollowBestCar()
-				console.log(`Follow best car: ${nextMode}`)
-				break
 			case 's':
 			case 'S':
-				// Check if Ctrl is held for save, otherwise toggle show inputs
-				if (this.p.keyIsDown(this.p.CONTROL)) {
-					this.saveGame();
-				} else {
-					// this.showInputs = this.toggleShowInputs()
-					// console.log(`Show inputs: ${this.showInputs}`)
-				}
+				this.saveGame();
 				break
 			case 'l':
 			case 'L':
-				// Load game (Ctrl+L)
-				// if (this.p.keyIsDown(this.p.CONTROL)) {
 				this.loadGame();
-				// }
-				break
-			case 'm':
-			case 'M':
-				// Toggle show map
-				this.showMap = !this.showMap
-				break
-			case 'g':
-			case 'G':
-				// Toggle show graphs
-				this.drawGraphs = !this.drawGraphs
 				break
 			case '=':
 			case '+':
