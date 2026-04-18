@@ -144,6 +144,7 @@ namespace SmartRace.Core
         public double MaxPower = 425000; // W - Ferrari 458 Italia (570 hp)
         public double FrontalArea = 2.3; // m² - Ferrari 458 Italia frontal area
         public double DragCoefficient = 0.35; // Cd - Ferrari 458 Italia
+        public double RollingResistanceCoeff = 0.011; // Crr - Ferrari 458 Italia (performance tires)
 
         // The brain inside the car
         public NeuralNet NeuralNet { get; set; }
@@ -208,7 +209,7 @@ namespace SmartRace.Core
             // Apply drag and rolling resistance for realistic physics
             var speedMPS = this.Speed; // m/s
             var dragForce = 0.5 * 1.225 * this.DragCoefficient * this.FrontalArea * speedMPS * speedMPS; // Air resistance (ρ * Cd * A * v²/2)
-            var rollingForce = 0.015 * this.Mass * 9.81; // Rolling resistance
+            var rollingForce = this.RollingResistanceCoeff * this.Mass * 9.81; // Rolling resistance
             var totalResistanceForce = dragForce + rollingForce;
 
             // Convert resistance back to simulation units and apply

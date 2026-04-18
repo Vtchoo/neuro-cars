@@ -13,7 +13,8 @@ namespace SmartRace.Core
         Softsign,
         ReLU,
         Tanh,
-        Sigmoid
+        Sigmoid,
+        LeakyRelu,
     }
 
     public struct NeuralNetConfig
@@ -458,6 +459,8 @@ namespace SmartRace.Core
                     return 1.0 / (1.0 + Math.Exp(-value));
                 case ActivationFunction.IdentityCapped:
                     return ActivationFunctions.IdentityCapped(value);
+                case ActivationFunction.LeakyRelu:
+                    return ActivationFunctions.LeakyRelu(value);
                 default:
                     Console.WriteLine("No valid activation function selected");
                     return value;

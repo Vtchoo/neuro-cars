@@ -169,6 +169,7 @@ namespace SmartRace.Core
                 "tanh" => ActivationFunction.Tanh,
                 "sigmoid" => ActivationFunction.Sigmoid,
                 "identitycapped" => ActivationFunction.IdentityCapped,
+                "leakyrelu" => ActivationFunction.LeakyRelu,
                 _ => ActivationFunction.Identity
             };
         }
@@ -184,6 +185,7 @@ namespace SmartRace.Core
                 ActivationFunction.Tanh => "tanh",
                 ActivationFunction.Sigmoid => "sigmoid",
                 ActivationFunction.IdentityCapped => "identityCapped",
+                ActivationFunction.LeakyRelu => "leakyRelu",
                 _ => "identity"
             };
         }

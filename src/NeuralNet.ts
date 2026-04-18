@@ -1,7 +1,9 @@
 // Matrix-based Neural Network Implementation for Smart Race
 // TypeScript class implementation with efficient matrix operations
 
-export type ActivationFunction = "identity" | "identityCapped" | "binary" | "softsign" | "relu" | "tanh" | "sigmoid";
+import { binary, identity, identityCapped, leakyRelu, relu, sigmoid, softsign, tanh } from "./utils/activationFunctions";
+
+export type ActivationFunction = "identity" | "identityCapped" | "binary" | "softsign" | "relu" | "leakyRelu" | "tanh" | "sigmoid";
 
 export interface NeuralNetTrace {
     /** Post-activation values for every layer: [0]=inputs, [1..layers]=hidden, [last]=outputs */
@@ -391,19 +393,21 @@ export class NeuralNet {
 export function activate(value: number, activation: ActivationFunction): number {
     switch (activation) {
         case "identity":
-            return value;
+            return identity(value);
         case "binary":
-            return value > 0 ? 1 : 0;
+            return binary(value);
         case "softsign":
-            return value / (1 + Math.abs(value));
+            return softsign(value);
         case "relu":
-            return value < 0 ? 0 : value;
+            return relu(value);
         case "tanh":
-            return Math.tanh(value);
+            return tanh(value);
         case "sigmoid":
-            return 1 / (1 + Math.exp(-value));
+            return sigmoid(value);
         case "identityCapped":
-            return Math.max(-1, Math.min(1, value));
+            return identityCapped(value);
+        case "leakyRelu":
+            return leakyRelu(value);
         default:
             console.log("No valid activation function selected");
             return value;

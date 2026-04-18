@@ -31,3 +31,8 @@ export function signedLog(value: number) {
     const sign = Math.sign(value);
     return sign * Math.log10(1 + Math.abs(value));
 }
+
+export function leakyRelu(value: number) {
+    const alpha = 0.01;
+    return value >= 0 ? value : alpha * value;
+}

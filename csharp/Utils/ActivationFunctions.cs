@@ -28,5 +28,11 @@ namespace SmartRace.Utils
             double sign = Math.Sign(value);
             return sign * Math.Log10(1 + Math.Abs(value));
         }
+
+        public static double LeakyRelu(double value)
+        {
+            var alpha = 0.01;
+            return value < 0 ? alpha * value : value;
+        }
     }
 }

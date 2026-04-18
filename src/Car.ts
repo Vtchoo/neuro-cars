@@ -52,7 +52,7 @@ const nnNeurons = 20
 const nnOutputs = 2
 const nnRange = 1.5
 const nnMutationRate = 0.01
-const nnActivation: ActivationFunction = "relu"
+const nnActivation: ActivationFunction = "leakyRelu"
 
 export type InputFormat = "raycast" | "lookahead"
 
@@ -115,6 +115,7 @@ export default class Car {
     maxPower = 425000 // W - Ferrari 458 Italia (570 hp)
     frontalArea = 2.3 // m² - Ferrari 458 Italia frontal area
     dragCoefficient = 0.35 // Cd - Ferrari 458 Italia
+    rollingResistanceCoeff = 0.011 // Crr - Ferrari 458 Italia (performance tires)
 
     /**
      * The force applied to the driving wheel from the input.
@@ -188,7 +189,7 @@ export default class Car {
         // Apply drag and rolling resistance for realistic physics
         const speedMPS = this.speed // Convert to m/s
         const dragForce = 0.5 * 1.225 * this.dragCoefficient * this.frontalArea * speedMPS * speedMPS // Air resistance (ρ * Cd * A * v²/2)
-        const rollingForce = 0.015 * this.mass * 9.81 // Rolling resistance
+        const rollingForce = this.rollingResistanceCoeff * this.mass * 9.81 // Rolling resistance
         const totalResistanceForce = dragForce + rollingForce
 
         // Convert resistance back to simulation units and apply
