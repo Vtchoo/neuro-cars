@@ -91,6 +91,14 @@ export function buildGameMenu(game: Game, p: p5) {
         showNeuralNetButton.html(`Show Neural Net: ${isOn ? 'On' : 'Off'}`)
     })
 
+    const showSpeciesButton = p.createButton(`Show Species: ${game.showClustering ? 'On' : 'Off'}`)
+    showSpeciesButton.parent(menu)
+    showSpeciesButton.attribute("title", "Color cars by neural network species (re-clustered each generation).")
+    showSpeciesButton.mouseClicked(() => {
+        const isOn = game.toggleShowClustering()
+        showSpeciesButton.html(`Show Species: ${isOn ? 'On' : 'Off'}`)
+    })
+
     const followButtonsContainer = p.createElement("div")
     followButtonsContainer.style(style({
         display: 'flex',

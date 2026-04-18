@@ -9,6 +9,11 @@ import { drawNeuralNet } from './ui/neuralNetViz';
 import { tooltip } from './utils/tooltip';
 import { buildMainMenu } from './ui/mainMenu';
 import { buildGameMenu } from './ui/gameMenu';
+import {
+	kMeansClustering,
+	analyzeClusters,
+	type ClusterGroup
+} from './utils/neuralNetClustering';
 import grassImage from '../images/grass.jpg'
 import carImage from '../images/car.png'
 import mcQueenImage from '../images/cars/mcqueen.png'
@@ -75,6 +80,10 @@ export default class Game {
 	referenceImageScale: number = 1
 	referenceImageOpacity: number = 0.5
 	private referenceImageButton: p5.Element | null = null
+
+	// Neural network clustering
+	clusteringResults: ClusterGroup[] | null = null
+	showClustering = false
 	renderTrack: p5.Graphics
 	renderCars: p5.Graphics
 
@@ -449,7 +458,10 @@ export default class Game {
 				}
 
 				for (const car of this.population) {
-					car.show(this.p, this.carSprite, this.otherSprites)
+					const clusterTint = this.showClustering && this.clusteringResults
+						? this.getClusterTint(car)
+						: undefined
+					car.show(this.p, this.carSprite, this.otherSprites, clusterTint)
 				}
 
 				// Follow best car camera logic
@@ -635,7 +647,11 @@ export default class Game {
 
 				this.ticks = 0
 				this.generation++
-				//console.log("Current generation: " + this.generation)
+
+				// Re-cluster population after every generation
+				if (this.population.length > 1) {
+					this.performClusteringAnalysis()
+				}
 
 				phase = "running"
 				break
@@ -700,6 +716,11 @@ export default class Game {
 			if (net) {
 				drawNeuralNet(this.p, net, this.lastNNTrace)
 			}
+		}
+
+		// Neural network clustering visualization
+		if (phase === 'running') {
+			this.drawClusteringVisualization()
 		}
 
 		if (this.drawGraphs) {
@@ -1048,6 +1069,9 @@ export default class Game {
 	}
 
 	private restoreGameState(saveData: any) {
+		// Invalidate clustering results from previous session
+		this.clusteringResults = null
+
 		// Restore track
 		this.track = Track.fromData(saveData.track);
 
@@ -1093,6 +1117,87 @@ export default class Game {
 		this.population.forEach(car => {
 			car.driverName = cars[Math.floor(Math.random() * cars.length)];
 		});
+	}
+
+	// Neural Network Clustering Methods
+	performClusteringAnalysis() {
+		console.log("🧠 Analyzing neural network clusters...");
+
+		try {
+			const kMeansResult = kMeansClustering(this.population, 5);
+			this.clusteringResults = kMeansResult;
+
+			const analysis = analyzeClusters(kMeansResult);
+
+			console.log("📊 Clustering Analysis Results:");
+			console.log(`Total cars analyzed: ${this.population.length}`);
+			console.log(`Number of clusters: ${kMeansResult.length}`);
+
+			kMeansResult.forEach((cluster, index) => {
+				console.log(`Species ${index + 1}: ${cluster.size} cars, Avg similarity: ${cluster.avgIntraSimlarity.toFixed(3)}`);
+			});
+
+			console.log(analysis);
+			console.log("Press 'V' to toggle visualization");
+
+		} catch (error) {
+			console.error("Error performing clustering analysis:", error);
+		}
+	}
+
+	drawClusteringVisualization() {
+		if (!this.clusteringResults || !this.showClustering) return;
+
+		const colors = this.clusterColors;
+
+		// Draw cluster information panel
+		this.p.push();
+		this.p.fill(0, 0, 0, 150);
+		this.p.noStroke();
+		this.p.rect(10, 10, 300, 150);
+
+		this.p.fill(255);
+		this.p.textSize(16);
+		this.p.text("Neural Network Clusters", 20, 30);
+
+		this.p.textSize(12);
+		let yOffset = 50;
+
+		this.clusteringResults.forEach((cluster, index) => {
+			const color = colors[index % colors.length];
+			this.p.fill(color[0], color[1], color[2]);
+			this.p.text(`Species ${index + 1}: ${cluster.size} cars`, 20, yOffset);
+			this.p.fill(200);
+			this.p.text(`Spread: ${cluster.avgIntraSimlarity.toFixed(3)}`, 160, yOffset);
+			yOffset += 20;
+		});
+
+		this.p.pop();
+	}
+
+	private clusterColors = [
+		[255, 80, 80], // Red
+		[80, 220, 80], // Green
+		[80, 120, 255], // Blue
+		[255, 220, 50], // Yellow
+		[220, 80, 255], // Magenta
+		[80, 220, 220], // Cyan
+	];
+
+	getClusterTint(car: Car): string | undefined {
+		if (!this.clusteringResults) return undefined;
+		const idx = this.clusteringResults.findIndex(cluster => cluster.cars.includes(car));
+		if (idx === -1) return undefined;
+		const [r, g, b] = this.clusterColors[idx % this.clusterColors.length];
+		return `rgb(${r},${g},${b})`;
+	}
+
+	toggleShowClustering() {
+		this.showClustering = !this.showClustering
+		if (this.showClustering && !this.clusteringResults && this.population.length > 1) {
+			this.performClusteringAnalysis()
+		}
+		return this.showClustering
 	}
 }
 
