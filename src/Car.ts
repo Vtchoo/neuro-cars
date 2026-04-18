@@ -106,12 +106,15 @@ export default class Car {
 
     // Tire slip simulation properties
     tireGripCoefficient = 1.2 // Tire grip coefficient (sports car)
-    mass = 1600 // kg equivalent for simulation
+    mass = 1485 // kg - Ferrari 458 Italia
     maxSlipAngle = Math.PI / 24 // 7.5 degrees - angle where tires start to slip significantly
 
     // Realistic acceleration values (converted to simulation units)
-    maxAcceleration = 8.0 // m/s² - typical sports car acceleration
+    maxAcceleration = 8.0 // m/s² - max acceleration at low speed (launch)
     maxBraking = 10.0 // m/s² - sports car braking capability
+    maxPower = 425000 // W - Ferrari 458 Italia (570 hp)
+    frontalArea = 2.3 // m² - Ferrari 458 Italia frontal area
+    dragCoefficient = 0.35 // Cd - Ferrari 458 Italia
 
     /**
      * The force applied to the driving wheel from the input.
@@ -184,7 +187,7 @@ export default class Car {
 
         // Apply drag and rolling resistance for realistic physics
         const speedMPS = this.speed // Convert to m/s
-        const dragForce = 0.5 * 1.225 * 0.35 * 2.0 * speedMPS * speedMPS // Air resistance (ρ * Cd * A * v²/2)
+        const dragForce = 0.5 * 1.225 * this.dragCoefficient * this.frontalArea * speedMPS * speedMPS // Air resistance (ρ * Cd * A * v²/2)
         const rollingForce = 0.015 * this.mass * 9.81 // Rolling resistance
         const totalResistanceForce = dragForce + rollingForce
 
@@ -338,9 +341,11 @@ export default class Car {
         const throttleInput = input[0] // -1 to 1
 
         if (throttleInput >= 0) {
-            // Forward acceleration
-            const accelerationMPS2 = throttleInput * this.maxAcceleration
-            this.acceleration = accelerationMPS2 // Convert to simulation units
+            // Power-limited engine force: full torque at low speed, power-capped at high speed
+            const maxTorqueForce = throttleInput * this.maxAcceleration * this.mass
+            const maxPowerForce = (this.maxPower * throttleInput) / Math.max(Math.abs(this.speed), 0.5)
+            const engineForce = Math.min(maxTorqueForce, maxPowerForce)
+            this.acceleration = engineForce / this.mass
         } else {
             // Braking (negative throttle)
             const brakingMPS2 = Math.abs(throttleInput) * this.maxBraking

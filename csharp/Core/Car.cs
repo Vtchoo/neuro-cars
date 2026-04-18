@@ -135,12 +135,15 @@ namespace SmartRace.Core
 
         // Tire slip simulation properties
         public double TireGripCoefficient = 1.2; // Tire grip coefficient (sports car)
-        public double Mass = 1600; // kg
+        public double Mass = 1485; // kg - Ferrari 458 Italia
         public double MaxSlipAngle = Math.PI / 24; // 7.5 degrees - angle where tires start to slip significantly
 
         // Realistic acceleration values (converted to simulation units)
-        public double MaxAcceleration = 8.0; // m/s² - typical sports car acceleration
+        public double MaxAcceleration = 8.0; // m/s² - max acceleration at low speed (launch)
         public double MaxBraking = 10.0; // m/s² - sports car braking capability
+        public double MaxPower = 425000; // W - Ferrari 458 Italia (570 hp)
+        public double FrontalArea = 2.3; // m² - Ferrari 458 Italia frontal area
+        public double DragCoefficient = 0.35; // Cd - Ferrari 458 Italia
 
         // The brain inside the car
         public NeuralNet NeuralNet { get; set; }
@@ -204,7 +207,7 @@ namespace SmartRace.Core
 
             // Apply drag and rolling resistance for realistic physics
             var speedMPS = this.Speed; // m/s
-            var dragForce = 0.5 * 1.225 * 0.35 * 2.0 * speedMPS * speedMPS; // Air resistance (ρ * Cd * A * v²/2)
+            var dragForce = 0.5 * 1.225 * this.DragCoefficient * this.FrontalArea * speedMPS * speedMPS; // Air resistance (ρ * Cd * A * v²/2)
             var rollingForce = 0.015 * this.Mass * 9.81; // Rolling resistance
             var totalResistanceForce = dragForce + rollingForce;
 
@@ -312,9 +315,11 @@ namespace SmartRace.Core
 
             if (throttleInput >= 0)
             {
-                // Forward acceleration
-                var accelerationMPS2 = throttleInput * this.MaxAcceleration;
-                this.Acceleration = accelerationMPS2; // Convert to simulation units
+                // Power-limited engine force: full torque at low speed, power-capped at high speed
+                var maxTorqueForce = throttleInput * this.MaxAcceleration * this.Mass;
+                var maxPowerForce = (this.MaxPower * throttleInput) / Math.Max(Math.Abs(this.Speed), 0.5);
+                var engineForce = Math.Min(maxTorqueForce, maxPowerForce);
+                this.Acceleration = engineForce / this.Mass;
             }
             else
             {
