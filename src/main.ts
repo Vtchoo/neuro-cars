@@ -494,7 +494,7 @@ export default class Game {
 						const realLifeSpeed = car.speed * 3.6
 						tooltip(
 							this.p,
-							[car.driverName || "Unknown Driver", `Fitness: ${car.neuralNet.fitness.toFixed(2)}`, `Gen: ${car.generation}`, `Speed: ${realLifeSpeed.toFixed(2)} km/h`],
+							[car.driverName || "Unknown Driver", `Fitness: ${car.neuralNet.fitness.toFixed(2)}`, `Gen: ${car.generation} (age: ${this.generation - car.generation})`, `Speed: ${realLifeSpeed.toFixed(2)} km/h`],
 							car.pos.x + 20 / this.cameraZoom,
 							car.pos.y + 15 / this.cameraZoom,
 							1 / this.cameraZoom
