@@ -75,7 +75,8 @@ export function drawNeuralNet(
     const neuronR = Math.min(MAX_RADIUS, Math.max(MIN_RADIUS, neuronSpacing / 2.5))
 
     const contentH = (maxNeurons - 1) * neuronSpacing
-    const panelH = contentH + PADDING * 2 + neuronR * 2
+    const biasExtraH = neuronSpacing * 1.5 + neuronR * 1.6   // room for bias nodes
+    const panelH = contentH + PADDING * 2 + neuronR * 2 + biasExtraH
 
     // ── background panel ──
     p.noStroke()
@@ -103,6 +104,7 @@ export function drawNeuralNet(
         const srcPts = positions[t]
         const dstPts = positions[t + 1]
         const contribs = trace?.weightedContributions[t]
+        const biasContribs = trace?.biasContributions[t]
 
         for (let dst = 0; dst < dstPts.length; dst++) {
             for (let src = 0; src < srcPts.length; src++) {
@@ -118,7 +120,32 @@ export function drawNeuralNet(
                 p.strokeWeight(Math.min(2.5, 0.6 + Math.abs(contribs?.[dst]?.[src] ?? 0) * 1.2))
                 p.line(srcPts[src][0], srcPts[src][1], dstPts[dst][0], dstPts[dst][1])
             }
+
+            // Bias edge: from bias node of layer t to dstPts[dst]
+            const biasX = positions[t][0][0]
+            const biasY = positions[t][positions[t].length - 1][1] + neuronSpacing * 1.5
+            const bval = biasContribs?.[dst] ?? 0
+            const [br, bg, bb, ba] = trace ? edgeColor(bval) : [130, 130, 130, 25]
+            if (!trace || ba >= 8) {
+                p.stroke(br, bg, bb, trace ? ba : 25)
+                p.strokeWeight(trace ? Math.min(2.5, 0.6 + Math.abs(bval) * 1.2) : 0.6)
+                p.line(biasX, biasY, dstPts[dst][0], dstPts[dst][1])
+            }
         }
+    }
+
+    // ── draw bias nodes (one per source column, below the neurons) ──
+    for (let t = 0; t < totalLayers - 1; t++) {
+        const colX = positions[t][0][0]
+        const biasY = positions[t][positions[t].length - 1][1] + neuronSpacing * 1.5
+        p.noStroke()
+        p.fill(220, 220, 100, 220)   // distinct yellow
+        p.circle(colX, biasY, neuronR * 1.6)
+        p.fill(30, 30, 30)
+        p.noStroke()
+        p.textAlign(p.CENTER, p.CENTER)
+        p.textSize(Math.max(6, neuronR * 0.9))
+        p.text('b', colX, biasY)
     }
 
     // ── draw neuron circles ──

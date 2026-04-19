@@ -10,6 +10,8 @@ export interface NeuralNetTrace {
     layerActivations: number[][]
     /** For each weight-matrix transition t: [targetNeuron][sourceNeuron] = weight * sourceActivation */
     weightedContributions: number[][][]
+    /** For each weight-matrix transition t: [targetNeuron] = raw bias value */
+    biasContributions: number[][]
 }
 
 export interface NeuralNetConfig {
@@ -162,6 +164,7 @@ export class NeuralNet {
         let currentLayer: number[][] = input.map(v => [v])
         const layerActivations: number[][] = [input.slice()]
         const weightedContributions: number[][][] = []
+        const biasContributions: number[][] = []
 
         for (let i = 0; i < this.weightMatrices.length; i++) {
             const W = this.weightMatrices[i]
@@ -177,6 +180,8 @@ export class NeuralNet {
             }
             weightedContributions.push(contributions)
 
+            biasContributions.push(this.biasMatrices[i].map(row => row[0]))
+
             currentLayer = this.matrixMultiply(W, currentLayer)
             currentLayer = this.matrixAdd(currentLayer, this.biasMatrices[i])
             const activationFn = (i === this.weightMatrices.length - 1) ? this.outputActivation : this.activation
@@ -185,7 +190,7 @@ export class NeuralNet {
             layerActivations.push(currentLayer.map(row => row[0]))
         }
 
-        return { layerActivations, weightedContributions }
+        return { layerActivations, weightedContributions, biasContributions }
     }
 
     // Fitness management
