@@ -7,6 +7,7 @@ import { convertHSLToRGB } from "./utils/colors"
 import { signedLog, softsign } from "./utils/activationFunctions"
 import { XY } from "./utils/math"
 import { random } from "./utils/array"
+import { CarPreset } from "./cars/carPresets"
 
 let avgDeltaTime = 1 / 60 // 0.016807703080427727
 const UNITS_PER_METER = 10 // 10 pixels = 1 meter scale
@@ -118,6 +119,7 @@ export default class Car {
     rollingResistanceCoeff = 0.011 // Crr - Ferrari 458 Italia (performance tires)
     downforceCoefficient = 0 // CL - Ferrari 458 Italia (Enzo didn't value downforce)
     stationaryDownforce = 0 // N - constant downforce regardless of speed (e.g. fan cars)
+    maxReverseSpeed = 15.0 // m/s (~54 km/h)
 
     /**
      * The force applied to the driving wheel from the input.
@@ -126,6 +128,9 @@ export default class Car {
      * values < 1 create a more realistic driving experience, where the car takes some time to turn the wheel and doesn't instantly reach the desired direction. This makes the learning process more challenging, but also more rewarding, as the car has to learn to anticipate turns and adjust its speed accordingly.
      */
     drivingWheelForce = 0.05
+
+    // Sprite key for rendering — maps to a loaded image in main.ts
+    spriteKey = "car"
 
     // The brain inside the car
     neuralNet: NeuralNet
@@ -168,10 +173,12 @@ export default class Car {
         }
     }
 
-    constructor(startX: number, startY: number, startDir: number, generation?: number) {
+    constructor(startX: number, startY: number, startDir: number, generation?: number, preset?: CarPreset) {
         this.pos = newVector(startX, startY)
         this.direction = startDir
         this.generation = generation || 0
+
+        if (preset) Object.assign(this, preset)
 
         const inputs = this.getInputsCount()
         this.neuralNet = new NeuralNet(nnLayers, nnNeurons, inputs, nnOutputs, nnRange, nnMutationRate, nnActivation)
@@ -187,6 +194,7 @@ export default class Car {
     update(trackMap: number[][], resolution: number, track: Track, IsPlayerCar?: boolean) {
         // Apply acceleration
         this.speed += this.acceleration * avgDeltaTime
+        if (this.speed < -this.maxReverseSpeed) this.speed = -this.maxReverseSpeed
 
         // Apply drag and rolling resistance for realistic physics
         const speedMPS = this.speed // Convert to m/s

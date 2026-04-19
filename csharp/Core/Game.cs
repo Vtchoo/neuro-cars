@@ -49,6 +49,7 @@ namespace SmartRace.Core
         public int Ticks { get; private set; } = 0;
         public int MaxTicks { get; private set; } = 1000;
         public int CapTicks { get; private set; } = 15000;
+        public CarConfigJson CarConfig { get; set; } = JsonMapping.SupercarConfig;
         
         // Track and population
         private ITrack track;
@@ -133,7 +134,7 @@ namespace SmartRace.Core
             // Use parallel processing for initialization
             Parallel.For(0, Individuals, i =>
             {
-                population[i] = new Car(start.X, start.Y, direction, Generation);
+                population[i] = new Car(start.X, start.Y, direction, Generation, CarConfig);
             });
             
             StatusUpdated?.Invoke($"Initialized population of {Individuals} cars");
@@ -298,7 +299,7 @@ namespace SmartRace.Core
         {
             Parallel.For(0, Offspring, i =>
             {
-                var newCar = new Car(start.X, start.Y, direction, Generation + 1);
+                var newCar = new Car(start.X, start.Y, direction, Generation + 1, CarConfig);
                 newCar.NeuralNet = NeuralNet.Breed(
                     population[2 * i].NeuralNet,
                     population[2 * i + 1].NeuralNet
@@ -316,7 +317,7 @@ namespace SmartRace.Core
             {
                 for (int j = i + 1; j < EliteSize; j++)
                 {
-                    var newCar = new Car(start.X, start.Y, direction, Generation + 1);
+                    var newCar = new Car(start.X, start.Y, direction, Generation + 1, CarConfig);
                     newCar.NeuralNet = NeuralNet.Breed(
                         population[i].NeuralNet,
                         population[j].NeuralNet
@@ -337,7 +338,7 @@ namespace SmartRace.Core
         {
             Parallel.For(0, Offspring, i =>
             {
-                var newCar = new Car(start.X, start.Y, direction, Generation + 1);
+                var newCar = new Car(start.X, start.Y, direction, Generation + 1, CarConfig);
                 newCar.NeuralNet = population[i].NeuralNet.Copy();
                 newCar.NeuralNet.Mutate();
                 population[Individuals - 1 - i] = newCar;
@@ -467,10 +468,12 @@ namespace SmartRace.Core
 
                 // Restore population using JSON mapping
                 population = new Car[saveData.Population.Count];
+                var carConfig = saveData.CarConfig ?? JsonMapping.SupercarConfig;
+                CarConfig = carConfig;
                 
                 Parallel.For(0, saveData.Population.Count, i =>
                 {
-                    population[i] = JsonMapping.CreateCarFromJson(saveData.Population[i]);
+                    population[i] = JsonMapping.CreateCarFromJson(saveData.Population[i], carConfig);
                 });
 
                 // Restore track starting point and direction
@@ -525,7 +528,8 @@ namespace SmartRace.Core
                         StartPointIndex = startPointIndex,
                         CycleStartPoint = cycleStartPoint.ToString().ToLower()
                     },
-                    Population = population.Select(JsonMapping.CreateJsonFromCar).ToList()
+                    Population = population.Select(JsonMapping.CreateJsonFromCar).ToList(),
+                    CarConfig = CarConfig
                 };
 
                 var options = new JsonSerializerOptions { 

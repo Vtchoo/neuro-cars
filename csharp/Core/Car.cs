@@ -53,36 +53,36 @@ namespace SmartRace.Core
     {
         private static readonly string[][] RandomNames = new string[][]
         {
-            new string[] { "Ayrton", "Senna" },
-            new string[] { "Michael", "Schumacher" },
-            new string[] { "Lewis", "Hamilton" },
-            new string[] { "Sebastian", "Vettel" },
-            new string[] { "Alain", "Prost" },
-            new string[] { "Niki", "Lauda" },
-            new string[] { "Jim", "Clark" },
-            new string[] { "Jackie", "Stewart" },
-            new string[] { "Fernando", "Alonso" },
-            new string[] { "Kimi", "Raikkonen" },
-            new string[] { "Juan Manuel", "Fangio" },
-            new string[] { "Alberto", "Ascari" },
-            new string[] { "Jim", "Hawkins" },
-            new string[] { "Eleanor", "Arroway" },
-            new string[] { "Tony", "Stark" },
-            new string[] { "Felipe", "Massa" },
-            new string[] { "Gilles", "Villeneuve" },
-            new string[] { "Dale", "Earnhardt" },
-            new string[] { "Colin", "McRae" },
-            new string[] { "Travis", "Pastrana" },
-            new string[] { "Ken", "Block" },
-            new string[] { "Richard", "Petty" },
-            new string[] { "Oscar", "Piastri" },
-            new string[] { "Lando", "Norris" },
-            new string[] { "George", "Russell" },
-            new string[] { "Mick", "Schumacher" },
-            new string[] { "Charlie", "Leclerc" },
-            new string[] { "Max", "Verstappen" },
-            new string[] { "Rubens", "Barrichello" },
-            new string[] { "Lightning", "McQueen" },
+            ["Ayrton", "Senna"], // Greatest of all time, the legend himself
+            ["Michael", "Schumacher"], // The original GOAT, 7-time world champion and dominant force in the 90s and early 2000s
+            ["Lewis", "Hamilton"], // Modern GOAT, 7-time world champion, known for his consistency and racecraft
+            ["Sebastian", "Vettel"], // 4-time world champion, dominant in the early 2010s with Red Bull
+            ["Alain", "Prost"], // 4-time world champion, known as "The Professor" for his calculated driving style
+            ["Niki", "Lauda"], // 3-time world champion, known for his incredible comeback after a near-fatal crash
+            ["Jim", "Clark"], // 2-time world champion, dominant in the 60s with Lotus
+            ["Jackie", "Stewart"], // 3-time world champion, known for his smooth driving style and safety advocacy
+            ["Fernando", "Alonso"], // 2-time world champion, known for his versatility and racecraft
+            ["Kimi", "Raikkonen"], // 1-time world champion, known as "The Iceman" for his cool demeanor and raw speed
+            ["Juan Manuel", "Fangio"], // 5-time world champion in the 50s, known for his skill and dominance in the early years of F1
+            ["Alberto", "Ascari"], // 2-time world champion in the 50s, known for his smooth driving style
+            ["Tony", "Stark"], // Fictional character from Marvel Comics, known for his genius and charisma
+            ["Felipe", "Massa"], // 1-time world champion, known for his speed and near miss of the 2008 title
+            ["Gilles", "Villeneuve"], // Known for his fearless driving style and incredible car control, a true legend of the sport
+            ["Dale", "Earnhardt"], // NASCAR legend, known for his aggressive driving style and 7 championships in the top-tier NASCAR series
+            ["Colin", "McRae"], // Rally legend, known for his incredible car control and 1995 World Rally Championship title
+            ["Travis", "Pastrana"], // Known for his versatility across motorsports, including motocross, rally, and NASCAR, as well as his daring stunts in the Nitro Circus
+            ["Ken", "Block"], // Known for his Gymkhana series of videos showcasing his incredible car control and stunts, as well as his success in rally and rallycross
+            ["Richard", "Petty"], // NASCAR legend, known as "The King" for his record 200 race wins and 7 championships in the top-tier NASCAR series
+            ["Oscar", "Piastri"], // Young talent and 2021 Formula 2 champion, currently racing in Formula 1 with McLaren
+            ["Lando", "Norris"], // Rising star in Formula 1, known for his speed and personality, currently racing with McLaren
+            ["George", "Russell"], // Young talent in Formula 1, known for his speed and consistency, currently racing with Mercedes
+            ["Mick", "Schumacher"], // Son of Michael Schumacher, showing promise in Formula 2 and currently racing in Formula 1 with Haas
+            ["Charlie", "Leclerc"], // Young talent in Formula 1, known for his speed and racecraft, currently racing with Ferrari
+            ["Max", "Verstappen"], // Current dominant force in Formula 1, known for his aggressive driving style and multiple world championships with Red Bull
+            ["Rubens", "Barrichello"], // Known for his long career in Formula 1, including being a teammate to Michael Schumacher during his dominant years at Ferrari
+            ["Gabriel", "Bortoleto"], // Brazilian driver known for his success in junior formulas and currently racing in Formula 1
+            ["Franco", "Colapinto"], // Argentine driver known for his success in junior formulas and currently racing in Formula 1
+            ["Lightning", "McQueen"], // Fictional character from the Cars movie franchise, known for his speed and racing spirit
         };
 
         private static readonly string[] Names = RandomNames.Select(name => name[0]).ToArray();
@@ -141,12 +141,14 @@ namespace SmartRace.Core
         // Realistic acceleration values (converted to simulation units)
         public double MaxAcceleration = 8.0; // m/s² - max acceleration at low speed (launch)
         public double MaxBraking = 10.0; // m/s² - sports car braking capability
+        public double MaxReverseSpeed = 10.0; // m/s (~36 km/h) - max reverse speed
         public double MaxPower = 425000; // W - Ferrari 458 Italia (570 hp)
         public double FrontalArea = 2.3; // m² - Ferrari 458 Italia frontal area
         public double DragCoefficient = 0.35; // Cd - Ferrari 458 Italia
         public double RollingResistanceCoeff = 0.011; // Crr - Ferrari 458 Italia (performance tires)
         public double DownforceCoefficient = 0; // CL - Ferrari 458 Italia (Enzo didn't value downforce)
         public double StationaryDownforce = 0; // N - constant downforce regardless of speed (e.g. fan cars)
+        public string SpriteKey = "car"; // sprite identifier used by the browser renderer
 
         // The brain inside the car
         public NeuralNet NeuralNet { get; set; }
@@ -161,11 +163,14 @@ namespace SmartRace.Core
 
         private static readonly Random random = new Random();
 
-        public Car(double startX, double startY, double startDir, int generation = 0)
+        public Car(double startX, double startY, double startDir, int generation = 0, CarConfigJson config = null)
         {
             Position = VectorFactory.NewVector(startX, startY);
             Direction = startDir;
             Generation = generation;
+
+            if (config != null)
+                ApplyConfig(config);
 
             int inputs = GetInputsCount();
             NeuralNet = new NeuralNet(nnLayers, nnNeurons, inputs, nnOutputs, nnRange, nnMutationRate, nnActivation);
@@ -174,6 +179,24 @@ namespace SmartRace.Core
             ColorHSL = color;
 
             DriverName = $"{Names[random.Next(Names.Length)]} {Surnames[random.Next(Surnames.Length)]}";
+        }
+
+        public void ApplyConfig(CarConfigJson config)
+        {
+            if (config.Wheelbase.HasValue) Wheelbase = config.Wheelbase.Value;
+            if (config.MaxSteeringAngle.HasValue) MaxSteeringAngle = config.MaxSteeringAngle.Value;
+            if (config.TireGripCoefficient.HasValue) TireGripCoefficient = config.TireGripCoefficient.Value;
+            if (config.Mass.HasValue) Mass = config.Mass.Value;
+            if (config.MaxAcceleration.HasValue) MaxAcceleration = config.MaxAcceleration.Value;
+            if (config.MaxBraking.HasValue) MaxBraking = config.MaxBraking.Value;
+            if (config.MaxReverseSpeed.HasValue) MaxReverseSpeed = config.MaxReverseSpeed.Value;
+            if (config.MaxPower.HasValue) MaxPower = config.MaxPower.Value;
+            if (config.FrontalArea.HasValue) FrontalArea = config.FrontalArea.Value;
+            if (config.DragCoefficient.HasValue) DragCoefficient = config.DragCoefficient.Value;
+            if (config.RollingResistanceCoeff.HasValue) RollingResistanceCoeff = config.RollingResistanceCoeff.Value;
+            if (config.DownforceCoefficient.HasValue) DownforceCoefficient = config.DownforceCoefficient.Value;
+            if (config.StationaryDownforce.HasValue) StationaryDownforce = config.StationaryDownforce.Value;
+            if (config.SpriteKey != null) SpriteKey = config.SpriteKey;
         }
 
         public void FadeColor()
@@ -207,6 +230,7 @@ namespace SmartRace.Core
         {
             // Apply acceleration
             this.Speed += this.Acceleration * avgDeltaTime;
+            if (this.Speed < -this.MaxReverseSpeed) this.Speed = -this.MaxReverseSpeed;
 
             // Apply drag and rolling resistance for realistic physics
             var speedMPS = this.Speed; // m/s

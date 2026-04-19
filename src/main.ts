@@ -3,6 +3,7 @@ import p5 from 'p5';
 import { createTrackBuilder, setTrack, drawTrackSelection, handleTrackBuilderKeyPress } from "./ui/trackBuilder"
 import { newVector, Vector } from './Vector';
 import Car from './Car';
+import { supercarPreset, f1CarPreset, CarPreset } from './cars/carPresets';
 import { NeuralNet, NeuralNetTrace } from './NeuralNet';
 import Track, { TrackPieceType } from './Track';
 import { drawNeuralNet } from './ui/neuralNetViz';
@@ -20,6 +21,7 @@ import mcQueenImage from '../images/cars/mcqueen.png'
 import theKingImage from '../images/cars/king.png'
 import chickHicksImage from '../images/cars/chickhicks2.png'
 import sennaImage from '../images/cars/senna2.png'
+import formula1Image from '../images/cars/formula1.png'
 
 
 //---------- SMART RACE 2 ----------
@@ -93,10 +95,13 @@ export default class Game {
 	renderMap: p5.Graphics
 
 	carSprite: p5.Image
+	carTypeSprites: Map<string, p5.Image> = new Map()
 	otherSprites: Map<string, p5.Image> = new Map()
 
 	track = new Track()
 	population: Car[] = []
+
+	carConfig: CarPreset = supercarPreset
 
 	followBestCar: 'off' | 'best' | 'bestActive' = 'off'
 	followCar: Car | null = null
@@ -297,6 +302,8 @@ export default class Game {
 
 	preload() {
 		this.carSprite = this.p.loadImage(carImage)
+		this.carTypeSprites.set("car", this.carSprite)
+		this.carTypeSprites.set("formula1", this.p.loadImage(formula1Image))
 		this.backgroundImage = this.p.loadImage(grassImage)
 		//carSprite = loadImage("car.png")
 		// carSprite = this.p.loadImage("https://raw.githubusercontent.com/Vtchoo/smartRace2/master/images/car.png")
@@ -392,12 +399,12 @@ export default class Game {
 				// 	population[i] = new Car(start.x, start.y, direction)
 				// }
 				this.population = Array.from({ length: individuals }, () => {
-					const car = new Car(this.start.x, this.start.y, this.direction)
+					const car = new Car(this.start.x, this.start.y, this.direction, undefined, this.carConfig)
 					console.log(car)
 					return car
 				})
 
-				this.player = new Car(this.start.x, this.start.y, this.direction)
+				this.player = new Car(this.start.x, this.start.y, this.direction, undefined, this.carConfig)
 
 				this.setPhase("running")
 				break
@@ -461,7 +468,8 @@ export default class Game {
 					const clusterTint = this.showClustering && this.clusteringResults
 						? this.getClusterTint(car)
 						: undefined
-					car.show(this.p, this.carSprite, this.otherSprites, clusterTint)
+					const sprite = this.carTypeSprites.get(car.spriteKey) ?? this.carSprite
+					car.show(this.p, sprite, this.otherSprites, clusterTint)
 				}
 
 				// Follow best car camera logic
@@ -479,7 +487,7 @@ export default class Game {
 					this.cameraOffsetX = -this.player.pos.x
 					this.cameraOffsetY = -this.player.pos.y
 					this.player.update(this.trackMap, this.resolution, this.track, true)
-					this.player.show(this.p, this.carSprite, this.otherSprites)
+					this.player.show(this.p, this.carTypeSprites.get(this.player.spriteKey) ?? this.carSprite, this.otherSprites)
 				}
 
 				// if mouse is over some car, show that car's inputs (only if showInputs is not "all" or "best")
@@ -565,7 +573,7 @@ export default class Game {
 				switch (breedingMethod) {
 					case 'pair': {
 						for (let i = 0; i < offspring; i++) {
-							const newCar = new Car(this.start.x, this.start.y, this.direction, this.generation + 1)
+							const newCar = new Car(this.start.x, this.start.y, this.direction, this.generation + 1, this.carConfig)
 							newCar.neuralNet = NeuralNet.breed(this.population[2 * i].neuralNet, this.population[2 * i + 1].neuralNet)
 							this.population[individuals - 1 - i] = newCar
 						}
@@ -575,7 +583,7 @@ export default class Game {
 						const offspring: Car[] = []
 						for (let i = 0; i < eliteSize; i++) {
 							for (let j = i + 1; j < eliteSize; j++) {
-								const newCar = new Car(this.start.x, this.start.y, this.direction, this.generation + 1)
+								const newCar = new Car(this.start.x, this.start.y, this.direction, this.generation + 1, this.carConfig)
 								newCar.neuralNet = NeuralNet.breed(this.population[i].neuralNet, this.population[j].neuralNet)
 								offspring.push(newCar)
 							}
@@ -588,7 +596,7 @@ export default class Game {
 					}
 					case 'clone': {
 						for (let i = 0; i < offspring; i++) {
-							const newCar = new Car(this.start.x, this.start.y, this.direction, this.generation + 1)
+							const newCar = new Car(this.start.x, this.start.y, this.direction, this.generation + 1, this.carConfig)
 							newCar.neuralNet = this.population[i].neuralNet.copy()
 							newCar.neuralNet.mutate()
 							this.population[individuals - 1 - i] = newCar
@@ -1010,6 +1018,7 @@ export default class Game {
 				maxTicks: this.maxTicks,
 				startPointIndex: this.startPointIndex,
 			},
+			carConfig: this.carConfig,
 			population: this.population.map(car => ({
 				NN: car.neuralNet.exportData(),
 				generation: car.generation,
@@ -1078,6 +1087,10 @@ export default class Game {
 		// Regenerate track graphics
 		this.track.draw(this.p);
 
+		// Restore car config (fall back to supercar preset if not present)
+		this.carConfig = saveData.carConfig ?? supercarPreset
+
+		console.log(saveData.carConfig)
 		// Restore game state
 		this.generation = saveData.game.generation;
 		this.ticks = saveData.game.ticks;
@@ -1086,7 +1099,7 @@ export default class Game {
 
 		// Restore population
 		this.population = saveData.population.map((carData: any) => {
-			const car = new Car(carData.position.x, carData.position.y, carData.direction, carData.generation);
+			const car = new Car(carData.position.x, carData.position.y, carData.direction, carData.generation, this.carConfig);
 			car.neuralNet = NeuralNet.fromData(carData.NN);
 			car.generation = carData.generation;
 			car.speed = carData.speed;
@@ -1101,7 +1114,7 @@ export default class Game {
 		this.start = this.track.startingPoint;
 		this.direction = this.track.startingDirection;
 
-		this.player = new Car(this.start.x, this.start.y, this.direction)
+		this.player = new Car(this.start.x, this.start.y, this.direction, undefined, this.carConfig)
 
 		// Set phase to running
 		this.setPhase("running");

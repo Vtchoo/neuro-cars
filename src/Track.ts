@@ -4,6 +4,8 @@ import { closestPointOnArcSegment, closestPointOnLineSegment } from "./utils/tra
 import { add, arcLineIntersection, ArcSegment, calculateArcCenter, closestPointOnLine, cross, distancePointToLine, length, lineLineIntersection, LineSegment, lineSegmentIntersection, segmentIntersection, sub, XY } from "./utils/math"
 import Game from "./main"
 
+const asphaltColor = "#3a3a3a"
+
 interface ITrackPiece {
     type: TrackPieceType
     width: number
@@ -409,6 +411,7 @@ export default class Track {
             switch (piece.type) {
                 case TrackPieceType.Straight:
                     p.push()
+                    p.stroke(asphaltColor)
                     p.line(piece.start.x, piece.start.y, piece.end.x, piece.end.y)
                     p.strokeWeight(1)
                     p.stroke("white")
@@ -467,6 +470,7 @@ export default class Track {
                     const actualAngleStart = piece.clockwise ? angleStart : angleEnd
                     const actualAngleEnd = piece.clockwise ? angleEnd : angleStart
                     p.push()
+                    p.stroke(asphaltColor)
                     p.arc(piece.center.x, piece.center.y, radius * 2, radius * 2, actualAngleStart, actualAngleEnd)
                     p.strokeWeight(1)
                     p.stroke("white")
@@ -491,7 +495,7 @@ export default class Track {
                     p.stroke("white")
                     p.strokeWeight(piece.width + 2)
                     p.bezier(piece.start.x, piece.start.y, piece.control1.x, piece.control1.y, piece.control2.x, piece.control2.y, piece.end.x, piece.end.y)
-                    p.stroke("black")
+                    p.stroke(asphaltColor)
                     p.strokeWeight(piece.width)
                     p.bezier(piece.start.x, piece.start.y, piece.control1.x, piece.control1.y, piece.control2.x, piece.control2.y, piece.end.x, piece.end.y)
                     p.pop()

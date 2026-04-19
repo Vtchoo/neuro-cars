@@ -22,6 +22,9 @@ namespace SmartRace.Core
         
         [JsonPropertyName("population")]
         public List<CarDataJson> Population { get; set; }
+
+        [JsonPropertyName("carConfig")]
+        public CarConfigJson CarConfig { get; set; }
     }
 
     public class TrackDataJson
@@ -133,6 +136,51 @@ namespace SmartRace.Core
         public double Y { get; set; }
     }
 
+    public class CarConfigJson
+    {
+        [JsonPropertyName("wheelbase")]
+        public double? Wheelbase { get; set; }
+
+        [JsonPropertyName("maxSteeringAngle")]
+        public double? MaxSteeringAngle { get; set; }
+
+        [JsonPropertyName("tireGripCoefficient")]
+        public double? TireGripCoefficient { get; set; }
+
+        [JsonPropertyName("mass")]
+        public double? Mass { get; set; }
+
+        [JsonPropertyName("maxAcceleration")]
+        public double? MaxAcceleration { get; set; }
+
+        [JsonPropertyName("maxBraking")]
+        public double? MaxBraking { get; set; }
+
+        [JsonPropertyName("maxReverseSpeed")]
+        public double? MaxReverseSpeed { get; set; }
+
+        [JsonPropertyName("maxPower")]
+        public double? MaxPower { get; set; }
+
+        [JsonPropertyName("frontalArea")]
+        public double? FrontalArea { get; set; }
+
+        [JsonPropertyName("dragCoefficient")]
+        public double? DragCoefficient { get; set; }
+
+        [JsonPropertyName("rollingResistanceCoeff")]
+        public double? RollingResistanceCoeff { get; set; }
+
+        [JsonPropertyName("downforceCoefficient")]
+        public double? DownforceCoefficient { get; set; }
+
+        [JsonPropertyName("stationaryDownforce")]
+        public double? StationaryDownforce { get; set; }
+
+        [JsonPropertyName("spriteKey")]
+        public string SpriteKey { get; set; }
+    }
+
     public class TrackPieceJson
     {
         [JsonPropertyName("type")]
@@ -158,6 +206,23 @@ namespace SmartRace.Core
     // Conversion utilities to map between JSON and internal C# classes
     public static class JsonMapping
     {
+        // Fallback config for saves that predate the carConfig field (Ferrari 458 Italia)
+        public static readonly CarConfigJson SupercarConfig = new CarConfigJson
+        {
+            Wheelbase = 3.0,
+            MaxSteeringAngle = Math.PI / 6,
+            TireGripCoefficient = 1.2,
+            Mass = 1485,
+            MaxAcceleration = 8.0,
+            MaxBraking = 10.0,
+            MaxReverseSpeed = 15.0,
+            MaxPower = 425000,
+            FrontalArea = 2.3,
+            DragCoefficient = 0.35,
+            RollingResistanceCoeff = 0.011,
+            DownforceCoefficient = 0,
+            StationaryDownforce = 0,
+        };
         public static ActivationFunction ParseActivationFunction(string activation)
         {
             return activation?.ToLowerInvariant() switch
@@ -286,20 +351,22 @@ namespace SmartRace.Core
         }
 
         // Convert JSON to Car
-        public static Car CreateCarFromJson(CarDataJson jsonData)
+        public static Car CreateCarFromJson(CarDataJson jsonData, CarConfigJson config = null)
         {
             var car = new Car(
                 jsonData.Position.X,
                 jsonData.Position.Y,
                 jsonData.Direction,
-                jsonData.Generation
-            );
-
-            car.NeuralNet = CreateNeuralNetFromJson(jsonData.NN);
-            car.Speed = jsonData.Speed;
-            car.Acceleration = jsonData.Acceleration;
-            car.LastDrivingWheelDirection = jsonData.LastDrivingWheelDirection;
-            car.DriverName = jsonData.DriverName;
+                jsonData.Generation,
+                config ?? SupercarConfig
+            )
+            {
+                NeuralNet = CreateNeuralNetFromJson(jsonData.NN),
+                Speed = jsonData.Speed,
+                Acceleration = jsonData.Acceleration,
+                LastDrivingWheelDirection = jsonData.LastDrivingWheelDirection,
+                DriverName = jsonData.DriverName
+            };
 
             return car;
         }
