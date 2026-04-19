@@ -145,6 +145,7 @@ namespace SmartRace.Core
         public double FrontalArea = 2.3; // m² - Ferrari 458 Italia frontal area
         public double DragCoefficient = 0.35; // Cd - Ferrari 458 Italia
         public double RollingResistanceCoeff = 0.011; // Crr - Ferrari 458 Italia (performance tires)
+        public double DownforceCoefficient = 0; // CL - Ferrari 458 Italia (Enzo didn't value downforce)
 
         // The brain inside the car
         public NeuralNet NeuralNet { get; set; }
@@ -355,9 +356,10 @@ namespace SmartRace.Core
                 return this.MaxSteeringAngle;
             }
 
-            // Calculate maximum lateral acceleration the tires can provide
-            // Based on tire grip coefficient and gravity
-            var maxLateralAcceleration = this.TireGripCoefficient * 9.81; // m/s²
+            // Downforce increases normal force on tires, raising the lateral grip limit
+            var downforce = 0.5 * 1.225 * this.DownforceCoefficient * this.FrontalArea * speedMPS * speedMPS;
+            var effectiveNormalForce = this.Mass * 9.81 + downforce;
+            var maxLateralAcceleration = this.TireGripCoefficient * (effectiveNormalForce / this.Mass); // m/s²
 
             // Calculate the maximum turning radius before tire slip occurs
             // Using the relationship: lateral_accel = v²/R

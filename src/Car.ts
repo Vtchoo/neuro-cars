@@ -116,6 +116,7 @@ export default class Car {
     frontalArea = 2.3 // m² - Ferrari 458 Italia frontal area
     dragCoefficient = 0.35 // Cd - Ferrari 458 Italia
     rollingResistanceCoeff = 0.011 // Crr - Ferrari 458 Italia (performance tires)
+    downforceCoefficient = 0 // CL - Ferrari 458 Italia (Enzo didn't value downforce)
 
     /**
      * The force applied to the driving wheel from the input.
@@ -320,9 +321,10 @@ export default class Car {
             return this.maxSteeringAngle
         }
 
-        // Calculate maximum lateral acceleration the tires can provide
-        // Based on tire grip coefficient and gravity
-        const maxLateralAcceleration = this.tireGripCoefficient * 9.81 // m/s²
+        // Downforce increases normal force on tires, raising the lateral grip limit
+        const downforce = 0.5 * 1.225 * this.downforceCoefficient * this.frontalArea * speedMPS * speedMPS
+        const effectiveNormalForce = this.mass * 9.81 + downforce
+        const maxLateralAcceleration = this.tireGripCoefficient * (effectiveNormalForce / this.mass) // m/s²
 
         // Calculate the maximum turning radius before tire slip occurs
         // Using the relationship: lateral_accel = v²/R
