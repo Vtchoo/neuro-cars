@@ -267,12 +267,23 @@ export default class Car {
             this.lapMaxSegment = Math.max(this.lapMaxSegment, prevIdx)
 
             if (forwardCrossing) {
+                // Interpolate the exact sub-tick at which the car crossed the line:
+                // distToLine  = remaining distance in the last segment at the previous tick
+                // distPastLine = distance into segment 0 at the current tick
+                // fraction = distToLine / totalDistance → how far through this tick the crossing happened
+                const lastSegLen = Track.getTrackPieceLength(track.analyticPieces[totalSegments - 1])
+                const distToLine = lastSegLen - previousCarPositionInTrack.distanceFromTrackPieceStart
+                const distPastLine = currentCarPositionInTrack.distanceFromTrackPieceStart
+                const totalDist = distToLine + distPastLine
+                const fraction = totalDist > 0 ? distToLine / totalDist : 0
+                const exactCrossingTick = gameTick + fraction
+
                 // Car must have covered at least half the track forward to count as a valid lap
                 if (this.lapStartTick !== null && this.lapMaxSegment >= Math.floor(totalSegments / 2)) {
-                    this.lastCompletedLapTicks = gameTick - this.lapStartTick
+                    this.lastCompletedLapTicks = exactCrossingTick - this.lapStartTick
                 }
-                // Start the next lap timer
-                this.lapStartTick = gameTick
+                // Start the next lap timer at the exact crossing point
+                this.lapStartTick = exactCrossingTick
                 this.lapMaxSegment = 0
             } else if (backwardCrossing) {
                 // Car reversed over the start/finish line — invalidate the current lap

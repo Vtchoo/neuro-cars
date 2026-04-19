@@ -728,9 +728,6 @@ export default class Game {
 				"S - Save game",
 				"L - Load game",
 				`Generation: ${this.generation}`,
-				this.bestLapTime !== null
-					? `Best Lap: ${this.bestLapTime}t — ${this.lapRecords[this.lapRecords.length - 1]?.driverName} (gen ${this.lapRecords[this.lapRecords.length - 1]?.generation})`
-					: 'Best Lap: --',
 			],
 			20,
 			30,
