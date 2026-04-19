@@ -85,8 +85,8 @@ namespace SmartRace.Core
             ["Lightning", "McQueen"], // Fictional character from the Cars movie franchise, known for his speed and racing spirit
         };
 
-        private static readonly string[] Names = RandomNames.Select(name => name[0]).ToArray();
-        private static readonly string[] Surnames = RandomNames.Select(name => name[1]).ToArray();
+        private static readonly string[] Names = [.. RandomNames.Select(name => name[0])];
+        private static readonly string[] Surnames = [.. RandomNames.Select(name => name[1])];
 
         public string DriverName { get; set; }
 
