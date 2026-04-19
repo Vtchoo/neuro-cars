@@ -143,6 +143,17 @@ export default class Car {
     lastLookAheadPoints: Vector[] | null = null
     lastCarPositionInTrack: TrackQueryResult | null = null
 
+    // Lap timing
+    private lapStartTick: number | null = null
+    private lapMaxSegment: number = 0
+    lastCompletedLapTicks: number | null = null
+
+    resetLap() {
+        this.lapStartTick = null
+        this.lapMaxSegment = 0
+        this.lastCompletedLapTicks = null
+    }
+
     fadeColor() {
         const fadedColor = { ...this.color }
         fadedColor.s = Math.max(0, fadedColor.s - 2)
@@ -191,7 +202,7 @@ export default class Car {
     }
 
     // Updates car position
-    update(trackMap: number[][], resolution: number, track: Track, IsPlayerCar?: boolean) {
+    update(trackMap: number[][], resolution: number, track: Track, IsPlayerCar?: boolean, gameTick?: number) {
         // Apply acceleration
         this.speed += this.acceleration * avgDeltaTime
         if (this.speed < -this.maxReverseSpeed) this.speed = -this.maxReverseSpeed
@@ -243,6 +254,32 @@ export default class Car {
 
         const currentCarPositionInTrack = queryTrack(track.analyticPieces.map(convertToTrackSegment), this.pos, this.direction)
         this.lastCarPositionInTrack = currentCarPositionInTrack
+
+        // Lap timing — detect crossing the start/finish line (boundary between last and first segment)
+        if (!IsPlayerCar && previousCarPositionInTrack && gameTick !== undefined) {
+            const prevIdx = previousCarPositionInTrack.segmentIndex
+            const currIdx = currentCarPositionInTrack.segmentIndex
+            const totalSegments = track.analyticPieces.length
+            const forwardCrossing = prevIdx === totalSegments - 1 && currIdx === 0
+            const backwardCrossing = prevIdx === 0 && currIdx === totalSegments - 1
+
+            // Accumulate the furthest segment reached during this timed lap
+            this.lapMaxSegment = Math.max(this.lapMaxSegment, prevIdx)
+
+            if (forwardCrossing) {
+                // Car must have covered at least half the track forward to count as a valid lap
+                if (this.lapStartTick !== null && this.lapMaxSegment >= Math.floor(totalSegments / 2)) {
+                    this.lastCompletedLapTicks = gameTick - this.lapStartTick
+                }
+                // Start the next lap timer
+                this.lapStartTick = gameTick
+                this.lapMaxSegment = 0
+            } else if (backwardCrossing) {
+                // Car reversed over the start/finish line — invalidate the current lap
+                this.lapStartTick = null
+                this.lapMaxSegment = 0
+            }
+        }
 
         if (isInsideTrack) {
             const fitnessReward = this.calculateFitnessReward(track, previousCarPositionInTrack, currentCarPositionInTrack)

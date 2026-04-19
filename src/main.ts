@@ -103,6 +103,9 @@ export default class Game {
 
 	carConfig: CarPreset = supercarPreset
 
+	lapRecords: { ticks: number, driverName: string, generation: number }[] = []
+	bestLapTime: number | null = null
+
 	followBestCar: 'off' | 'best' | 'bestActive' = 'off'
 	followCar: Car | null = null
 
@@ -430,7 +433,19 @@ export default class Game {
 					const inputs = individual.getInputs(this.trackMap, false, this.p, this.resolution, this.track)
 					individual.drive(individual.neuralNet.output(inputs))
 					// }
-					individual.update(this.trackMap, this.resolution, this.track)
+					individual.update(this.trackMap, this.resolution, this.track, false, this.ticks)
+					if (individual.lastCompletedLapTicks !== null) {
+						if (this.bestLapTime === null || individual.lastCompletedLapTicks < this.bestLapTime) {
+							this.bestLapTime = individual.lastCompletedLapTicks
+							this.lapRecords.push({
+								ticks: individual.lastCompletedLapTicks,
+								driverName: individual.driverName,
+								generation: this.generation,
+							})
+							console.log(`New best lap: ${individual.lastCompletedLapTicks} ticks by ${individual.driverName} (gen ${this.generation})`)
+						}
+						individual.lastCompletedLapTicks = null
+					}
 				})
 
 				// Compute neural-net trace for the followed car (used by the visualizer)
@@ -642,6 +657,7 @@ export default class Game {
 					individual.acceleration = 0
 					individual.lastDrivingWheelDirection = 0
 					individual.lastCarPositionInTrack = null
+					individual.resetLap()
 					individual.neuralNet.resetFitness()
 				}
 
@@ -712,6 +728,9 @@ export default class Game {
 				"S - Save game",
 				"L - Load game",
 				`Generation: ${this.generation}`,
+				this.bestLapTime !== null
+					? `Best Lap: ${this.bestLapTime}t — ${this.lapRecords[this.lapRecords.length - 1]?.driverName} (gen ${this.lapRecords[this.lapRecords.length - 1]?.generation})`
+					: 'Best Lap: --',
 			],
 			20,
 			30,
@@ -729,6 +748,11 @@ export default class Game {
 		// Neural network clustering visualization
 		if (phase === 'running') {
 			this.drawClusteringVisualization()
+		}
+
+		// Lap records panel
+		if (phase === 'running' && this.lapRecords.length > 0) {
+			this.drawLapRecords()
 		}
 
 		if (this.drawGraphs) {
@@ -1080,6 +1104,8 @@ export default class Game {
 	private restoreGameState(saveData: any) {
 		// Invalidate clustering results from previous session
 		this.clusteringResults = null
+		this.lapRecords = []
+		this.bestLapTime = null
 
 		// Restore track
 		this.track = Track.fromData(saveData.track);
@@ -1156,6 +1182,41 @@ export default class Game {
 		} catch (error) {
 			console.error("Error performing clustering analysis:", error);
 		}
+	}
+
+	drawLapRecords() {
+		const top10 = this.lapRecords.slice(-10).reverse()
+		const panelWidth = 320
+		const rowHeight = 20
+		const headerHeight = 30
+		const padding = 10
+		const panelHeight = headerHeight + top10.length * rowHeight + padding
+
+		const x = this.p.width - panelWidth - 10
+		const y = 10
+
+		this.p.push()
+		this.p.fill(0, 0, 0, 150)
+		this.p.noStroke()
+		this.p.rect(x, y, panelWidth, panelHeight, 4)
+
+		this.p.fill(255, 220, 50)
+		this.p.textSize(14)
+		this.p.textAlign(this.p.LEFT)
+		this.p.text('🏁 Best Lap Times', x + padding, y + 20)
+
+		this.p.textSize(12)
+		top10.forEach((record, i) => {
+			const rowY = y + headerHeight + i * rowHeight + rowHeight / 2 + 4
+			const totalSecs = record.ticks / 60
+			const mins = Math.floor(totalSecs / 60)
+			const secs = (totalSecs % 60).toFixed(3).padStart(6, '0')
+			const timeStr = mins > 0 ? `${mins}:${secs}` : `${secs}s`
+			const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`
+			this.p.fill(i === 0 ? [255, 220, 50] : 200)
+			this.p.text(`${medal} ${timeStr}  ${record.driverName}  gen${record.generation}`, x + padding, rowY)
+		})
+		this.p.pop()
 	}
 
 	drawClusteringVisualization() {
