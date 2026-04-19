@@ -117,6 +117,7 @@ export default class Car {
     dragCoefficient = 0.35 // Cd - Ferrari 458 Italia
     rollingResistanceCoeff = 0.011 // Crr - Ferrari 458 Italia (performance tires)
     downforceCoefficient = 0 // CL - Ferrari 458 Italia (Enzo didn't value downforce)
+    stationaryDownforce = 0 // N - constant downforce regardless of speed (e.g. fan cars)
 
     /**
      * The force applied to the driving wheel from the input.
@@ -322,7 +323,7 @@ export default class Car {
         }
 
         // Downforce increases normal force on tires, raising the lateral grip limit
-        const downforce = 0.5 * 1.225 * this.downforceCoefficient * this.frontalArea * speedMPS * speedMPS
+        const downforce = 0.5 * 1.225 * this.downforceCoefficient * this.frontalArea * speedMPS * speedMPS + this.stationaryDownforce
         const effectiveNormalForce = this.mass * 9.81 + downforce
         const maxLateralAcceleration = this.tireGripCoefficient * (effectiveNormalForce / this.mass) // m/s²
 

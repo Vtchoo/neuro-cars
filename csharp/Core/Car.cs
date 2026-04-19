@@ -146,6 +146,7 @@ namespace SmartRace.Core
         public double DragCoefficient = 0.35; // Cd - Ferrari 458 Italia
         public double RollingResistanceCoeff = 0.011; // Crr - Ferrari 458 Italia (performance tires)
         public double DownforceCoefficient = 0; // CL - Ferrari 458 Italia (Enzo didn't value downforce)
+        public double StationaryDownforce = 0; // N - constant downforce regardless of speed (e.g. fan cars)
 
         // The brain inside the car
         public NeuralNet NeuralNet { get; set; }
@@ -357,7 +358,7 @@ namespace SmartRace.Core
             }
 
             // Downforce increases normal force on tires, raising the lateral grip limit
-            var downforce = 0.5 * 1.225 * this.DownforceCoefficient * this.FrontalArea * speedMPS * speedMPS;
+            var downforce = 0.5 * 1.225 * this.DownforceCoefficient * this.FrontalArea * speedMPS * speedMPS + this.StationaryDownforce;
             var effectiveNormalForce = this.Mass * 9.81 + downforce;
             var maxLateralAcceleration = this.TireGripCoefficient * (effectiveNormalForce / this.Mass); // m/s²
 
