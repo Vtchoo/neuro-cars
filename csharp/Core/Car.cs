@@ -163,6 +163,9 @@ namespace SmartRace.Core
         public Vector LastCurrentCarPositionInTrack { get; private set; }
         public Vector[] LastLookAheadPoints { get; private set; }
 
+        // Cached track segments to avoid re-converting every tick (set by Game after track loads)
+        public TrackSegment[] CachedTrackSegments { get; set; }
+
         private static readonly Random random = new Random();
 
         public Car(double startX, double startY, double startDir, int generation = 0, CarConfigJson config = null)
@@ -279,7 +282,9 @@ namespace SmartRace.Core
                 this.Speed * Math.Sin(this.Direction) * avgDeltaTime * Constants.UNITS_PER_METER
             );
 
-            var currentCarPositionInTrack = TrackMath.QueryTrack(track.AnalyticPieces.Select(ConvertToTrackSegment).ToArray(), new XY(Position.X, Position.Y), this.Direction);
+            var currentCarPositionInTrack = TrackMath.QueryTrack(
+                CachedTrackSegments ?? track.AnalyticPieces.Select(ConvertToTrackSegment).ToArray(),
+                new XY(Position.X, Position.Y), this.Direction);
             this.LastCarPositionInTrack = currentCarPositionInTrack;
 
             var fitnessReward = CalculateFitnessReward(track, previousCarPositionInTrack, currentCarPositionInTrack);
@@ -418,7 +423,9 @@ namespace SmartRace.Core
             inputs[1] = LastDrivingWheelDirection;
 
             if (LastCarPositionInTrack is null)
-                LastCarPositionInTrack = TrackMath.QueryTrack(track.AnalyticPieces.Select(ConvertToTrackSegment).ToArray(), new XY(Position.X, Position.Y), Direction);
+                LastCarPositionInTrack = TrackMath.QueryTrack(
+                    CachedTrackSegments ?? track.AnalyticPieces.Select(ConvertToTrackSegment).ToArray(),
+                    new XY(Position.X, Position.Y), Direction);
 
             switch (inputFormat)
             {
@@ -501,16 +508,18 @@ namespace SmartRace.Core
             //    new XY(Position.X, Position.Y), Direction);
             
             //LastCarPositionInTrack = currentCarPositionInTrack;
-            var currentCarPositionInTrack = LastCarPositionInTrack ?? TrackMath.QueryTrack(track.AnalyticPieces.Select(ConvertToTrackSegment).ToArray(), new XY(Position.X, Position.Y), Direction);
+            var currentCarPositionInTrack = LastCarPositionInTrack ?? TrackMath.QueryTrack(
+                CachedTrackSegments ?? track.AnalyticPieces.Select(ConvertToTrackSegment).ToArray(),
+                new XY(Position.X, Position.Y), Direction);
 
             LastCurrentCarPositionInTrack = new Vector(currentCarPositionInTrack.Point.X, currentCarPositionInTrack.Point.Y);
 
-            List<Vector> lookAheadPoints = new List<Vector>();
+            var lookAheadPoints = new Vector[totalQueryPoints];
             double distanceBetweenPoints = maxLookaheadDistance / totalQueryPoints;
 
-            for (int i = 1; i <= totalQueryPoints; i++)
+            for (int i = 0; i < totalQueryPoints; i++)
             {
-                double lookaheadDistance = i * distanceBetweenPoints;
+                double lookaheadDistance = (i + 1) * distanceBetweenPoints;
                 double remainingDistance = lookaheadDistance;
                 int segmentIndex = currentCarPositionInTrack.SegmentIndex;
                 Vector pointOnTrack = new Vector(currentCarPositionInTrack.Point.X, currentCarPositionInTrack.Point.Y);
@@ -569,38 +578,35 @@ namespace SmartRace.Core
                     }
                 }
 
-                lookAheadPoints.Add(pointOnTrack);
+                lookAheadPoints[i] = pointOnTrack;
             }
 
-            LastLookAheadPoints = lookAheadPoints.ToArray();
-
-            // Convert lookahead points to relative coordinates
-            Vector[] relativeLookAheadPoints = lookAheadPoints.Select(point =>
-            {
-                Vector relativePosition = Vector.Sub(point, new Vector(currentCarPositionInTrack.Point.X, currentCarPositionInTrack.Point.Y));
-                // Rotate relative position to be relative to tangent
-                XY tangent = currentCarPositionInTrack.Tangent;
-                double rotatedX = relativePosition.X * tangent.X + relativePosition.Y * tangent.Y;
-                double rotatedY = -relativePosition.X * tangent.Y + relativePosition.Y * tangent.X;
-                return new Vector(rotatedX, rotatedY);
-            }).ToArray();
+            LastLookAheadPoints = lookAheadPoints;
 
             double normalizationFactor = 1 + maxLookaheadDistance;
             ITrackPiece trackPiece = track.AnalyticPieces[currentCarPositionInTrack.SegmentIndex];
 
-            List<double> finalInputs = new List<double>();
-            foreach (Vector point in relativeLookAheadPoints)
-            {
-                finalInputs.Add(point.X / normalizationFactor);
-                finalInputs.Add(point.Y / normalizationFactor);
-            }
-            finalInputs.Add(currentCarPositionInTrack.HeadingAngle);
-            finalInputs.Add(currentCarPositionInTrack.LateralOffset / (trackPiece.Width / 2));
+            double[] finalInputs = new double[totalLookAheadPoints * 2 + 2];
+            XY tangent = currentCarPositionInTrack.Tangent;
+            double carPtX = currentCarPositionInTrack.Point.X;
+            double carPtY = currentCarPositionInTrack.Point.Y;
 
-            return finalInputs.ToArray();
+            for (int i = 0; i < lookAheadPoints.Length; i++)
+            {
+                double relX = lookAheadPoints[i].X - carPtX;
+                double relY = lookAheadPoints[i].Y - carPtY;
+                double rotX = relX * tangent.X + relY * tangent.Y;
+                double rotY = -relX * tangent.Y + relY * tangent.X;
+                finalInputs[i * 2]     = rotX / normalizationFactor;
+                finalInputs[i * 2 + 1] = rotY / normalizationFactor;
+            }
+            finalInputs[totalLookAheadPoints * 2]     = currentCarPositionInTrack.HeadingAngle;
+            finalInputs[totalLookAheadPoints * 2 + 1] = currentCarPositionInTrack.LateralOffset / (trackPiece.Width / 2);
+
+            return finalInputs;
         }
 
-        private static TrackSegment ConvertToTrackSegment(ITrackPiece piece)
+        internal static TrackSegment ConvertToTrackSegment(ITrackPiece piece)
         {
             switch (piece.Type)
             {

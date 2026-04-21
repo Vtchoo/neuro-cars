@@ -64,6 +64,9 @@ namespace SmartRace.Core
         private double[][][] weightMatrices;
         private double[][][] biasMatrices;
 
+        // Pre-allocated buffers for zero-allocation forward pass (one flat array per layer output)
+        private double[][] _layerOutputs;
+
         private bool useXavierInitialization = false; // Flag to toggle Xavier initialization
 
         private static readonly Random random = new Random();
@@ -105,6 +108,12 @@ namespace SmartRace.Core
                 biasMatrices[i] = CreateRandomMatrix(neurons, 1, neurons, 1);
             }
             biasMatrices[layers] = CreateRandomMatrix(outputs, 1, neurons, 1);
+
+            // Pre-allocate forward pass output buffers
+            _layerOutputs = new double[layers + 1][];
+            for (int i = 0; i < layers; i++)
+                _layerOutputs[i] = new double[neurons];
+            _layerOutputs[layers] = new double[outputs];
         }
 
         // Helper function to create random matrix with Xavier-style initialization for softsign
@@ -175,34 +184,31 @@ namespace SmartRace.Core
             return result;
         }
 
-        // Forward pass through the network
+        // Forward pass through the network (zero-allocation: uses pre-allocated _layerOutputs buffers)
         public double[] Output(double[] input)
         {
-            // Convert input array to column vector
-            double[][] currentLayer = new double[input.Length][];
-            for (int i = 0; i < input.Length; i++)
+            double[] prevOutput = input;
+
+            for (int l = 0; l < weightMatrices.Length; l++)
             {
-                currentLayer[i] = new double[] { input[i] };
+                double[][] w = weightMatrices[l];
+                double[][] b = biasMatrices[l];
+                double[] buf = _layerOutputs[l];
+                var act = (l == weightMatrices.Length - 1) ? OutputActivation : Activation;
+
+                for (int i = 0; i < buf.Length; i++)
+                {
+                    double sum = b[i][0];
+                    double[] row = w[i];
+                    for (int k = 0; k < prevOutput.Length; k++)
+                        sum += row[k] * prevOutput[k];
+                    buf[i] = Activate(sum, act);
+                }
+
+                prevOutput = buf;
             }
 
-            // Forward pass through all layers
-            for (int i = 0; i < weightMatrices.Length; i++)
-            {
-                // Matrix multiplication: weights * input + bias
-                currentLayer = MatrixMultiply(weightMatrices[i], currentLayer);
-                currentLayer = MatrixAdd(currentLayer, biasMatrices[i]);
-                var activationFunction = (i == weightMatrices.Length - 1) ? OutputActivation : Activation;
-                currentLayer = ApplyActivation(currentLayer, activationFunction);
-            }
-
-            // Convert result back to flat array format
-            double[] outputArray = new double[currentLayer.Length];
-            for (int i = 0; i < currentLayer.Length; i++)
-            {
-                outputArray[i] = currentLayer[i][0];
-            }
-
-            return outputArray;
+            return _layerOutputs[weightMatrices.Length - 1];
         }
 
         // Fitness management

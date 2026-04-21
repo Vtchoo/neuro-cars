@@ -58,6 +58,22 @@ namespace SmartRace.Core
         private Vector start;
         private double direction;
 
+        // Cached track segment array shared by all cars (recomputed only when track changes)
+        private TrackSegment[] _cachedTrackSegments;
+
+        private void RefreshTrackSegmentCache()
+        {
+            if (track == null) return;
+            _cachedTrackSegments = track.AnalyticPieces.Select(Car.ConvertToTrackSegment).ToArray();
+        }
+
+        private void PushTrackSegmentCacheToCars()
+        {
+            if (_cachedTrackSegments == null || population == null) return;
+            foreach (var car in population)
+                car.CachedTrackSegments = _cachedTrackSegments;
+        }
+
         // Training progress tracking
         public List<double> MaxFitness { get; private set; } = [0];
         public List<double> AvgFitness { get; private set; } = [0];
@@ -179,63 +195,47 @@ namespace SmartRace.Core
         {
             Ticks = 0;
             ResetPopulation();
-            
+
             StatusUpdated?.Invoke($"Running generation {Generation}...");
-
-            // High-frequency simulation loop
-            while (Ticks < MaxTicks && !cancellationToken.IsCancellationRequested)
-            {
-                // Parallel processing of all cars
-                await SimulateTickParallelAsync();
-                
-                // Check if all cars have stopped
-                if (AllCarsStopped() && Ticks > 10)
-                    break;
-
-                Ticks++;
-                
-                // Report progress every 100 ticks to avoid flooding
-                if (Ticks % 100 == 0)
-                {
-                    TickCompleted?.Invoke(Ticks);
-                }
-
-                // Optional: Add small delay to prevent CPU overload in debug scenarios
-                // await Task.Delay(1); // Remove for maximum speed
-            }
-
-            // Generation completed - calculate and report fitness
-            ProcessGenerationResults();
-        }
-
-        // Parallel simulation of all cars in a single tick
-        private async Task SimulateTickParallelAsync()
-        {
-            // Skip simulation if no track is loaded
-            if (track == null)
-            {
-                StatusUpdated?.Invoke("Warning: No track loaded, skipping simulation");
-                return;
-            }
 
             await Task.Run(() =>
             {
-                Parallel.ForEach(population, car =>
+                PushTrackSegmentCacheToCars();
+
+                while (Ticks < MaxTicks && !cancellationToken.IsCancellationRequested)
                 {
-                    // Get neural network inputs
-                    var shouldMakeDecision = Ticks % (60 / DecisionsPerSecond) == 0; // assume 60fps in the simulation
-                    if (shouldMakeDecision)
-                    {
-                        // Get neural network output and drive
-                        double[] inputs = car.GetInputs(track);
-                        double[] outputs = car.NeuralNet.Output(inputs);
-                        car.LastInputs = outputs;
-                    }
-                    car.Drive();
-                        
-                    // Update car physics
-                    car.Update(track);
-                });
+                    SimulateTick();
+
+                    if (AllCarsStopped() && Ticks > 10)
+                        break;
+
+                    Ticks++;
+
+                    if (Ticks % 100 == 0)
+                        TickCompleted?.Invoke(Ticks);
+                }
+            }, cancellationToken);
+
+            ProcessGenerationResults();
+        }
+
+        // Synchronous simulation of all cars in a single tick
+        private void SimulateTick()
+        {
+            if (track == null)
+                return;
+
+            Parallel.ForEach(population, car =>
+            {
+                var shouldMakeDecision = Ticks % (60 / DecisionsPerSecond) == 0;
+                if (shouldMakeDecision)
+                {
+                    double[] inputs = car.GetInputs(track);
+                    double[] outputs = car.NeuralNet.Output(inputs);
+                    car.LastInputs = outputs;
+                }
+                car.Drive();
+                car.Update(track);
             });
         }
 
@@ -427,26 +427,25 @@ namespace SmartRace.Core
         private void ResetPopulation()
         {
             var random = new Random();
-            
-            Parallel.ForEach(population, car =>
+
+            foreach (var car in population)
             {
-                // Small random position variation around start point
                 double pointFromRadius = Math.Sqrt(random.NextDouble());
                 double radius = pointFromRadius * TrackWidth / 4;
                 double angle = random.NextDouble() * 2 * Math.PI;
-                
+
                 car.Position = new Vector(
                     start.X + radius * Math.Cos(angle),
                     start.Y + radius * Math.Sin(angle)
                 );
-                
+
                 car.Speed = 0;
                 car.Direction = direction;
                 car.Acceleration = 0;
                 car.LastDrivingWheelDirection = 0;
                 car.LastCarPositionInTrack = null;
                 car.NeuralNet.ResetFitness();
-            });
+            }
         }
 
         // Restore game state from save data
@@ -489,6 +488,7 @@ namespace SmartRace.Core
                     
                     // Create the actual track object from JSON data
                     track = Track.FromJsonData(saveData.Track);
+                    RefreshTrackSegmentCache();
                     StatusUpdated?.Invoke($"Track loaded: {saveData.Track.Pieces.Count} pieces");
                 }
                 else
