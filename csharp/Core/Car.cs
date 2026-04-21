@@ -126,6 +126,8 @@ namespace SmartRace.Core
         public double Acceleration { get; set; } = 0;
         public double Direction { get; set; } = 0;
         public double LastDrivingWheelDirection { get; set; } = 0;
+
+        public double[] LastInputs { get; set; } = [0, 0];
         public double DrivingWheelForce = 0.05;
 
         // Ackermann steering properties
@@ -334,10 +336,10 @@ namespace SmartRace.Core
         }
 
         // Inputs for driving the car with Ackermann steering and tire slip simulation
-        public void Drive(double[] input)
+        public void Drive()
         {
             // Calculate realistic acceleration based on throttle input (-1 to 1)
-            var throttleInput = input[0]; // -1 to 1
+            var throttleInput = LastInputs[0]; // -1 to 1
 
 
             if (throttleInput >= 0)
@@ -356,7 +358,7 @@ namespace SmartRace.Core
             }
 
             // Calculate target steering angle from input (-1 to 1)
-            var targetSteeringInput = input[1]; // -1 to 1
+            var targetSteeringInput = LastInputs[1]; // -1 to 1
             var targetSteeringAngle = targetSteeringInput * this.MaxSteeringAngle;
 
             // Apply tire slip limitation - limit actual steering angle based on current speed

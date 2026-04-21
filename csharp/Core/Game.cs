@@ -49,6 +49,7 @@ namespace SmartRace.Core
         public int Ticks { get; private set; } = 0;
         public int MaxTicks { get; private set; } = 1000;
         public int CapTicks { get; private set; } = 15000;
+        private readonly int DecisionsPerSecond = 10;
         public CarConfigJson CarConfig { get; set; } = JsonMapping.SupercarConfig;
         
         // Track and population
@@ -222,11 +223,15 @@ namespace SmartRace.Core
                 Parallel.ForEach(population, car =>
                 {
                     // Get neural network inputs
-                    double[] inputs = car.GetInputs(track);
-                        
-                    // Get neural network output and drive
-                    double[] outputs = car.NeuralNet.Output(inputs);
-                    car.Drive(outputs);
+                    var shouldMakeDecision = Ticks % (60 / DecisionsPerSecond) == 0; // assume 60fps in the simulation
+                    if (shouldMakeDecision)
+                    {
+                        // Get neural network output and drive
+                        double[] inputs = car.GetInputs(track);
+                        double[] outputs = car.NeuralNet.Output(inputs);
+                        car.LastInputs = outputs;
+                    }
+                    car.Drive();
                         
                     // Update car physics
                     car.Update(track);

@@ -99,6 +99,7 @@ export default class Car {
     acceleration = 0
     direction = 0
     lastDrivingWheelDirection = 0
+    lastInputs: number[] = [0, 0]
 
     // Ackermann steering properties
     wheelbase = 3 // 3 meters
@@ -396,9 +397,9 @@ export default class Car {
     }
 
     // Inputs for driving the car with Ackermann steering and tire slip simulation
-    drive(input: number[]) {
+    drive() {
         // Calculate realistic acceleration based on throttle input (-1 to 1)
-        const throttleInput = input[0] // -1 to 1
+        const throttleInput = this.lastInputs[0] // -1 to 1
 
         if (throttleInput >= 0) {
             // Power-limited engine force: full torque at low speed, power-capped at high speed
@@ -413,7 +414,7 @@ export default class Car {
         }
 
         // Calculate target steering angle from input (-1 to 1)
-        const targetSteeringInput = input[1] // -1 to 1
+        const targetSteeringInput = this.lastInputs[1] // -1 to 1
         const targetSteeringAngle = targetSteeringInput * this.maxSteeringAngle
 
         // Apply tire slip limitation - limit actual steering angle based on current speed
@@ -427,7 +428,7 @@ export default class Car {
     }
 
     // Gets sensors' data
-    getInputs(trackMap: number[][], showInputs: boolean, p: p5, resolution: number, track: Track) {
+    updateSensors(trackMap: number[][], showInputs: boolean, p: p5, resolution: number, track: Track) {
         const inputs = [
             signedLog(this.speed),
             this.lastDrivingWheelDirection,

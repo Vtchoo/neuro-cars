@@ -110,7 +110,6 @@ export default class Game {
 	followCar: Car | null = null
 
 	private readonly decisionsPerSecond = 10
-	private lastDecisionTime = 0
 
 	// Track building
 	direction: number //of the starting track
@@ -421,18 +420,20 @@ export default class Game {
 				// or the AI detection map
 				if (this.showMap == true) { this.p.image(this.renderMap, 0, 0) }
 
-				const currentTime = Date.now()
-				const shouldMakeDecision = currentTime - this.lastDecisionTime >= 1000 / this.decisionsPerSecond
-				if (shouldMakeDecision) {
-					this.lastDecisionTime = currentTime
-				}
+				const shouldMakeDecision = this.ticks % Math.floor(60 / this.decisionsPerSecond) === 0
 
 				// Updates each individual
 				this.population.forEach((individual) => {
-					// if (shouldMakeDecision) {
-					const inputs = individual.getInputs(this.trackMap, false, this.p, this.resolution, this.track)
-					individual.drive(individual.neuralNet.output(inputs))
-					// }
+					const shouldUpdateSensors =
+						shouldMakeDecision ||
+						this.showInputs === "all" ||
+						this.getFollowedCar() === individual
+					
+					const sensorsData = shouldUpdateSensors ? individual.updateSensors(this.trackMap, false, this.p, this.resolution, this.track) : individual.lastInputs
+					if (shouldMakeDecision) {
+						individual.lastInputs = individual.neuralNet.output(sensorsData)
+					}
+					individual.drive()
 					individual.update(this.trackMap, this.resolution, this.track, false, this.ticks)
 					if (individual.lastCompletedLapTicks !== null) {
 						if (this.bestLapTime === null || individual.lastCompletedLapTicks < this.bestLapTime) {
@@ -452,7 +453,7 @@ export default class Game {
 				if (this.showNeuralNet) {
 					const followed = this.getFollowedCar()
 					if (followed) {
-						const tracedInputs = followed.getInputs(this.trackMap, false, this.p, this.resolution, this.track)
+						const tracedInputs = followed.updateSensors(this.trackMap, false, this.p, this.resolution, this.track)
 						this.lastNNTrace = followed.neuralNet.forwardWithTrace(tracedInputs)
 					} else {
 						this.lastNNTrace = null
