@@ -101,7 +101,7 @@ export default class Game {
 	track = new Track()
 	population: Car[] = []
 
-	carConfig: CarPreset = supercarPreset
+	carConfig: CarPreset = f1CarPreset
 
 	lapRecords: { ticks: number, driverName: string, generation: number }[] = []
 	bestLapTime: number | null = null
@@ -109,7 +109,7 @@ export default class Game {
 	followBestCar: 'off' | 'best' | 'bestActive' = 'off'
 	followCar: Car | null = null
 
-	private readonly decisionsPerSecond = 10
+	private readonly decisionsPerSecond = 60
 
 	// Track building
 	direction: number //of the starting track
@@ -230,8 +230,12 @@ export default class Game {
 	/**
 	 * Cycles through track's track pieces as starting points for the race, instead of always starting at the same point. This makes the AI more robust and able to handle different parts of the track.
 	 */
-	cycleStartPoint: 'off' | 'sequential' | 'random' = 'random'
+	cycleStartPoint: 'off' | 'sequential' | 'random' | 'sequentialContinuous' | 'randomPoint' = 'sequentialContinuous'
 	startPointIndex = 0
+	/** Offset in units within the current piece for sequentialContinuous mode */
+	startPointOffset = 0
+	/** How far (in track units) to advance per generation in sequentialContinuous mode */
+	sequentialContinuousStep = 1000 // 1000 units = 100 m
 
 	incrementMaxTicks(increment: number) {
 		this.maxTicks += increment
@@ -428,7 +432,7 @@ export default class Game {
 						shouldMakeDecision ||
 						this.showInputs === "all" ||
 						this.getFollowedCar() === individual
-					
+
 					const sensorsData = shouldUpdateSensors ? individual.updateSensors(this.trackMap, false, this.p, this.resolution, this.track) : individual.lastInputs
 					if (shouldMakeDecision) {
 						individual.lastInputs = individual.neuralNet.output(sensorsData)
@@ -625,24 +629,62 @@ export default class Game {
 				let startingPoint = this.start
 				let startingDirection = this.direction
 				if (this.cycleStartPoint !== 'off') {
-					let newStartPiece
-					while (!newStartPiece) {
-						if (this.cycleStartPoint === 'sequential') {
-							this.startPointIndex = (this.startPointIndex + 1) % this.track.pieces.length
-						} else if (this.cycleStartPoint === 'random') {
-							this.startPointIndex = Math.floor(Math.random() * this.track.pieces.length)
+					switch (this.cycleStartPoint) {
+						case 'sequential': {
+							let newStartPiece
+							while (!newStartPiece) {
+								this.startPointIndex = (this.startPointIndex + 1) % this.track.pieces.length
+								const candidate = this.track.pieces[this.startPointIndex]
+								if (candidate.type === TrackPieceType.Arc) {
+									const radius = Vector.sub(candidate.center, candidate.start).mag()
+									if (radius < trackWidth) continue
+								}
+								newStartPiece = candidate
+							}
+							startingPoint = newStartPiece.start
+							startingDirection = Track.getTrackPieceStartDirection(newStartPiece)
+							break
 						}
-						const startPieceCandidate = this.track.pieces[this.startPointIndex]
-						// if it's an arc and the radius is too small, skip it because the cars would just crash immediately and not learn anything
-						if (startPieceCandidate.type === TrackPieceType.Arc) {
-							const radius = Vector.sub(startPieceCandidate.center, startPieceCandidate.start).mag()
-							if (radius < trackWidth)
-								continue
+						case 'random': {
+							let newStartPiece
+							while (!newStartPiece) {
+								this.startPointIndex = Math.floor(Math.random() * this.track.pieces.length)
+								const candidate = this.track.pieces[this.startPointIndex]
+								if (candidate.type === TrackPieceType.Arc) {
+									const radius = Vector.sub(candidate.center, candidate.start).mag()
+									if (radius < trackWidth) continue
+								}
+								newStartPiece = candidate
+							}
+							startingPoint = newStartPiece.start
+							startingDirection = Track.getTrackPieceStartDirection(newStartPiece)
+							break
 						}
-						newStartPiece = startPieceCandidate
+						case 'sequentialContinuous': {
+							const result = Track.getPointAtDistance(
+								this.track.analyticPieces,
+								this.startPointIndex,
+								this.startPointOffset,
+								this.sequentialContinuousStep
+							)
+							this.startPointIndex = result.pieceIndex
+							this.startPointOffset = result.offsetInPiece
+							startingPoint = result.point
+							startingDirection = result.direction
+							break
+						}
+						case 'randomPoint': {
+							const totalLength = this.track.analyticPieces.reduce(
+								(sum, p) => sum + Track.getTrackPieceLength(p), 0
+							)
+							const result = Track.getPointAtDistance(this.track.analyticPieces, 0, 0, Math.random() * totalLength)
+							this.startPointIndex = result.pieceIndex
+							this.startPointOffset = result.offsetInPiece
+							startingPoint = result.point
+							startingDirection = result.direction
+							break
+						}
 					}
-					startingPoint = newStartPiece.start
-					startingDirection = Track.getTrackPieceStartDirection(newStartPiece)
 				}
 
 				// Resets every individual's car
@@ -1211,7 +1253,8 @@ export default class Game {
 			const secs = (totalSecs % 60).toFixed(3).padStart(6, '0')
 			const timeStr = mins > 0 ? `${mins}:${secs}` : `${secs}s`
 			const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`
-			this.p.fill(i === 0 ? [255, 220, 50] : 200)
+			if (i === 0) this.p.fill(255, 220, 50)
+			else this.p.fill(200)
 			this.p.text(`${medal} ${timeStr}  ${record.driverName}  gen${record.generation}`, x + padding, rowY)
 		})
 		this.p.pop()

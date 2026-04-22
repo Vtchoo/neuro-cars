@@ -22,7 +22,9 @@ namespace SmartRace.Core
     {
         Off,
         Sequential,
-        Random
+        Random,
+        SequentialContinuous,
+        RandomPoint
     }
 
     // Note: JSON mapping classes are now in JsonMapping.cs for compatibility
@@ -49,7 +51,7 @@ namespace SmartRace.Core
         public int Ticks { get; private set; } = 0;
         public int MaxTicks { get; private set; } = 1000;
         public int CapTicks { get; private set; } = 15000;
-        private readonly int DecisionsPerSecond = 10;
+        private readonly int DecisionsPerSecond = 60;
         public CarConfigJson CarConfig { get; set; } = JsonMapping.SupercarConfig;
         
         // Track and population
@@ -84,8 +86,12 @@ namespace SmartRace.Core
             get => cycleStartPoint; 
             set => cycleStartPoint = value; 
         }
-        private CycleStartPoint cycleStartPoint = CycleStartPoint.Sequential;
+        private CycleStartPoint cycleStartPoint = CycleStartPoint.SequentialContinuous;
         private int startPointIndex = 0;
+        /// <summary>Offset in units within the current piece for SequentialContinuous mode.</summary>
+        private double startPointOffset = 0;
+        /// <summary>How far (in track units) to advance per generation in SequentialContinuous mode. 1000 units = 100 m.</summary>
+        public double SequentialContinuousStep { get; set; } = 1000;
 
         // Events for progress reporting
         public event Action<int, double, double, double> GenerationCompleted; // generation, maxFitness, avgFitness, fitnessPerTick
@@ -353,46 +359,128 @@ namespace SmartRace.Core
         // Update starting point for variety
         private void UpdateStartingPoint()
         {
-            if (cycleStartPoint == CycleStartPoint.Off || track?.Pieces == null || track.Pieces.Length == 0)
+            if (cycleStartPoint == CycleStartPoint.Off)
                 return;
 
-            var random = new Random();
-            ITrackPiece newStartPiece = null;
-            
-            // Keep trying until we find a suitable starting piece
-            while (newStartPiece == null)
+            switch (cycleStartPoint)
             {
-                // Update the start point index based on cycling mode
-                if (cycleStartPoint == CycleStartPoint.Sequential)
-                {
-                    startPointIndex = (startPointIndex + 1) % track.Pieces.Length;
-                }
-                else if (cycleStartPoint == CycleStartPoint.Random)
-                {
-                    startPointIndex = random.Next(track.Pieces.Length);
-                }
+                case CycleStartPoint.Sequential:
+                case CycleStartPoint.Random:
+                    {
+                        if (track?.Pieces == null || track.Pieces.Length == 0) return;
+                        var random = new Random();
+                        ITrackPiece newStartPiece = null;
 
-                var startPieceCandidate = track.Pieces[startPointIndex];
-                
-                // If it's an arc and the radius is too small, skip it because cars would crash immediately
-                if (startPieceCandidate.Type == TrackPieceType.Arc)
+                        while (newStartPiece == null)
+                        {
+                            if (cycleStartPoint == CycleStartPoint.Sequential)
+                                startPointIndex = (startPointIndex + 1) % track.Pieces.Length;
+                            else
+                                startPointIndex = random.Next(track.Pieces.Length);
+
+                            var candidate = track.Pieces[startPointIndex];
+                            if (candidate.Type == TrackPieceType.Arc)
+                            {
+                                var arcPiece = (IArcPiece)candidate;
+                                if (Vector.Sub(arcPiece.Start, arcPiece.Center).Mag() < TrackWidth)
+                                    continue;
+                            }
+                            newStartPiece = candidate;
+                        }
+
+                        start = new Vector(newStartPiece.Start.X, newStartPiece.Start.Y);
+                        direction = CalculateStartingDirection(newStartPiece);
+                        StatusUpdated?.Invoke($"Starting point updated to piece {startPointIndex} ({newStartPiece.Type})");
+                        break;
+                    }
+
+                case CycleStartPoint.SequentialContinuous:
+                    {
+                        if (track?.AnalyticPieces == null || track.AnalyticPieces.Length == 0) return;
+                        var result = GetPointAtDistance(track.AnalyticPieces, startPointIndex, startPointOffset, SequentialContinuousStep);
+                        startPointIndex = result.pieceIndex;
+                        startPointOffset = result.offsetInPiece;
+                        start = result.point;
+                        direction = result.direction;
+                        StatusUpdated?.Invoke($"Starting point advanced to piece {startPointIndex} offset {startPointOffset:F1}");
+                        break;
+                    }
+
+                case CycleStartPoint.RandomPoint:
+                    {
+                        if (track?.AnalyticPieces == null || track.AnalyticPieces.Length == 0) return;
+                        double totalLength = track.AnalyticPieces.Sum(p => p.Length);
+                        double randomDist = new Random().NextDouble() * totalLength;
+                        var result = GetPointAtDistance(track.AnalyticPieces, 0, 0, randomDist);
+                        startPointIndex = result.pieceIndex;
+                        startPointOffset = result.offsetInPiece;
+                        start = result.point;
+                        direction = result.direction;
+                        StatusUpdated?.Invoke($"Starting point randomized to piece {startPointIndex} offset {startPointOffset:F1}");
+                        break;
+                    }
+            }
+        }
+
+        /// <summary>
+        /// Walk <paramref name="distance"/> units forward along the track starting from
+        /// <paramref name="offsetInPiece"/> into piece <paramref name="pieceIndex"/>.
+        /// Returns the world position, tangent direction, and the new piece index + offset.
+        /// </summary>
+        private static (Vector point, double direction, int pieceIndex, double offsetInPiece) GetPointAtDistance(
+            ITrackPiece[] pieces, int pieceIndex, double offsetInPiece, double distance)
+        {
+            int idx = pieceIndex;
+            double offset = offsetInPiece;
+
+            while (distance > 0)
+            {
+                var piece = pieces[idx];
+                double remaining = piece.Length - offset;
+
+                if (distance < remaining)
                 {
-                    var arcPiece = (IArcPiece)startPieceCandidate;
-                    var radiusVector = Vector.Sub(arcPiece.Start, arcPiece.Center);
-                    var radius = radiusVector.Mag();
-                    
-                    if (radius < TrackWidth)
-                        continue; // Skip this piece and try the next one
+                    offset += distance;
+                    distance = 0;
                 }
-                
-                newStartPiece = startPieceCandidate;
+                else
+                {
+                    distance -= remaining;
+                    idx = (idx + 1) % pieces.Length;
+                    offset = 0;
+                }
             }
 
-            // Update starting point and direction based on the selected piece
-            start = new Vector(newStartPiece.Start.X, newStartPiece.Start.Y);
-            direction = CalculateStartingDirection(newStartPiece);
-            
-            StatusUpdated?.Invoke($"Starting point updated to piece {startPointIndex} ({newStartPiece.Type})");
+            var currentPiece = pieces[idx];
+            double t = offset / currentPiece.Length;
+
+            Vector point;
+            double dir;
+
+            if (currentPiece.Type == TrackPieceType.Straight)
+            {
+                double dx = currentPiece.End.X - currentPiece.Start.X;
+                double dy = currentPiece.End.Y - currentPiece.Start.Y;
+                point = new Vector(currentPiece.Start.X + dx * t, currentPiece.Start.Y + dy * t);
+                dir = Math.Atan2(dy, dx);
+            }
+            else // Arc
+            {
+                var arcPiece = (IArcPiece)currentPiece;
+                double radius = Math.Sqrt(
+                    Math.Pow(currentPiece.Start.X - arcPiece.Center.X, 2) +
+                    Math.Pow(currentPiece.Start.Y - arcPiece.Center.Y, 2));
+                double startAngle = Math.Atan2(currentPiece.Start.Y - arcPiece.Center.Y, currentPiece.Start.X - arcPiece.Center.X);
+                double endAngle = Math.Atan2(currentPiece.End.Y - arcPiece.Center.Y, currentPiece.End.X - arcPiece.Center.X);
+                double angleDiff = endAngle - startAngle;
+                if (!arcPiece.Clockwise && angleDiff > 0) angleDiff -= 2 * Math.PI;
+                else if (arcPiece.Clockwise && angleDiff < 0) angleDiff += 2 * Math.PI;
+                double angle = startAngle + angleDiff * t;
+                point = new Vector(arcPiece.Center.X + radius * Math.Cos(angle), arcPiece.Center.Y + radius * Math.Sin(angle));
+                dir = angle + (arcPiece.Clockwise ? Math.PI / 2 : -Math.PI / 2);
+            }
+
+            return (point, dir, idx, offset);
         }
 
         // Calculate the starting direction based on track piece type

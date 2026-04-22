@@ -63,7 +63,7 @@ namespace SmartRace.WinForms
                 Size = new System.Drawing.Size(90, 20),
                 DropDownStyle = ComboBoxStyle.DropDownList
             };
-            cmbCycleMode.Items.AddRange(new[] { "Off", "Sequential", "Random" });
+            cmbCycleMode.Items.AddRange(["Off", "Sequential", "SequentialContinuous", "Random", "RandomPoint"]);
             cmbCycleMode.SelectedIndex = 1; // Default to Sequential
 
             // Status display
@@ -233,7 +233,13 @@ namespace SmartRace.WinForms
                         game.CycleStartPoint = CycleStartPoint.Sequential;
                         break;
                     case 2:
+                        game.CycleStartPoint = CycleStartPoint.SequentialContinuous;
+                        break;
+                    case 3:
                         game.CycleStartPoint = CycleStartPoint.Random;
+                        break;
+                    case 4:
+                        game.CycleStartPoint = CycleStartPoint.RandomPoint;
                         break;
                 }
                 LogMessage($"Start point cycling set to: {game.CycleStartPoint}");

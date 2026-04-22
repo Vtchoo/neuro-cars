@@ -1540,6 +1540,62 @@ export default class Track {
         return angleDiff > 0; // If the angle difference is positive, it's clockwise
     }
 
+    /**
+     * Walk `distance` units forward along the track starting from `offsetInPiece` into piece `pieceIndex`.
+     * Returns the world position, tangent direction, and the new piece index + offset.
+     */
+    static getPointAtDistance(
+        pieces: TrackPiece[],
+        pieceIndex: number,
+        offsetInPiece: number,
+        distance: number
+    ): { point: Vector, direction: number, pieceIndex: number, offsetInPiece: number } {
+        let idx = pieceIndex
+        let offset = offsetInPiece
+
+        while (distance > 0) {
+            const piece = pieces[idx]
+            const pieceLen = Track.getTrackPieceLength(piece)
+            const remaining = pieceLen - offset
+
+            if (distance < remaining) {
+                offset += distance
+                distance = 0
+            } else {
+                distance -= remaining
+                idx = (idx + 1) % pieces.length
+                offset = 0
+            }
+        }
+
+        const piece = pieces[idx]
+        const t = offset / Track.getTrackPieceLength(piece)
+
+        let point: Vector
+        let direction: number
+
+        if (piece.type === TrackPieceType.Straight) {
+            const dx = piece.end.x - piece.start.x
+            const dy = piece.end.y - piece.start.y
+            point = new Vector(piece.start.x + dx * t, piece.start.y + dy * t)
+            direction = Math.atan2(dy, dx)
+        } else if (piece.type === TrackPieceType.Arc) {
+            const radius = Math.sqrt((piece.center.x - piece.start.x) ** 2 + (piece.center.y - piece.start.y) ** 2)
+            const startAngle = Math.atan2(piece.start.y - piece.center.y, piece.start.x - piece.center.x)
+            const endAngle = Math.atan2(piece.end.y - piece.center.y, piece.end.x - piece.center.x)
+            let angleDiff = endAngle - startAngle
+            if (!piece.clockwise && angleDiff > 0) angleDiff -= 2 * Math.PI
+            else if (piece.clockwise && angleDiff < 0) angleDiff += 2 * Math.PI
+            const angle = startAngle + angleDiff * t
+            point = new Vector(piece.center.x + radius * Math.cos(angle), piece.center.y + radius * Math.sin(angle))
+            direction = angle + (piece.clockwise ? Math.PI / 2 : -Math.PI / 2)
+        } else {
+            throw new Error('getPointAtDistance: unsupported piece type')
+        }
+
+        return { point, direction, pieceIndex: idx, offsetInPiece: offset }
+    }
+
     static getTrackPieceLength(piece: TrackPiece): number {
         switch (piece.type) {
             case TrackPieceType.Straight:
