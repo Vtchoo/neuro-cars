@@ -187,26 +187,63 @@ function closestPointOnSegment(seg: TrackSegment, q: XY): ClosestPointResult {
     }
 }
 
+// Search radius for neighbour-hint queries: checks hint ± NEIGHBOR_SEARCH_RADIUS segments.
+// A car travelling at 80 m/s × 1/60 s × UNITS_PER_METER fits well within 1 segment, so
+// radius 2 gives a comfortable safety margin while keeping the scan to 5 segments max.
+const NEIGHBOR_SEARCH_RADIUS = 2;
+
+function findClosestOnTrack(
+    track: TrackSegment[],
+    carPos: XY,
+    hint: number
+): ClosestPointOnTrackResult {
+    // When a valid hint is supplied and there are enough segments, scan only the
+    // hint's neighbourhood.  If the nearest neighbour result looks implausibly far
+    // (distance² > 1e9 sq-units) fall back to the full scan so we never return
+    // a wrong segment after a teleport or a reset.
+    if (hint >= 0 && hint < track.length && track.length > NEIGHBOR_SEARCH_RADIUS * 2) {
+        let neighborBest: ClosestPointOnTrackResult | null = null;
+
+        for (let offset = -NEIGHBOR_SEARCH_RADIUS; offset <= NEIGHBOR_SEARCH_RADIUS; offset++) {
+            const i = (hint + offset + track.length) % track.length;
+            const r = closestPointOnSegment(track[i], carPos);
+            if (!neighborBest || r.distanceSq < neighborBest.distanceSq) {
+                neighborBest = { ...r, segmentIndex: i };
+            }
+        }
+
+        // Sanity check: if distance is unreasonably large the car has teleported;
+        // fall through to the full scan.
+        if (neighborBest!.distanceSq < 1e9) {
+            return neighborBest!;
+        }
+    }
+
+    // Full scan fallback (first call, after reset, or implausible neighbour result).
+    let fullBest: ClosestPointOnTrackResult | null = null;
+    for (let i = 0; i < track.length; i++) {
+        const r = closestPointOnSegment(track[i], carPos);
+        if (!fullBest || r.distanceSq < fullBest.distanceSq) {
+            fullBest = { ...r, segmentIndex: i };
+        }
+    }
+    return fullBest!;
+}
+
 export function queryTrack(
     track: TrackSegment[],
     carPos: XY,
-    carAngle: number
+    carAngle: number,
+    hintSegmentIndex = -1
 ): TrackQueryResult {
     if (track.length === 0) {
         throw new Error("Track must contain at least one segment.");
     }
 
-    let best: (ClosestPointResult & { segmentIndex: number }) | null = null;
+    const best = findClosestOnTrack(track, carPos, hintSegmentIndex);
 
-    for (let i = 0; i < track.length; i++) {
-        const r = closestPointOnSegment(track[i], carPos);
-        if (!best || r.distanceSq < best.distanceSq) {
-            best = { ...r, segmentIndex: i };
-        }
-    }
-
-    const tangent = normalize(best!.tangent);
-    const delta = sub(carPos, best!.point);
+    const tangent = normalize(best.tangent);
+    const delta = sub(carPos, best.point);
 
     // Right-positive lateral offset
     const right = rightNormalFromTangent(tangent);
@@ -217,7 +254,7 @@ export function queryTrack(
     const headingAngle = wrapAngle(carAngle - trackAngle);
 
     return {
-        ...best!,
+        ...best,
         tangent,
         lateralOffset,
         headingAngle,

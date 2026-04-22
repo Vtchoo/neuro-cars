@@ -144,6 +144,9 @@ export default class Car {
     lastLookAheadPoints: Vector[] | null = null
     lastCarPositionInTrack: TrackQueryResult | null = null
 
+    // Cached track segments to avoid re-converting every tick (set externally after track loads)
+    cachedTrackSegments: TrackSegment[] | null = null
+
     // Lap timing
     private lapStartTick: number | null = null
     private lapMaxSegment: number = 0
@@ -253,7 +256,8 @@ export default class Car {
             this.speed * Math.sin(this.direction) * avgDeltaTime * UNITS_PER_METER
         )
 
-        const currentCarPositionInTrack = queryTrack(track.analyticPieces.map(convertToTrackSegment), this.pos, this.direction)
+        const trackSegments = this.cachedTrackSegments ?? (this.cachedTrackSegments = track.analyticPieces.map(convertToTrackSegment))
+        const currentCarPositionInTrack = queryTrack(trackSegments, this.pos, this.direction, this.lastCarPositionInTrack?.segmentIndex ?? -1)
         this.lastCarPositionInTrack = currentCarPositionInTrack
 
         // Lap timing — detect crossing the start/finish line (boundary between last and first segment)
@@ -435,7 +439,9 @@ export default class Car {
         ]
 
         if (!this.lastCarPositionInTrack)
-            this.lastCarPositionInTrack = queryTrack(track.analyticPieces.map(convertToTrackSegment), this.pos, this.direction)
+            this.lastCarPositionInTrack = queryTrack(
+                this.cachedTrackSegments ?? (this.cachedTrackSegments = track.analyticPieces.map(convertToTrackSegment)),
+                this.pos, this.direction, -1)
 
         switch (this.inputFormat) {
             case "raycast": {
@@ -493,7 +499,9 @@ export default class Car {
         const maxLookaheadDistance = singleFrameDistance * 60 * 6 // look ahead up to 6 seconds in the future at current speed
 
         // const currentCarPositionInTrack = queryTrack(track.analyticPieces.map(convertToTrackSegment), this.pos, this.direction)
-        const currentCarPositionInTrack = this.lastCarPositionInTrack || queryTrack(track.analyticPieces.map(convertToTrackSegment), this.pos, this.direction)
+        const currentCarPositionInTrack = this.lastCarPositionInTrack || queryTrack(
+            this.cachedTrackSegments ?? (this.cachedTrackSegments = track.analyticPieces.map(convertToTrackSegment)),
+            this.pos, this.direction, -1)
         this.lastCurrentCarPositionInTrack = new Vector(currentCarPositionInTrack.point.x, currentCarPositionInTrack.point.y)
 
         const lookAheadPoints: Vector[] = []
