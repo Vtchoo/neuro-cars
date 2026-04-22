@@ -290,7 +290,8 @@ namespace SmartRace.Core
 
             var currentCarPositionInTrack = TrackMath.QueryTrack(
                 CachedTrackSegments ?? track.AnalyticPieces.Select(ConvertToTrackSegment).ToArray(),
-                new XY(Position.X, Position.Y), this.Direction);
+                new XY(Position.X, Position.Y), this.Direction,
+                previousCarPositionInTrack?.SegmentIndex ?? -1);
             this.LastCarPositionInTrack = currentCarPositionInTrack;
 
             var fitnessReward = CalculateFitnessReward(track, previousCarPositionInTrack, currentCarPositionInTrack);

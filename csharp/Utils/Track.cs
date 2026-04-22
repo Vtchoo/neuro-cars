@@ -382,35 +382,17 @@ namespace SmartRace.Utils
             }
         }
 
-        public static TrackQueryResult QueryTrack(TrackSegment[] track, XY carPos, double carAngle)
+        public static TrackQueryResult QueryTrack(TrackSegment[] track, XY carPos, double carAngle, int hintSegmentIndex = -1)
         {
             if (track.Length == 0)
             {
                 throw new ArgumentException("Track must contain at least one segment.");
             }
 
-            ClosestPointOnTrackResult? best = null;
+            ClosestPointOnTrackResult best = FindClosestOnTrack(track, carPos, hintSegmentIndex);
 
-            for (int i = 0; i < track.Length; i++)
-            {
-                ClosestPointResult r = ClosestPointOnSegment(track[i], carPos);
-                if (!best.HasValue || r.DistanceSq < best.Value.DistanceSq)
-                {
-                    best = new ClosestPointOnTrackResult
-                    {
-                        Point = r.Point,
-                        Tangent = r.Tangent,
-                        Distance = r.Distance,
-                        DistanceSq = r.DistanceSq,
-                        T = r.T,
-                        SegmentIndex = i,
-                        DistanceFromTrackPieceStart = r.DistanceFromTrackPieceStart,
-                    };
-                }
-            }
-
-            XY tangent = Normalize(best.Value.Tangent);
-            XY delta = Sub(carPos, best.Value.Point);
+            XY tangent = Normalize(best.Tangent);
+            XY delta = Sub(carPos, best.Point);
 
             // Right-positive lateral offset
             XY right = RightNormalFromTangent(tangent);
@@ -422,16 +404,85 @@ namespace SmartRace.Utils
 
             return new TrackQueryResult
             {
-                Point = best.Value.Point,
+                Point = best.Point,
                 Tangent = tangent,
-                Distance = best.Value.Distance,
-                DistanceSq = best.Value.DistanceSq,
-                T = best.Value.T,
-                SegmentIndex = best.Value.SegmentIndex,
+                Distance = best.Distance,
+                DistanceSq = best.DistanceSq,
+                T = best.T,
+                SegmentIndex = best.SegmentIndex,
                 LateralOffset = lateralOffset,
                 HeadingAngle = headingAngle,
-                DistanceFromTrackPieceStart = best.Value.DistanceFromTrackPieceStart,
+                DistanceFromTrackPieceStart = best.DistanceFromTrackPieceStart,
             };
+        }
+
+        // Search radius for neighbour-hint queries: checks hint ± NeighborSearchRadius segments.
+        // A car travelling at 80 m/s × 1/60 s × UNITS_PER_METER fits well within 1 segment, so
+        // radius 2 gives a comfortable safety margin while keeping the scan to 5 segments max.
+        private const int NeighborSearchRadius = 2;
+
+        private static ClosestPointOnTrackResult FindClosestOnTrack(TrackSegment[] track, XY carPos, int hint)
+        {
+            // When a valid hint is supplied and there are enough segments, scan only the
+            // hint's neighbourhood.  If the nearest neighbour result looks implausibly far
+            // (distance > half the track width, which we approximate conservatively as 1e9
+            // sq-units to stay unit-agnostic) fall back to the full scan so we never return
+            // a wrong segment after a teleport or a reset.
+            if (hint >= 0 && hint < track.Length && track.Length > NeighborSearchRadius * 2)
+            {
+                ClosestPointOnTrackResult neighborBest = default;
+                bool found = false;
+
+                for (int offset = -NeighborSearchRadius; offset <= NeighborSearchRadius; offset++)
+                {
+                    int i = (hint + offset + track.Length) % track.Length;
+                    ClosestPointResult r = ClosestPointOnSegment(track[i], carPos);
+                    if (!found || r.DistanceSq < neighborBest.DistanceSq)
+                    {
+                        neighborBest = new ClosestPointOnTrackResult
+                        {
+                            Point = r.Point,
+                            Tangent = r.Tangent,
+                            Distance = r.Distance,
+                            DistanceSq = r.DistanceSq,
+                            T = r.T,
+                            SegmentIndex = i,
+                            DistanceFromTrackPieceStart = r.DistanceFromTrackPieceStart,
+                        };
+                        found = true;
+                    }
+                }
+
+                // Sanity check: if distance is unreasonably large the car has teleported;
+                // fall through to the full scan.
+                if (neighborBest.DistanceSq < 1e9)
+                    return neighborBest;
+            }
+
+            // Full scan fallback (first call, after reset, or implausible neighbour result).
+            ClosestPointOnTrackResult fullBest = default;
+            bool fullFound = false;
+
+            for (int i = 0; i < track.Length; i++)
+            {
+                ClosestPointResult r = ClosestPointOnSegment(track[i], carPos);
+                if (!fullFound || r.DistanceSq < fullBest.DistanceSq)
+                {
+                    fullBest = new ClosestPointOnTrackResult
+                    {
+                        Point = r.Point,
+                        Tangent = r.Tangent,
+                        Distance = r.Distance,
+                        DistanceSq = r.DistanceSq,
+                        T = r.T,
+                        SegmentIndex = i,
+                        DistanceFromTrackPieceStart = r.DistanceFromTrackPieceStart,
+                    };
+                    fullFound = true;
+                }
+            }
+
+            return fullBest;
         }
     }
 }
