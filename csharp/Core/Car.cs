@@ -166,6 +166,10 @@ namespace SmartRace.Core
         // Cached track segments to avoid re-converting every tick (set by Game after track loads)
         public TrackSegment[] CachedTrackSegments { get; set; }
 
+        // Pre-allocated input/output buffers to avoid per-tick heap allocations
+        private double[] _cachedInputs;
+        private double[] _cachedRaycastDistances;
+
         private static readonly Random random = new Random();
 
         public Car(double startX, double startY, double startDir, int generation = 0, CarConfigJson config = null)
@@ -179,6 +183,8 @@ namespace SmartRace.Core
 
             int inputs = GetInputsCount();
             NeuralNet = new NeuralNet(nnLayers, nnNeurons, inputs, nnOutputs, nnRange, nnMutationRate, nnActivation);
+            _cachedInputs = new double[inputs];
+            _cachedRaycastDistances = new double[totalRayCastRays];
 
             HSL color = new HSL(Generation % 360, 100, 50);
             ColorHSL = color;
@@ -418,7 +424,8 @@ namespace SmartRace.Core
             }
 
 
-            var inputs = new double[GetInputsCount()];
+            var inputs = _cachedInputs;
+            Array.Clear(inputs, 0, inputs.Length);
             inputs[0] = ActivationFunctions.SignedLog(Speed);
             inputs[1] = LastDrivingWheelDirection;
 
@@ -454,7 +461,8 @@ namespace SmartRace.Core
             // Return default inputs if no track available
             if (track == null)
             {
-                LastRayCastDistances = inputs.Take(totalRayCastRays).ToArray();
+                Array.Clear(_cachedRaycastDistances, 0, totalRayCastRays);
+                LastRayCastDistances = _cachedRaycastDistances;
                 return inputs;
             }
 
@@ -482,7 +490,8 @@ namespace SmartRace.Core
                 }
             }
             
-            LastRayCastDistances = inputs.Take(totalRayCastRays).ToArray();
+            Array.Copy(inputs, _cachedRaycastDistances, totalRayCastRays);
+            LastRayCastDistances = _cachedRaycastDistances;
             return inputs;
         }
 
@@ -514,15 +523,17 @@ namespace SmartRace.Core
 
             LastCurrentCarPositionInTrack = new Vector(currentCarPositionInTrack.Point.X, currentCarPositionInTrack.Point.Y);
 
-            var lookAheadPoints = new Vector[totalQueryPoints];
+            // Store lookahead points as flat double pairs (X0,Y0, X1,Y1, ...) to avoid Vector heap allocations
             double distanceBetweenPoints = maxLookaheadDistance / totalQueryPoints;
+            double[] lookAheadX = new double[totalQueryPoints];
+            double[] lookAheadY = new double[totalQueryPoints];
 
             for (int i = 0; i < totalQueryPoints; i++)
             {
-                double lookaheadDistance = (i + 1) * distanceBetweenPoints;
-                double remainingDistance = lookaheadDistance;
+                double remainingDistance = (i + 1) * distanceBetweenPoints;
                 int segmentIndex = currentCarPositionInTrack.SegmentIndex;
-                Vector pointOnTrack = new Vector(currentCarPositionInTrack.Point.X, currentCarPositionInTrack.Point.Y);
+                double ptX = currentCarPositionInTrack.Point.X;
+                double ptY = currentCarPositionInTrack.Point.Y;
 
                 while (remainingDistance > 0)
                 {
@@ -532,56 +543,79 @@ namespace SmartRace.Core
                     {
                         case TrackPieceType.Straight:
                             {
-                                double availableDistanceInCurrentSegment = Vector.Sub(segment.End, pointOnTrack).Mag();
-                                if (remainingDistance <= availableDistanceInCurrentSegment)
+                                double dX = segment.End.X - ptX;
+                                double dY = segment.End.Y - ptY;
+                                double availableDistance = Math.Sqrt(dX * dX + dY * dY);
+                                if (remainingDistance <= availableDistance)
                                 {
-                                    Vector segmentDirection = Vector.Sub(segment.End, segment.Start);
-                                    Vector unitVector = new Vector(segmentDirection.X / segmentDirection.Mag(), segmentDirection.Y / segmentDirection.Mag());
-                                    pointOnTrack = new Vector(pointOnTrack.X + unitVector.X * remainingDistance, pointOnTrack.Y + unitVector.Y * remainingDistance);
+                                    double sdX = segment.End.X - segment.Start.X;
+                                    double sdY = segment.End.Y - segment.Start.Y;
+                                    double invMag = 1.0 / Math.Sqrt(sdX * sdX + sdY * sdY);
+                                    ptX += sdX * invMag * remainingDistance;
+                                    ptY += sdY * invMag * remainingDistance;
                                     remainingDistance = 0;
                                 }
                                 else
                                 {
-                                    remainingDistance -= availableDistanceInCurrentSegment;
+                                    remainingDistance -= availableDistance;
                                     segmentIndex = (segmentIndex + 1) % track.AnalyticPieces.Length;
-                                    pointOnTrack = track.AnalyticPieces[segmentIndex].Start;
+                                    ptX = track.AnalyticPieces[segmentIndex].Start.X;
+                                    ptY = track.AnalyticPieces[segmentIndex].Start.Y;
                                 }
                                 break;
                             }
                         case TrackPieceType.Arc:
                             {
                                 IArcPiece arcSegment = segment as IArcPiece;
-                                Vector center = arcSegment.Center;
-                                double radius = Vector.Sub(segment.Start, center).Mag();
+                                double cX = arcSegment.Center.X;
+                                double cY = arcSegment.Center.Y;
+                                double rDx = segment.Start.X - cX;
+                                double rDy = segment.Start.Y - cY;
+                                double radius = Math.Sqrt(rDx * rDx + rDy * rDy);
 
-                                double finalAngle = (Math.Atan2(segment.End.Y - center.Y, segment.End.X - center.X) + 2 * Math.PI) % (2 * Math.PI);
-                                double startAngle = (Math.Atan2(pointOnTrack.Y - center.Y, pointOnTrack.X - center.X) + 2 * Math.PI) % (2 * Math.PI);
+                                double finalAngle = (Math.Atan2(segment.End.Y - cY, segment.End.X - cX) + 2 * Math.PI) % (2 * Math.PI);
+                                double startAngle = (Math.Atan2(ptY - cY, ptX - cX) + 2 * Math.PI) % (2 * Math.PI);
 
-                                double availableAngleInCurrentSegment = arcSegment.Clockwise ? finalAngle - startAngle : startAngle - finalAngle;
-                                double availableDistanceInCurrentSegment = Math.Abs((availableAngleInCurrentSegment + 2 * Math.PI) % (2 * Math.PI)) * radius;
+                                double availableAngle = arcSegment.Clockwise ? finalAngle - startAngle : startAngle - finalAngle;
+                                double availableDistance = Math.Abs((availableAngle + 2 * Math.PI) % (2 * Math.PI)) * radius;
 
-                                if (remainingDistance <= availableDistanceInCurrentSegment)
+                                if (remainingDistance <= availableDistance)
                                 {
                                     double angleDirection = arcSegment.Clockwise ? 1 : -1;
-                                    double angleToPoint = Math.Atan2(pointOnTrack.Y - center.Y, pointOnTrack.X - center.X) + angleDirection * (remainingDistance / radius);
-                                    pointOnTrack = new Vector(center.X + radius * Math.Cos(angleToPoint), center.Y + radius * Math.Sin(angleToPoint));
+                                    double angleToPoint = Math.Atan2(ptY - cY, ptX - cX) + angleDirection * (remainingDistance / radius);
+                                    ptX = cX + radius * Math.Cos(angleToPoint);
+                                    ptY = cY + radius * Math.Sin(angleToPoint);
                                     remainingDistance = 0;
                                 }
                                 else
                                 {
-                                    remainingDistance -= availableDistanceInCurrentSegment;
+                                    remainingDistance -= availableDistance;
                                     segmentIndex = (segmentIndex + 1) % track.AnalyticPieces.Length;
-                                    pointOnTrack = track.AnalyticPieces[segmentIndex].Start;
+                                    ptX = track.AnalyticPieces[segmentIndex].Start.X;
+                                    ptY = track.AnalyticPieces[segmentIndex].Start.Y;
                                 }
                                 break;
                             }
                     }
                 }
 
-                lookAheadPoints[i] = pointOnTrack;
+                lookAheadX[i] = ptX;
+                lookAheadY[i] = ptY;
             }
 
-            LastLookAheadPoints = lookAheadPoints;
+            // Update LastLookAheadPoints (used externally for visualization only)
+            if (LastLookAheadPoints == null || LastLookAheadPoints.Length != totalQueryPoints)
+                LastLookAheadPoints = new Vector[totalQueryPoints];
+            for (int i = 0; i < totalQueryPoints; i++)
+            {
+                if (LastLookAheadPoints[i] == null)
+                    LastLookAheadPoints[i] = new Vector(lookAheadX[i], lookAheadY[i]);
+                else
+                {
+                    LastLookAheadPoints[i].X = lookAheadX[i];
+                    LastLookAheadPoints[i].Y = lookAheadY[i];
+                }
+            }
 
             double normalizationFactor = 1 + maxLookaheadDistance;
             ITrackPiece trackPiece = track.AnalyticPieces[currentCarPositionInTrack.SegmentIndex];
@@ -591,14 +625,12 @@ namespace SmartRace.Core
             double carPtX = currentCarPositionInTrack.Point.X;
             double carPtY = currentCarPositionInTrack.Point.Y;
 
-            for (int i = 0; i < lookAheadPoints.Length; i++)
+            for (int i = 0; i < totalQueryPoints; i++)
             {
-                double relX = lookAheadPoints[i].X - carPtX;
-                double relY = lookAheadPoints[i].Y - carPtY;
-                double rotX = relX * tangent.X + relY * tangent.Y;
-                double rotY = -relX * tangent.Y + relY * tangent.X;
-                finalInputs[i * 2]     = rotX / normalizationFactor;
-                finalInputs[i * 2 + 1] = rotY / normalizationFactor;
+                double relX = lookAheadX[i] - carPtX;
+                double relY = lookAheadY[i] - carPtY;
+                finalInputs[i * 2]     = (relX * tangent.X + relY * tangent.Y) / normalizationFactor;
+                finalInputs[i * 2 + 1] = (-relX * tangent.Y + relY * tangent.X) / normalizationFactor;
             }
             finalInputs[totalLookAheadPoints * 2]     = currentCarPositionInTrack.HeadingAngle;
             finalInputs[totalLookAheadPoints * 2 + 1] = currentCarPositionInTrack.LateralOffset / (trackPiece.Width / 2);
