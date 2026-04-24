@@ -58,8 +58,8 @@ export function drawNeuralNet(
     const PANEL_W      = 210
     const MIN_RADIUS   = 3
     const MAX_RADIUS   = 8
-    const MIN_SPACING  = MIN_RADIUS * 2.5
-    const MAX_PANEL_H  = p.height - PANEL_TOP - 30
+    const BIAS_ZONE_H  = 26           // pixels reserved at the bottom for bias nodes
+    const MAX_PANEL_H  = (p.height / 2)// - PANEL_TOP - 30
     const PADDING      = 12
 
     const totalLayers = 2 + net.layers   // input col + hidden cols + output col
@@ -69,14 +69,16 @@ export function drawNeuralNet(
 
     const maxNeurons = Math.max(...layerSizes)
 
-    // Size neurons so they fit in MAX_PANEL_H
-    const spacingFromH = (MAX_PANEL_H - PADDING * 2) / maxNeurons
-    const neuronSpacing = Math.min(MAX_RADIUS * 2.8, Math.max(MIN_SPACING, spacingFromH))
+    // Neurons fill the panel minus bias zone – no minimum spacing so they can overlap
+    const availableForNeurons = MAX_PANEL_H - PADDING * 2 - BIAS_ZONE_H
+    const neuronSpacing = Math.min(MAX_RADIUS * 2.8, availableForNeurons / maxNeurons)
     const neuronR = Math.min(MAX_RADIUS, Math.max(MIN_RADIUS, neuronSpacing / 2.5))
 
     const contentH = (maxNeurons - 1) * neuronSpacing
-    const biasExtraH = neuronSpacing * 1.5 + neuronR * 1.6   // room for bias nodes
-    const panelH = contentH + PADDING * 2 + neuronR * 2 + biasExtraH
+    const panelH = MAX_PANEL_H   // always capped
+
+    // Bias node Y: anchored to the bottom of the panel interior
+    const biasY = PANEL_TOP + panelH - BIAS_ZONE_H / 2
 
     // ── background panel ──
     p.noStroke()
@@ -123,7 +125,6 @@ export function drawNeuralNet(
 
             // Bias edge: from bias node of layer t to dstPts[dst]
             const biasX = positions[t][0][0]
-            const biasY = positions[t][positions[t].length - 1][1] + neuronSpacing * 1.5
             const bval = biasContribs?.[dst] ?? 0
             const [br, bg, bb, ba] = trace ? edgeColor(bval) : [130, 130, 130, 25]
             if (!trace || ba >= 8) {
@@ -137,7 +138,6 @@ export function drawNeuralNet(
     // ── draw bias nodes (one per source column, below the neurons) ──
     for (let t = 0; t < totalLayers - 1; t++) {
         const colX = positions[t][0][0]
-        const biasY = positions[t][positions[t].length - 1][1] + neuronSpacing * 1.5
         p.noStroke()
         p.fill(220, 220, 100, 220)   // distinct yellow
         p.circle(colX, biasY, neuronR * 1.6)
