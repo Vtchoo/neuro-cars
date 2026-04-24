@@ -771,6 +771,8 @@ export default class Game {
 				"S - Save game",
 				"L - Load game",
 				`Generation: ${this.generation}`,
+				`Max age: ${this.population.reduce((max, car) => Math.max(max, this.generation - car.generation), 0)}`,
+				`Average age: ${this.population.reduce((sum, car) => sum + (this.generation - car.generation), 0) / this.population.length || 0}`,
 			],
 			20,
 			30,
