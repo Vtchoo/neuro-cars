@@ -379,6 +379,19 @@ namespace SmartRace.Core
             // Clamp the steering angle to what the tires can actually provide
             this.SteeringAngle = Math.Sign(targetSteeringAngle) * Math.Min(Math.Abs(targetSteeringAngle), maxEffectiveAngle);
 
+            // Friction circle: tires have a finite combined grip budget.
+            // When lateral acceleration is high, less grip remains for longitudinal force.
+            if (Math.Abs(this.SteeringAngle) > 0.001 && Math.Abs(this.Speed) > 0.1)
+            {
+                var speedMPS = Math.Abs(this.Speed);
+                var downforce = 0.5 * 1.225 * this.DownforceCoefficient * this.FrontalArea * speedMPS * speedMPS + this.StationaryDownforce;
+                var maxLateralAccel = this.TireGripCoefficient * (this.Mass * 9.81 + downforce) / this.Mass;
+                var turningRadius = this.Wheelbase / Math.Tan(Math.Abs(this.SteeringAngle));
+                var lateralAccel = (speedMPS * speedMPS) / turningRadius;
+                var frictionCircleFactor = Math.Sqrt(Math.Max(0.0, 1.0 - Math.Pow(lateralAccel / maxLateralAccel, 2)));
+                this.Acceleration *= frictionCircleFactor;
+            }
+
             // Keep lastDrivingWheelDirection for neural network input consistency
             this.LastDrivingWheelDirection = targetSteeringInput;
         }

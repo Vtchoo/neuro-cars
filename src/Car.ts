@@ -427,6 +427,18 @@ export default class Car {
         // Clamp the steering angle to what the tires can actually provide
         this.steeringAngle = Math.sign(targetSteeringAngle) * Math.min(Math.abs(targetSteeringAngle), maxEffectiveAngle)
 
+        // Friction circle: tires have a finite combined grip budget.
+        // When lateral acceleration is high, less grip remains for longitudinal force.
+        if (Math.abs(this.steeringAngle) > 0.001 && Math.abs(this.speed) > 0.1) {
+            const speedMPS = Math.abs(this.speed)
+            const downforce = 0.5 * 1.225 * this.downforceCoefficient * this.frontalArea * speedMPS * speedMPS + this.stationaryDownforce
+            const maxLateralAccel = this.tireGripCoefficient * (this.mass * 9.81 + downforce) / this.mass
+            const turningRadius = this.wheelbase / Math.tan(Math.abs(this.steeringAngle))
+            const lateralAccel = (speedMPS * speedMPS) / turningRadius
+            const frictionCircleFactor = Math.sqrt(Math.max(0, 1 - (lateralAccel / maxLateralAccel) ** 2))
+            this.acceleration *= frictionCircleFactor
+        }
+
         // Keep lastDrivingWheelDirection for neural network input consistency
         this.lastDrivingWheelDirection = targetSteeringInput
     }
