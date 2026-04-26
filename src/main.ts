@@ -230,7 +230,7 @@ export default class Game {
 	/**
 	 * Cycles through track's track pieces as starting points for the race, instead of always starting at the same point. This makes the AI more robust and able to handle different parts of the track.
 	 */
-	cycleStartPoint: 'off' | 'sequential' | 'random' | 'sequentialContinuous' | 'randomPoint' = 'sequentialContinuous'
+	cycleStartPoint: 'off' | 'sequential' | 'random' | 'sequentialContinuous' | 'randomPoint' = 'randomPoint'
 	startPointIndex = 0
 	/** Offset in units within the current piece for sequentialContinuous mode */
 	startPointOffset = 0
