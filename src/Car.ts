@@ -587,7 +587,10 @@ export default class Car {
         const trackPiece = track.analyticPieces[currentCarPositionInTrack.segmentIndex]
 
         const finalInputs = [
-            ...relativeLookAheadPoints.flatMap(point => [point.x / normalizationFactor, point.y / normalizationFactor]),
+            ...relativeLookAheadPoints.flatMap((point, i) => {
+                const normalization = (totalqueryPoints / (i + 1)) / normalizationFactor
+                return [point.x * normalization, point.y * normalization]
+            }),
             currentCarPositionInTrack.headingAngle,
             currentCarPositionInTrack.lateralOffset / (trackPiece.width / 2),
         ]

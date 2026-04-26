@@ -643,8 +643,9 @@ namespace SmartRace.Core
             {
                 double relX = lookAheadX[i] - carPtX;
                 double relY = lookAheadY[i] - carPtY;
-                finalInputs[i * 2]     = (relX * tangent.X + relY * tangent.Y) / normalizationFactor;
-                finalInputs[i * 2 + 1] = (-relX * tangent.Y + relY * tangent.X) / normalizationFactor;
+                double normalization = (totalQueryPoints / (double)(i + 1)) / normalizationFactor;
+                finalInputs[i * 2]     = (relX * tangent.X + relY * tangent.Y) * normalization;
+                finalInputs[i * 2 + 1] = (-relX * tangent.Y + relY * tangent.X) * normalization;
             }
             finalInputs[totalLookAheadPoints * 2]     = currentCarPositionInTrack.HeadingAngle;
             finalInputs[totalLookAheadPoints * 2 + 1] = currentCarPositionInTrack.LateralOffset / (trackPiece.Width / 2);
