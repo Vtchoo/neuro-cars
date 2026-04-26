@@ -1,4 +1,4 @@
-import { add, angleOf, ArcSegment, BezierSegment, clamp, distanceSq, dot, length, lengthSq, LineSegment, mul, normalize, sub, wrapAngle, XY } from "./math";
+import { ArcSegment, BezierSegment, LineSegment, wrapAngle, XY } from "./math";
 
 export type ClosestPointResult = {
     point: XY;
@@ -21,6 +21,35 @@ export type TrackQueryResult = ClosestPointResult & {
     headingAngle: number;  // signed angle from track tangent to car heading, in [-PI, PI]
 };
 
+/** Creates a zero-initialized TrackQueryResult — use for pre-allocation, then pass to queryTrack. */
+export function makeTrackQueryResult(): TrackQueryResult {
+    return {
+        point: { x: 0, y: 0 },
+        tangent: { x: 0, y: 0 },
+        distanceSq: 0, distance: 0, t: 0, distanceFromTrackPieceStart: 0,
+        segmentIndex: -1, lateralOffset: 0, headingAngle: 0,
+    };
+}
+
+// ---------------------------------------------------------------------------
+// Module-level scratch objects — NEVER store these references; they are
+// overwritten on every call. Safe because JS is single-threaded and the call
+// chain is fully synchronous.
+// ---------------------------------------------------------------------------
+const _cpPt: XY = { x: 0, y: 0 };
+const _cpTg: XY = { x: 0, y: 0 };
+const _cpScratch: ClosestPointResult = {
+    point: _cpPt, tangent: _cpTg,
+    distanceSq: 0, distance: 0, t: 0, distanceFromTrackPieceStart: 0,
+};
+const _bestPt: XY = { x: 0, y: 0 };
+const _bestTg: XY = { x: 0, y: 0 };
+const _bestScratch: ClosestPointOnTrackResult = {
+    point: _bestPt, tangent: _bestTg,
+    distanceSq: Infinity, distance: 0, t: 0, distanceFromTrackPieceStart: 0,
+    segmentIndex: 0,
+};
+
 /**
  * Signed angular travel from 'from' to 'to'.
  * If ccw=true, result is in [0, 2π).
@@ -38,128 +67,115 @@ export function signedArcDelta(from: number, to: number, ccw: boolean): number {
     return d;
 }
 
+// Returns _cpScratch — do NOT store the reference, read immediately.
 export function closestPointOnLineSegment(seg: LineSegment, q: XY): ClosestPointResult {
-    const a = seg.start;
-    const b = seg.end;
-    const ab = sub(b, a);
-    const abLenSq = lengthSq(ab);
+    const ax = seg.start.x, ay = seg.start.y;
+    const bx = seg.end.x,   by = seg.end.y;
+    const abx = bx - ax,    aby = by - ay;
+    const abLenSq = abx * abx + aby * aby;
 
     if (abLenSq < 1e-12) {
-        const tangent = { x: 1, y: 0 };
-        const d2 = distanceSq(q, a);
-        return {
-            point: a,
-            tangent,
-            distanceSq: d2,
-            distance: Math.sqrt(d2),
-            t: 0,
-            distanceFromTrackPieceStart: 0,
-        };
+        const dx = q.x - ax, dy = q.y - ay;
+        const d2 = dx * dx + dy * dy;
+        _cpPt.x = ax; _cpPt.y = ay;
+        _cpTg.x = 1;  _cpTg.y = 0;
+        _cpScratch.distanceSq = d2;
+        _cpScratch.distance = Math.sqrt(d2);
+        _cpScratch.t = 0;
+        _cpScratch.distanceFromTrackPieceStart = 0;
+        return _cpScratch;
     }
 
-    const t = clamp(dot(sub(q, a), ab) / abLenSq, 0, 1);
-    const point = add(a, mul(ab, t));
-    const tangent = normalize(ab);
-    const d2 = distanceSq(q, point);
+    const raw = ((q.x - ax) * abx + (q.y - ay) * aby) / abLenSq;
+    const t = raw < 0 ? 0 : raw > 1 ? 1 : raw;
+    const px = ax + abx * t,  py = ay + aby * t;
+    const abLen = Math.sqrt(abLenSq);
+    const dx = q.x - px, dy = q.y - py;
+    const d2 = dx * dx + dy * dy;
 
-    const distanceFromTrackPieceStart = t * Math.sqrt(abLenSq);
-
-    return {
-        point,
-        tangent,
-        distanceSq: d2,
-        distance: Math.sqrt(d2),
-        t,
-        distanceFromTrackPieceStart,
-    };
+    _cpPt.x = px; _cpPt.y = py;
+    _cpTg.x = abx / abLen; _cpTg.y = aby / abLen;
+    _cpScratch.distanceSq = d2;
+    _cpScratch.distance = Math.sqrt(d2);
+    _cpScratch.t = t;
+    _cpScratch.distanceFromTrackPieceStart = t * abLen;
+    return _cpScratch;
 }
 
+// Returns _cpScratch — do NOT store the reference, read immediately.
 export function closestPointOnArcSegment(seg: ArcSegment, q: XY): ClosestPointResult {
-    const { start, end, center } = seg;
+    const cx = seg.center.x, cy = seg.center.y;
+    const vsx = seg.start.x - cx, vsy = seg.start.y - cy;
+    const vex = seg.end.x   - cx, vey = seg.end.y   - cy;
+    const vqx = q.x - cx,         vqy = q.y - cy;
 
-    const vs = sub(start, center);
-    const ve = sub(end, center);
-    const vq = sub(q, center);
+    const rs = Math.sqrt(vsx * vsx + vsy * vsy);
+    const re = Math.sqrt(vex * vex + vey * vey);
 
-    const rs = length(vs);
-    const re = length(ve);
-
-    if (rs < 1e-12 || re < 1e-12) {
-        throw new Error("Arc start/end must not coincide with center.");
-    }
+    if (rs < 1e-12 || re < 1e-12) throw new Error("Arc start/end must not coincide with center.");
 
     const radius = 0.5 * (rs + re);
-    if (Math.abs(rs - re) > 1e-6 * Math.max(1, radius)) {
-        throw new Error("Arc start and end are not on the same circle.");
-    }
+    if (Math.abs(rs - re) > 1e-6 * Math.max(1, radius)) throw new Error("Arc start and end are not on the same circle.");
 
-    const a0 = angleOf(vs);
-    const a1 = angleOf(ve);
-    const aq = angleOf(vq);
-
-    // // Choose minor arc direction
-    // const ccwDelta = signedArcDelta(a0, a1, true);   // [0, 2π)
-    // const cwDelta = signedArcDelta(a0, a1, false);   // (-2π, 0]
+    const a0 = Math.atan2(vsy, vsx);
+    const a1 = Math.atan2(vey, vex);
+    const aq = Math.atan2(vqy, vqx);
 
     const useCCW = seg.clockwise;
     const totalDelta = signedArcDelta(a0, a1, useCCW);
-
-    // Where does q lie along that directed arc?
     const qDelta = signedArcDelta(a0, aq, useCCW);
-    const onArc =
-        useCCW
-            ? qDelta >= 0 && qDelta <= totalDelta
-            : qDelta <= 0 && qDelta >= totalDelta;
+    const onArc = useCCW
+        ? qDelta >= 0 && qDelta <= totalDelta
+        : qDelta <= 0 && qDelta >= totalDelta;
 
-    let point: XY;
-    let t: number;
+    let px: number, py: number, t: number;
+    const vqLenSq = vqx * vqx + vqy * vqy;
 
-    if (lengthSq(vq) === 0) {
-        // Query exactly at center: any circle point is equally radially valid,
-        // so fall back to nearest endpoint.
-        const d2Start = distanceSq(q, start);
-        const d2End = distanceSq(q, end);
-        if (d2Start <= d2End) {
-            point = start;
-            t = 0;
+    if (vqLenSq === 0) {
+        const dsx = q.x - seg.start.x, dsy = q.y - seg.start.y;
+        const dex = q.x - seg.end.x,   dey = q.y - seg.end.y;
+        if (dsx * dsx + dsy * dsy <= dex * dex + dey * dey) {
+            px = seg.start.x; py = seg.start.y; t = 0;
         } else {
-            point = end;
-            t = 1;
+            px = seg.end.x;   py = seg.end.y;   t = 1;
         }
     } else if (onArc) {
-        const dir = normalize(vq);
-        point = add(center, mul(dir, radius));
+        const vqLen = Math.sqrt(vqLenSq);
+        px = cx + (vqx / vqLen) * radius;
+        py = cy + (vqy / vqLen) * radius;
         t = totalDelta === 0 ? 0 : qDelta / totalDelta;
     } else {
-        const d2Start = distanceSq(q, start);
-        const d2End = distanceSq(q, end);
-        if (d2Start <= d2End) {
-            point = start;
-            t = 0;
+        const dsx = q.x - seg.start.x, dsy = q.y - seg.start.y;
+        const dex = q.x - seg.end.x,   dey = q.y - seg.end.y;
+        if (dsx * dsx + dsy * dsy <= dex * dex + dey * dey) {
+            px = seg.start.x; py = seg.start.y; t = 0;
         } else {
-            point = end;
-            t = 1;
+            px = seg.end.x;   py = seg.end.y;   t = 1;
         }
     }
 
-    // Forward tangent follows arc direction.
-    const radial = normalize(sub(point, center));
-    const tangent = !seg.clockwise
-        ? { x: radial.y, y: -radial.x }   // rotate radial by -90°
-        : { x: -radial.y, y: radial.x };  // rotate radial by +90°
+    // Forward tangent: rotate unit radial by ±90° (already unit length).
+    const rpx = px - cx, rpy = py - cy;
+    const rpLen = Math.sqrt(rpx * rpx + rpy * rpy);
+    let tanX: number, tanY: number;
+    if (rpLen < 1e-12) { tanX = 1; tanY = 0; }
+    else {
+        const rx = rpx / rpLen, ry = rpy / rpLen;
+        if (!seg.clockwise) { tanX = ry;  tanY = -rx; }  // rotate -90°
+        else                { tanX = -ry; tanY =  rx; }  // rotate +90°
+    }
 
-    const d2 = distanceSq(q, point);
+    const dx = q.x - px, dy = q.y - py;
+    const d2 = dx * dx + dy * dy;
+    const tc = t < 0 ? 0 : t > 1 ? 1 : t;
 
-    const distanceFromTrackPieceStart = t * Math.abs(totalDelta) * radius;
-
-    return {
-        point,
-        tangent: normalize(tangent),
-        distanceSq: d2,
-        distance: Math.sqrt(d2),
-        t: clamp(t, 0, 1),
-        distanceFromTrackPieceStart,
-    };
+    _cpPt.x = px; _cpPt.y = py;
+    _cpTg.x = tanX; _cpTg.y = tanY;
+    _cpScratch.distanceSq = d2;
+    _cpScratch.distance = Math.sqrt(d2);
+    _cpScratch.t = tc;
+    _cpScratch.distanceFromTrackPieceStart = tc * Math.abs(totalDelta) * radius;
+    return _cpScratch;
 }
 
 /**
@@ -192,71 +208,91 @@ function closestPointOnSegment(seg: TrackSegment, q: XY): ClosestPointResult {
 // radius 2 gives a comfortable safety margin while keeping the scan to 5 segments max.
 const NEIGHBOR_SEARCH_RADIUS = 2;
 
+// Returns _bestScratch — do NOT store the reference, read immediately.
 function findClosestOnTrack(
     track: TrackSegment[],
     carPos: XY,
     hint: number
 ): ClosestPointOnTrackResult {
-    // When a valid hint is supplied and there are enough segments, scan only the
-    // hint's neighbourhood.  If the nearest neighbour result looks implausibly far
-    // (distance² > 1e9 sq-units) fall back to the full scan so we never return
-    // a wrong segment after a teleport or a reset.
     if (hint >= 0 && hint < track.length && track.length > NEIGHBOR_SEARCH_RADIUS * 2) {
-        let neighborBest: ClosestPointOnTrackResult | null = null;
-
+        let found = false;
         for (let offset = -NEIGHBOR_SEARCH_RADIUS; offset <= NEIGHBOR_SEARCH_RADIUS; offset++) {
             const i = (hint + offset + track.length) % track.length;
-            const r = closestPointOnSegment(track[i], carPos);
-            if (!neighborBest || r.distanceSq < neighborBest.distanceSq) {
-                neighborBest = { ...r, segmentIndex: i };
+            const r = closestPointOnSegment(track[i], carPos); // writes _cpScratch
+            if (!found || r.distanceSq < _bestScratch.distanceSq) {
+                _bestPt.x = r.point.x;   _bestPt.y = r.point.y;
+                _bestTg.x = r.tangent.x; _bestTg.y = r.tangent.y;
+                _bestScratch.distanceSq = r.distanceSq;
+                _bestScratch.distance   = r.distance;
+                _bestScratch.t          = r.t;
+                _bestScratch.distanceFromTrackPieceStart = r.distanceFromTrackPieceStart;
+                _bestScratch.segmentIndex = i;
+                found = true;
             }
         }
-
-        // Sanity check: if distance is unreasonably large the car has teleported;
-        // fall through to the full scan.
-        if (neighborBest!.distanceSq < 1e9) {
-            return neighborBest!;
-        }
+        if (found && _bestScratch.distanceSq < 1e9) return _bestScratch;
     }
 
-    // Full scan fallback (first call, after reset, or implausible neighbour result).
-    let fullBest: ClosestPointOnTrackResult | null = null;
+    // Full scan fallback.
+    let found = false;
     for (let i = 0; i < track.length; i++) {
-        const r = closestPointOnSegment(track[i], carPos);
-        if (!fullBest || r.distanceSq < fullBest.distanceSq) {
-            fullBest = { ...r, segmentIndex: i };
+        const r = closestPointOnSegment(track[i], carPos); // writes _cpScratch
+        if (!found || r.distanceSq < _bestScratch.distanceSq) {
+            _bestPt.x = r.point.x;   _bestPt.y = r.point.y;
+            _bestTg.x = r.tangent.x; _bestTg.y = r.tangent.y;
+            _bestScratch.distanceSq = r.distanceSq;
+            _bestScratch.distance   = r.distance;
+            _bestScratch.t          = r.t;
+            _bestScratch.distanceFromTrackPieceStart = r.distanceFromTrackPieceStart;
+            _bestScratch.segmentIndex = i;
+            found = true;
         }
     }
-    return fullBest!;
+    return _bestScratch;
 }
 
+/**
+ * Query the track for the car's position. Writes the result into `out` if provided
+ * (recommended — pass a pre-allocated TrackQueryResult to avoid heap allocation).
+ * If `out` is omitted a new object is allocated (first-call / non-hot-path use only).
+ */
 export function queryTrack(
     track: TrackSegment[],
     carPos: XY,
     carAngle: number,
-    hintSegmentIndex = -1
+    hintSegmentIndex = -1,
+    out?: TrackQueryResult
 ): TrackQueryResult {
-    if (track.length === 0) {
-        throw new Error("Track must contain at least one segment.");
-    }
+    if (track.length === 0) throw new Error("Track must contain at least one segment.");
 
-    const best = findClosestOnTrack(track, carPos, hintSegmentIndex);
+    const best = findClosestOnTrack(track, carPos, hintSegmentIndex); // writes _bestScratch
 
-    const tangent = normalize(best.tangent);
-    const delta = sub(carPos, best.point);
+    // Normalize tangent (inline — avoids sub/normalize allocations)
+    const tx = best.tangent.x, ty = best.tangent.y;
+    const tLen = Math.sqrt(tx * tx + ty * ty);
+    const ntx = tLen > 1e-12 ? tx / tLen : tx;
+    const nty = tLen > 1e-12 ? ty / tLen : ty;
 
-    // Right-positive lateral offset
-    const right = rightNormalFromTangent(tangent);
-    const lateralOffset = dot(delta, right);
+    // delta = carPos - best.point
+    const dx = carPos.x - best.point.x;
+    const dy = carPos.y - best.point.y;
 
-    // Signed heading angle from track tangent to car heading, in [-PI, PI]
-    const trackAngle = angleOf(tangent);
-    const headingAngle = wrapAngle(carAngle - trackAngle);
+    // right = rightNormal(tangent) = { x: nty, y: -ntx }
+    const lateralOffset = dx * nty + dy * (-ntx);
 
-    return {
-        ...best,
-        tangent,
-        lateralOffset,
-        headingAngle,
-    };
+    const headingAngle = wrapAngle(carAngle - Math.atan2(nty, ntx));
+
+    const result = out ?? makeTrackQueryResult();
+    result.point.x   = best.point.x;
+    result.point.y   = best.point.y;
+    result.tangent.x = ntx;
+    result.tangent.y = nty;
+    result.distanceSq = best.distanceSq;
+    result.distance   = best.distance;
+    result.t          = best.t;
+    result.distanceFromTrackPieceStart = best.distanceFromTrackPieceStart;
+    result.segmentIndex  = best.segmentIndex;
+    result.lateralOffset = lateralOffset;
+    result.headingAngle  = headingAngle;
+    return result;
 }

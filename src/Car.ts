@@ -2,7 +2,7 @@ import p5 from "p5"
 import { ActivationFunction, NeuralNet } from "./NeuralNet"
 import { newVector, Vector } from "./Vector"
 import Track, { TrackPiece, TrackPieceType } from "./Track"
-import { queryTrack, TrackQueryResult, TrackSegment } from "./utils/track"
+import { makeTrackQueryResult, queryTrack, TrackQueryResult, TrackSegment } from "./utils/track"
 import { convertHSLToRGB } from "./utils/colors"
 import { signedLog, softsign } from "./utils/activationFunctions"
 import { XY } from "./utils/math"
@@ -142,10 +142,38 @@ export default class Car {
     private totalLookAheadPoints = 10
     lastCurrentCarPositionInTrack: Vector | null = null
     lastLookAheadPoints: Vector[] | null = null
-    lastCarPositionInTrack: TrackQueryResult | null = null
+
+    // Ping-pong pre-allocated TrackQueryResult buffers — zero alloc per tick.
+    // _tqrFlip=false → A is current; _tqrFlip=true → B is current.
+    private _tqrA: TrackQueryResult = makeTrackQueryResult()
+    private _tqrB: TrackQueryResult = makeTrackQueryResult()
+    private _tqrFlip = false
+    private _tqrValid = false
+
+    get lastCarPositionInTrack(): TrackQueryResult | null {
+        return this._tqrValid ? (this._tqrFlip ? this._tqrB : this._tqrA) : null
+    }
+
+    /** Setting to null invalidates the cached result (e.g. on reset). Other values are not supported. */
+    set lastCarPositionInTrack(value: TrackQueryResult | null) {
+        if (value === null) this._tqrValid = false
+    }
+
+    /** Writes a new queryTrack result into the unused ping-pong slot then flips. */
+    private _writeTrackPosition(segments: TrackSegment[], hint: number): void {
+        const out = this._tqrFlip ? this._tqrA : this._tqrB
+        queryTrack(segments, this.pos, this.direction, hint, out)
+        this._tqrFlip = !this._tqrFlip
+        this._tqrValid = true
+    }
 
     // Cached track segments to avoid re-converting every tick (set externally after track loads)
     cachedTrackSegments: TrackSegment[] | null = null
+
+    // Pre-allocated buffers for zero-allocation sensor reads
+    private _sensorBuffer: number[] = []
+    private _lookAheadX = new Float64Array(0)
+    private _lookAheadY = new Float64Array(0)
 
     // Lap timing
     private lapStartTick: number | null = null
@@ -196,6 +224,9 @@ export default class Car {
         if (preset) Object.assign(this, preset)
 
         const inputs = this.getInputsCount()
+        this._sensorBuffer = new Array(inputs).fill(0)
+        this._lookAheadX = new Float64Array(this.totalLookAheadPoints)
+        this._lookAheadY = new Float64Array(this.totalLookAheadPoints)
         this.neuralNet = new NeuralNet(nnLayers, nnNeurons, inputs, nnOutputs, nnRange, nnMutationRate, nnActivation)
 
         const color = { h: this.generation % 360, s: 100, l: 50 } // getRandomColor()
@@ -248,7 +279,9 @@ export default class Car {
             }
         } 
         
+        // Capture previous result reference (points to old ping-pong slot) before we overwrite.
         const previousCarPositionInTrack = this.lastCarPositionInTrack
+        const hintIdx = previousCarPositionInTrack?.segmentIndex ?? -1
 
         // Update position with consistent time scaling
         this.pos.add(
@@ -257,8 +290,9 @@ export default class Car {
         )
 
         const trackSegments = this.cachedTrackSegments ?? (this.cachedTrackSegments = track.analyticPieces.map(convertToTrackSegment))
-        const currentCarPositionInTrack = queryTrack(trackSegments, this.pos, this.direction, this.lastCarPositionInTrack?.segmentIndex ?? -1)
-        this.lastCarPositionInTrack = currentCarPositionInTrack
+        // Write into unused ping-pong slot (previousCarPositionInTrack still holds the old slot).
+        this._writeTrackPosition(trackSegments, hintIdx)
+        const currentCarPositionInTrack = this.lastCarPositionInTrack!
 
         // Lap timing — detect crossing the start/finish line (boundary between last and first segment)
         if (!IsPlayerCar && previousCarPositionInTrack && gameTick !== undefined) {
@@ -443,32 +477,29 @@ export default class Car {
         this.lastDrivingWheelDirection = targetSteeringInput
     }
 
-    // Gets sensors' data
+    // Gets sensors' data — writes into pre-allocated _sensorBuffer (no allocation)
     updateSensors(trackMap: number[][], showInputs: boolean, p: p5, resolution: number, track: Track) {
-        const inputs = [
-            signedLog(this.speed),
-            this.lastDrivingWheelDirection,
-        ]
+        this._sensorBuffer[0] = signedLog(this.speed)
+        this._sensorBuffer[1] = this.lastDrivingWheelDirection
 
-        if (!this.lastCarPositionInTrack)
-            this.lastCarPositionInTrack = queryTrack(
-                this.cachedTrackSegments ?? (this.cachedTrackSegments = track.analyticPieces.map(convertToTrackSegment)),
-                this.pos, this.direction, -1)
+        if (!this.lastCarPositionInTrack) {
+            const segments = this.cachedTrackSegments ?? (this.cachedTrackSegments = track.analyticPieces.map(convertToTrackSegment))
+            this._writeTrackPosition(segments, -1)
+        }
 
         switch (this.inputFormat) {
             case "raycast": {
                 const raycastInputs = this.getRaycastInputs(showInputs, p, track)
-                inputs.push(...raycastInputs)
+                for (let i = 0; i < raycastInputs.length; i++) this._sensorBuffer[2 + i] = raycastInputs[i]
                 break
             }
             case "lookahead": {
-                const lookaheadInputs = this.getLookaheadInputs(track)
-                inputs.push(...lookaheadInputs)
+                this.getLookaheadInputs(track)
                 break
             }
         }
 
-        return inputs
+        return this._sensorBuffer
     }
 
     private getRaycastInputs(showInputs: boolean, p: p5, track: Track) {
@@ -503,99 +534,119 @@ export default class Car {
         return inputs
     }
 
-    private getLookaheadInputs(track: Track) {
-        // in this mode, the car gets as input the points of the track that are in front of it, at a certain distance and angle from the car
-
-        const totalqueryPoints = this.totalLookAheadPoints
+    // Writes lookahead inputs directly into this._sensorBuffer starting at index 2 — no Vector allocations
+    private getLookaheadInputs(track: Track): void {
+        const totalQueryPoints = this.totalLookAheadPoints
         const singleFrameDistance = this.speed * avgDeltaTime * UNITS_PER_METER
-        const maxLookaheadDistance = singleFrameDistance * 60 * 6 // look ahead up to 6 seconds in the future at current speed
+        const maxLookaheadDistance = singleFrameDistance * 60 * 6
 
-        // const currentCarPositionInTrack = queryTrack(track.analyticPieces.map(convertToTrackSegment), this.pos, this.direction)
-        const currentCarPositionInTrack = this.lastCarPositionInTrack || queryTrack(
-            this.cachedTrackSegments ?? (this.cachedTrackSegments = track.analyticPieces.map(convertToTrackSegment)),
-            this.pos, this.direction, -1)
-        this.lastCurrentCarPositionInTrack = new Vector(currentCarPositionInTrack.point.x, currentCarPositionInTrack.point.y)
+        const currentCarPositionInTrack = this.lastCarPositionInTrack ||
+            (() => {
+                const segments = this.cachedTrackSegments ?? (this.cachedTrackSegments = track.analyticPieces.map(convertToTrackSegment))
+                this._writeTrackPosition(segments, -1)
+                return this.lastCarPositionInTrack!
+            })()
 
-        const lookAheadPoints: Vector[] = []
-        const distanceBetweenPoints = maxLookaheadDistance / totalqueryPoints
+        // Reuse lastCurrentCarPositionInTrack Vector instead of allocating a new one
+        if (this.lastCurrentCarPositionInTrack) {
+            this.lastCurrentCarPositionInTrack.x = currentCarPositionInTrack.point.x
+            this.lastCurrentCarPositionInTrack.y = currentCarPositionInTrack.point.y
+        } else {
+            this.lastCurrentCarPositionInTrack = new Vector(currentCarPositionInTrack.point.x, currentCarPositionInTrack.point.y)
+        }
 
-        for (let i = 1; i <= totalqueryPoints; i++) {
-            const lookaheadDistance = i * distanceBetweenPoints
-            let remainingDistance = lookaheadDistance
+        const distanceBetweenPoints = maxLookaheadDistance / totalQueryPoints
+        const normalizationFactor = 1 + maxLookaheadDistance
+        const tangentX = currentCarPositionInTrack.tangent.x
+        const tangentY = currentCarPositionInTrack.tangent.y
+        const carPtX = currentCarPositionInTrack.point.x
+        const carPtY = currentCarPositionInTrack.point.y
+        const pieces = track.analyticPieces
+        const nPieces = pieces.length
+
+        for (let i = 0; i < totalQueryPoints; i++) {
+            let remainingDistance = (i + 1) * distanceBetweenPoints
             let segmentIndex = currentCarPositionInTrack.segmentIndex
-            let pointOnTrack = currentCarPositionInTrack.point
+            let ptX = carPtX
+            let ptY = carPtY
 
             while (remainingDistance > 0) {
-                const segment = track.analyticPieces[segmentIndex]
+                const segment = pieces[segmentIndex]
 
-                switch (segment.type) {
-                    case TrackPieceType.Straight: {
-                        const availableDistanceInCurrentSegment = Vector.sub(segment.end, pointOnTrack).mag()
-                        if (remainingDistance <= availableDistanceInCurrentSegment) {
-                            const segmentDirection = Vector.sub(segment.end, segment.start)
-                            const unitVector = new Vector(segmentDirection.x / segmentDirection.mag(), segmentDirection.y / segmentDirection.mag())
-                            pointOnTrack = new Vector(pointOnTrack.x + unitVector.x * remainingDistance, pointOnTrack.y + unitVector.y * remainingDistance)
-                            remainingDistance = 0
-                        } else {
-                            remainingDistance -= availableDistanceInCurrentSegment
-                            segmentIndex = (segmentIndex + 1) % track.analyticPieces.length
-                            pointOnTrack = track.analyticPieces[segmentIndex].start
-                        }
-                        break
+                if (segment.type === TrackPieceType.Straight) {
+                    const dX = segment.end.x - ptX
+                    const dY = segment.end.y - ptY
+                    const availDist = Math.sqrt(dX * dX + dY * dY)
+                    if (remainingDistance <= availDist) {
+                        const sdX = segment.end.x - segment.start.x
+                        const sdY = segment.end.y - segment.start.y
+                        const invMag = 1 / Math.sqrt(sdX * sdX + sdY * sdY)
+                        ptX += sdX * invMag * remainingDistance
+                        ptY += sdY * invMag * remainingDistance
+                        remainingDistance = 0
+                    } else {
+                        remainingDistance -= availDist
+                        segmentIndex = (segmentIndex + 1) % nPieces
+                        ptX = pieces[segmentIndex].start.x
+                        ptY = pieces[segmentIndex].start.y
                     }
-                    case TrackPieceType.Arc: {
-                        const center = segment.center
-                        const radius = Vector.sub(segment.start, center).mag()
-
-                        const finalAngle = (Math.atan2(segment.end.y - center.y, segment.end.x - center.x) + 2 * Math.PI) % (2 * Math.PI)
-                        const startAngle = (Math.atan2(pointOnTrack.y - center.y, pointOnTrack.x - center.x) + 2 * Math.PI) % (2 * Math.PI)
-
-                        const availableAngleInCurrentSegment = segment.clockwise ? finalAngle - startAngle : startAngle - finalAngle
-                        const availableDistanceInCurrentSegment = Math.abs((availableAngleInCurrentSegment + 2 * Math.PI) % (2 * Math.PI)) * radius
-
-                        if (remainingDistance <= availableDistanceInCurrentSegment) {
-                            const angleDirection = segment.clockwise ? 1 : -1
-                            const angleToPoint = Math.atan2(pointOnTrack.y - center.y, pointOnTrack.x - center.x) + angleDirection * (remainingDistance / radius)
-                            pointOnTrack = new Vector(center.x + radius * Math.cos(angleToPoint), center.y + radius * Math.sin(angleToPoint))
-                            remainingDistance = 0
-                        } else {
-                            remainingDistance -= availableDistanceInCurrentSegment
-                            segmentIndex = (segmentIndex + 1) % track.analyticPieces.length
-                            pointOnTrack = track.analyticPieces[segmentIndex].start
-                        }
-                        break
+                } else if (segment.type === TrackPieceType.Arc) {
+                    const cX = segment.center.x
+                    const cY = segment.center.y
+                    const rDx = segment.start.x - cX
+                    const rDy = segment.start.y - cY
+                    const radius = Math.sqrt(rDx * rDx + rDy * rDy)
+                    const finalAngle = (Math.atan2(segment.end.y - cY, segment.end.x - cX) + 2 * Math.PI) % (2 * Math.PI)
+                    const startAngle = (Math.atan2(ptY - cY, ptX - cX) + 2 * Math.PI) % (2 * Math.PI)
+                    const availAngle = segment.clockwise ? finalAngle - startAngle : startAngle - finalAngle
+                    const availDist = Math.abs((availAngle + 2 * Math.PI) % (2 * Math.PI)) * radius
+                    if (remainingDistance <= availDist) {
+                        const angleDir = segment.clockwise ? 1 : -1
+                        const atAngle = Math.atan2(ptY - cY, ptX - cX) + angleDir * (remainingDistance / radius)
+                        ptX = cX + radius * Math.cos(atAngle)
+                        ptY = cY + radius * Math.sin(atAngle)
+                        remainingDistance = 0
+                    } else {
+                        remainingDistance -= availDist
+                        segmentIndex = (segmentIndex + 1) % nPieces
+                        ptX = pieces[segmentIndex].start.x
+                        ptY = pieces[segmentIndex].start.y
                     }
+                } else {
+                    // Spline or unknown — skip to next piece
+                    segmentIndex = (segmentIndex + 1) % nPieces
+                    ptX = pieces[segmentIndex].start.x
+                    ptY = pieces[segmentIndex].start.y
                 }
             }
 
-            lookAheadPoints.push(pointOnTrack)
+            this._lookAheadX[i] = ptX
+            this._lookAheadY[i] = ptY
+
+            // Rotate into tangent frame and normalize, write directly into sensor buffer
+            const relX = ptX - carPtX
+            const relY = ptY - carPtY
+            const normalization = (totalQueryPoints / (i + 1)) / normalizationFactor
+            this._sensorBuffer[2 + i * 2]     = (relX * tangentX + relY * tangentY) * normalization
+            this._sensorBuffer[2 + i * 2 + 1] = (-relX * tangentY + relY * tangentX) * normalization
         }
 
-        this.lastLookAheadPoints = lookAheadPoints
+        const trackPiece = pieces[currentCarPositionInTrack.segmentIndex]
+        this._sensorBuffer[2 + totalQueryPoints * 2]     = currentCarPositionInTrack.headingAngle
+        this._sensorBuffer[2 + totalQueryPoints * 2 + 1] = currentCarPositionInTrack.lateralOffset / (trackPiece.width / 2)
 
-        const relativeLookAheadPoints = lookAheadPoints.map(point => {
-            const relativePosition = Vector.sub(point, currentCarPositionInTrack.point)
-            // Rotate relative position to be relative to tangent
-            const tangent = currentCarPositionInTrack.tangent
-            const rotatedX = relativePosition.x * tangent.x + relativePosition.y * tangent.y
-            const rotatedY = -relativePosition.x * tangent.y + relativePosition.y * tangent.x
-            return new Vector(rotatedX, rotatedY)
-        })
-
-        const normalizationFactor = 1 + maxLookaheadDistance
-
-        const trackPiece = track.analyticPieces[currentCarPositionInTrack.segmentIndex]
-
-        const finalInputs = [
-            ...relativeLookAheadPoints.flatMap((point, i) => {
-                const normalization = (totalqueryPoints / (i + 1)) / normalizationFactor
-                return [point.x * normalization, point.y * normalization]
-            }),
-            currentCarPositionInTrack.headingAngle,
-            currentCarPositionInTrack.lateralOffset / (trackPiece.width / 2),
-        ]
-
-        return finalInputs
+        // Update lastLookAheadPoints for visualization (reuse existing Vector objects)
+        if (this.lastLookAheadPoints?.length === totalQueryPoints) {
+            for (let i = 0; i < totalQueryPoints; i++) {
+                this.lastLookAheadPoints[i].x = this._lookAheadX[i]
+                this.lastLookAheadPoints[i].y = this._lookAheadY[i]
+            }
+        } else {
+            this.lastLookAheadPoints = Array.from(
+                { length: totalQueryPoints },
+                (_, i) => new Vector(this._lookAheadX[i], this._lookAheadY[i])
+            )
+        }
     }
 
     reset(startX: number, startY: number, startDir: number) {

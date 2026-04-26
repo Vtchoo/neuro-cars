@@ -38,6 +38,16 @@ export class NeuralNet {
     private weightMatrices: number[][][];
     private biasMatrices: number[][][];
 
+    // ── Zero-allocation forward-pass buffers ──
+    // Weights/biases stored as flat row-major Float64Arrays for cache-friendly matmul.
+    // Two ping-pong buffers hold the running layer activations — no heap allocation per inference.
+    private _wFlat: Float64Array[] = []
+    private _bFlat: Float64Array[] = []
+    private _layerRows: number[] = []
+    private _bufA: Float64Array = new Float64Array(0)
+    private _bufB: Float64Array = new Float64Array(0)
+    private _outCache: number[] = []
+
     private useXavierInitialization: boolean = false; // Flag to toggle Xavier initialization
 
     constructor(layers: number, neurons: number, inputs: number, outputs: number, range: number, mutationRate: number, activation: ActivationFunction) {
@@ -73,6 +83,7 @@ export class NeuralNet {
             this.biasMatrices.push(this.createRandomMatrix(neurons, 1, neurons, 1));
         }
         this.biasMatrices.push(this.createRandomMatrix(outputs, 1, neurons, 1));
+        this._buildFlatArrays();
     }
 
     // Helper function to create random matrix with Xavier-style initialization for softsign
@@ -130,30 +141,59 @@ export class NeuralNet {
         return result;
     }
 
-    // Forward pass through the network
+    /** Rebuild flat Float64Array weight/bias caches from weightMatrices/biasMatrices.
+     *  Called after construction, mutation, breeding, and loading. Never called per-tick. */
+    private _buildFlatArrays(): void {
+        const nLayers = this.weightMatrices.length
+        this._layerRows = new Array(nLayers)
+        this._wFlat = new Array(nLayers)
+        this._bFlat = new Array(nLayers)
+        for (let l = 0; l < nLayers; l++) {
+            const m = this.weightMatrices[l]
+            const rows = m.length
+            const cols = m[0].length
+            this._layerRows[l] = rows
+            const wf = new Float64Array(rows * cols)
+            for (let i = 0; i < rows; i++)
+                for (let j = 0; j < cols; j++)
+                    wf[i * cols + j] = m[i][j]
+            this._wFlat[l] = wf
+            const bf = new Float64Array(rows)
+            const bm = this.biasMatrices[l]
+            for (let i = 0; i < rows; i++) bf[i] = bm[i][0]
+            this._bFlat[l] = bf
+        }
+        const maxSize = Math.max(this.inputs, this.neurons, this.outputs)
+        this._bufA = new Float64Array(maxSize)
+        this._bufB = new Float64Array(maxSize)
+        this._outCache = new Array(this.outputs)
+    }
+
+    // Forward pass — zero heap allocation (uses pre-allocated Float64Array ping-pong buffers)
     public output(input: number[]): number[] {
-        // Convert input array to column vector
-        let currentLayer: number[][] = [];
-        for (let i = 0; i < input.length; i++) {
-            currentLayer[i] = [input[i]];
+        let src = this._bufA
+        let dst = this._bufB
+        for (let i = 0; i < input.length; i++) src[i] = input[i]
+        let srcLen = input.length
+        const nLayers = this._wFlat.length
+        for (let layer = 0; layer < nLayers; layer++) {
+            const W = this._wFlat[layer]
+            const b = this._bFlat[layer]
+            const rows = this._layerRows[layer]
+            const isOutput = layer === nLayers - 1
+            const act = isOutput ? this.outputActivation : this.activation
+            for (let i = 0; i < rows; i++) {
+                let sum = b[i]
+                const offset = i * srcLen
+                for (let j = 0; j < srcLen; j++) sum += W[offset + j] * src[j]
+                dst[i] = activate(sum, act)
+            }
+            // swap ping-pong buffers (just local reference swap, no copy)
+            const tmp = src; src = dst; dst = tmp
+            srcLen = rows
         }
-
-        // Forward pass through all layers
-        for (let i = 0; i < this.weightMatrices.length; i++) {
-            // Matrix multiplication: weights * input + bias
-            currentLayer = this.matrixMultiply(this.weightMatrices[i], currentLayer);
-            currentLayer = this.matrixAdd(currentLayer, this.biasMatrices[i]);
-            const activationFunction = (i === this.weightMatrices.length - 1) ? this.outputActivation : this.activation;
-            currentLayer = this.applyActivation(currentLayer, activationFunction);
-        }
-
-        // Convert result back to flat array format
-        const outputArray: number[] = [];
-        for (let i = 0; i < currentLayer.length; i++) {
-            outputArray[i] = currentLayer[i][0];
-        }
-
-        return outputArray;
+        for (let i = 0; i < this.outputs; i++) this._outCache[i] = src[i]
+        return this._outCache
     }
 
     /**
@@ -235,6 +275,7 @@ export class NeuralNet {
         net.weightMatrices = data.weights;
         net.biasMatrices = data.biases;
         net.fitness = data.fitness || 0;
+        net._buildFlatArrays();
 
         return net;
     }
@@ -302,6 +343,7 @@ export class NeuralNet {
                 }
             }
         }
+        this._buildFlatArrays();
     }
 
     // Create a deep copy of this neural network
@@ -335,6 +377,7 @@ export class NeuralNet {
         }
 
         newNet.fitness = this.fitness;
+        newNet._buildFlatArrays();
         return newNet;
     }
 
@@ -390,6 +433,7 @@ export class NeuralNet {
             }
         }
 
+        offspring._buildFlatArrays();
         return offspring;
     }
 }
