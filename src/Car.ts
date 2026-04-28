@@ -221,7 +221,7 @@ export default class Car {
         this.direction = startDir
         this.generation = generation || 0
 
-        if (preset) Object.assign(this, preset)
+        if (preset) this.setCarConfig(preset)
 
         const inputs = this.getInputsCount()
         this._sensorBuffer = new Array(inputs).fill(0)
@@ -234,6 +234,23 @@ export default class Car {
         this.colorRGB = convertHSLToRGB(color.h, color.s, color.l)
 
         this.driverName = `${random(names)} ${random(surnames)}`
+    }
+
+    setCarConfig(preset: CarPreset) {
+        this.downforceCoefficient = preset.downforceCoefficient ?? this.downforceCoefficient
+        this.dragCoefficient = preset.dragCoefficient ?? this.dragCoefficient
+        this.frontalArea = preset.frontalArea ?? this.frontalArea
+        this.mass = preset.mass ?? this.mass
+        this.maxAcceleration = preset.maxAcceleration ?? this.maxAcceleration
+        this.maxBraking = preset.maxBraking ?? this.maxBraking
+        this.maxPower = preset.maxPower ?? this.maxPower
+        this.maxReverseSpeed = preset.maxReverseSpeed ?? this.maxReverseSpeed
+        this.maxSteeringAngle = preset.maxSteeringAngle ?? this.maxSteeringAngle
+        this.rollingResistanceCoeff = preset.rollingResistanceCoeff ?? this.rollingResistanceCoeff
+        this.spriteKey = preset.spriteKey ?? this.spriteKey
+        this.stationaryDownforce = preset.stationaryDownforce ?? this.stationaryDownforce
+        this.tireGripCoefficient = preset.tireGripCoefficient ?? this.tireGripCoefficient
+        this.wheelbase = preset.wheelbase ?? this.wheelbase
     }
 
     // Updates car position
