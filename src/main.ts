@@ -307,20 +307,15 @@ export default class Game {
 	// The simulation itself
 
 	preload() {
-		this.carSprite = this.p.loadImage(carImage)
-		this.carTypeSprites.set("car", this.carSprite)
-		this.carTypeSprites.set("formula1", this.p.loadImage(formula1Image))
+		this.p.loadImage(carImage, img => { img.resize(40, 20); this.carSprite = img; this.carTypeSprites.set("car", img) })
+		this.p.loadImage(formula1Image, img => { img.resize(40, 20); this.carTypeSprites.set("formula1", img) })
 		this.backgroundImage = this.p.loadImage(grassImage)
 		//carSprite = loadImage("car.png")
 		// carSprite = this.p.loadImage("https://raw.githubusercontent.com/Vtchoo/smartRace2/master/images/car.png")
-		const lightningMcQueenSprite = this.p.loadImage(mcQueenImage)
-		this.otherSprites.set("Lightning McQueen", lightningMcQueenSprite)
-		const theKingSprite = this.p.loadImage(theKingImage)
-		this.otherSprites.set("The King", theKingSprite)
-		const chickHicksSprite = this.p.loadImage(chickHicksImage)
-		this.otherSprites.set("Chick Hicks", chickHicksSprite)
-		const ayrtonSennaSprite = this.p.loadImage(sennaImage)
-		this.otherSprites.set("Ayrton Senna", ayrtonSennaSprite)
+		this.p.loadImage(mcQueenImage, img => { img.resize(40, 20); this.otherSprites.set("Lightning McQueen", img) })
+		this.p.loadImage(theKingImage, img => { img.resize(40, 20); this.otherSprites.set("The King", img) })
+		this.p.loadImage(chickHicksImage, img => { img.resize(40, 20); this.otherSprites.set("Chick Hicks", img) })
+		this.p.loadImage(sennaImage, img => { img.resize(40, 20); this.otherSprites.set("Ayrton Senna", img) })
 	}
 
 	setup() {

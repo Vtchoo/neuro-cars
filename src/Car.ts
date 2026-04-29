@@ -378,11 +378,9 @@ export default class Car {
         p.rotate(this.direction);
         p.imageMode(p.CENTER)
         if (!customSprite) {
-            carSprite.resize(40, 20)
             p.tint(tintOverride ?? this.paint)
             p.image(carSprite, 0, 0)
         } else {
-            customSprite.resize(40, 20)
             if (tintOverride) p.tint(tintOverride)
             else p.noTint()
             p.image(customSprite, 0, 0)
