@@ -1,731 +1,155 @@
-// Creates the menu for building the track pieces (just like in Roller Coaster Tycoon)
+import p5 from 'p5'
+import { Vector } from '../Vector'
+import type Game from '../main'
+import Track, { SplinePiece, TrackPieceType } from '../Track'
+import { buildGameMenu } from './gameMenu'
 
-import p5 from "p5"
-import { newVector, Vector } from "../Vector"
-import Game from "../main"
-import Track, { StraightPiece, TrackPieceType } from "../Track"
-import { style } from "../utils/css"
-import { containerStyle } from "./styles"
-import { buildGameMenu } from "./gameMenu"
-
-// Visual settings
-const buttonWidth = 60
-const buttonHeight = 50
-
-let currentPosition: Vector
-let currentDirection: number
-
-let buttons: p5.Element[]
-let editor: p5.Element
-let controls: p5.Element
-let advancedEditor: p5.Element
-let trackSelector: p5.Element
-
-// Track selection state
-let trackCursorIndex = 0
-let selectionStart: number | null = null
-let selectionEnd: number | null = null
-let isSelectionMode = false
-
-let showGrid = true
-
-const turnButtons = [
-    { label: 'Very Large Left', radius: 5.5, direction: 'left' },
-    { label: 'Very Large Right', radius: 5.5, direction: 'right' },
-    { label: 'Large Left', radius: 4.5, direction: 'left' },
-    { label: 'Large Right', radius: 4.5, direction: 'right' },
-    { label: 'Big Left', radius: 3.5, direction: 'left' },
-    { label: 'Big Right', radius: 3.5, direction: 'right' },
-    { label: 'Medium Left', radius: 2.5, direction: 'left' },
-    { label: 'Medium Right', radius: 2.5, direction: 'right' },
-    { label: 'Small Left', radius: 1.5, direction: 'left' },
-    { label: 'Small Right', radius: 1.5, direction: 'right' },
-]
-
-const wideButtonStyle = style({
-    width: `100%`,
-    height: `${buttonHeight}px`
-})
-
-export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirection: number, trackWidth: number, renderTrack: p5.Graphics, trackMap: number[][], renderMap: p5.Graphics, resolution: number, game: Game, track: Track) {
-
-    editor = p.createElement("div")
-    editor.style(style({
-        ...containerStyle,
-        position: 'absolute',
-        top: '1rem',
-        left: '1rem',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '.5rem'
-    }))
-
-    currentPosition = initialPosition
-    currentDirection = initialDirection
-
-    const initialTrackPiece = {
-        type: TrackPieceType.Straight,
-        start: new Vector(currentPosition.x - trackWidth * Math.cos(currentDirection), currentPosition.y - trackWidth * Math.sin(currentDirection)),
-        end: new Vector(currentPosition.x, currentPosition.y),
-        width: trackWidth,
-    } as StraightPiece
-
-    game.track.addStraight(initialTrackPiece.start, initialTrackPiece.end, initialTrackPiece.width)
-    console.log(game.track.pieces)
-    buttons = []
-
-    let angleIncrement = Math.PI / 16
-    
-    const angleIncrementButtons = p.createElement("div")
-    angleIncrementButtons.style(style({
-        display: 'flex',
-        gap: '.5rem',
-        width: '100%',
-        alignItems: 'center',
-    }))
-    const decreaseAngleIncrementButton = p.createButton("- angle")
-    decreaseAngleIncrementButton.style(style({
-        flex: 1,
-        whiteSpace: 'nowrap',
-    }))
-    decreaseAngleIncrementButton.mouseClicked(() => {
-        angleIncrement = Math.max(angleIncrement - Math.PI / 64, Math.PI / 64)
-        angleIncrementLabel.html(`${(angleIncrement * 180 / Math.PI).toFixed(1)}°`)
-    })
-    const angleIncrementLabel = p.createElement("div")
-    angleIncrementLabel.html(`${(angleIncrement * 180 / Math.PI).toFixed(1)}°`)
-    const increaseAngleIncrementButton = p.createButton("+ angle")
-    increaseAngleIncrementButton.style(style({
-        flex: 1,
-        whiteSpace: 'nowrap',
-    }))
-    increaseAngleIncrementButton.mouseClicked(() => {
-        angleIncrement = Math.min(angleIncrement + Math.PI / 64, Math.PI / 4)
-        angleIncrementLabel.html(`${(angleIncrement * 180 / Math.PI).toFixed(1)}°`)
-    })
-    angleIncrementButtons.child(decreaseAngleIncrementButton)
-    angleIncrementButtons.child(angleIncrementLabel)
-    angleIncrementButtons.child(increaseAngleIncrementButton)
-    editor.child(angleIncrementButtons)
-
-    for (let i = 0; i < 5; i++) {
-        const row = p.createElement("div")
-        row.style(style({
-            display: 'flex',
-            gap: '.5rem',
-            width: '100%',
-        }))
-
-        for (let j = 0; j < 2; j++) {
-            const button = p.createButton(turnButtons[i * 2 + j].label)
-            const turnInfo = turnButtons[i * 2 + j]
-            button.size(buttonWidth, buttonHeight)
-            button.style(style({
-                flex: 1,
-            }))
-            button.mouseClicked(() => {
-                game.track.appendArc(turnInfo.radius * trackWidth, angleIncrement, turnInfo.direction === "right", trackWidth)
-            })
-            buttons.push(button)
-            row.child(button)
-        }
-        editor.child(row)
-    }
-
-    const straightButton = p.createButton("1 unit Straight")
-    straightButton.style(wideButtonStyle)
-    straightButton.mouseClicked(() => {
-        game.track.appendStraight(trackWidth, trackWidth)
-    })
-    buttons.push(straightButton)
-    editor.child(straightButton)
-
-    const sqrt2Button = p.createButton("SQRT(2) units straight")
-    sqrt2Button.style(wideButtonStyle)
-    sqrt2Button.mouseClicked(() => {
-        game.track.appendStraight(Math.sqrt(2) * trackWidth, trackWidth)
-    })
-    buttons.push(sqrt2Button)
-    editor.child(sqrt2Button)
-
-    const deleteLastButton = p.createButton("Delete Last")
-    deleteLastButton.style(wideButtonStyle)
-    deleteLastButton.mouseClicked(() => {
-        if (game.track.pieces.length > 1) {
-            game.track.deleteLastPiece()
-        }
-    })
-    buttons.push(deleteLastButton)
-    editor.child(deleteLastButton)
-
-    const tryFinishTrackButton = p.createButton("Auto complete")
-    tryFinishTrackButton.style(wideButtonStyle)
-    tryFinishTrackButton.mouseClicked(() => {
-        game.track.tryFinishTrack()
-    })
-    buttons.push(tryFinishTrackButton)
-    editor.child(tryFinishTrackButton)
-
-    const buildPreviewButton = p.createButton("Build")
-    buildPreviewButton.style(wideButtonStyle)
-    buildPreviewButton.mouseClicked(() => {
-        game.track.buildPreviewTrackPieces()
-    })
-    buttons.push(buildPreviewButton)
-    editor.child(buildPreviewButton)
-
-    // Create Advanced Track Editor
-    createAdvancedTrackEditor(p, game, trackWidth)
-    
-    // Create Track Selection System  
-    createTrackSelector(p, game, trackWidth)
-
-    controls = p.createElement("div")
-    controls.style(style({
-        ...containerStyle,
-        display: 'flex',
-        gap: '.5rem',
-        position: 'absolute',
-        bottom: '1rem',
-        left: '1rem',
-    }))
-
-    const resetButton = p.createButton("Reset")
-    resetButton.size(buttonWidth, buttonHeight)
-    resetButton.mouseClicked(() => resetTrack(game))
-    buttons.push(resetButton)
-    controls.child(resetButton)
-
-    const doneButton = p.createButton("Done!")
-    doneButton.size(buttonWidth, buttonHeight)
-    doneButton.mouseClicked(() => setTrack(game, p))
-    buttons.push(doneButton)
-    controls.child(doneButton)
-
-    const loadTrackButton = p.createButton("Load Track")
-    loadTrackButton.size(buttonWidth, buttonHeight)
-    loadTrackButton.mouseClicked(() => loadTrackInEditor(p, game))
-    buttons.push(loadTrackButton)
-    controls.child(loadTrackButton)
+type Hit = { piece: SplinePiece, key: 'start' | 'end' | 'control1' | 'control2' }
+let panel: p5.Element | undefined
+let hit: Hit | null = null
+let pressed: Vector | null = null
+let dragged = false
+let width = 100
+const dist = (a: Vector,b: Vector) => Math.hypot(a.x-b.x,a.y-b.y)
+const mix = (a: Vector,b: Vector,t: number) => new Vector(a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t)
+const copy = (a: Vector) => new Vector(a.x,a.y)
+const pieces = (track: Track) => track.pieces as SplinePiece[]
+const point = (s: SplinePiece,t: number) => {
+    const a=mix(s.start,s.control1,t), b=mix(s.control1,s.control2,t), c=mix(s.control2,s.end,t)
+    return mix(mix(a,b,t),mix(b,c,t),t)
 }
-
-function resetTrack(game: Game) {
-    // Clear track pieces and reset to start
-    game.setPhase("resetTrack")
-}
-
-function loadTrackInEditor(p: p5, game: Game) {
-    // Create a file input element to load a track
-    const input = p.createFileInput((file: any) => {
-        if (file.type !== 'application' || file.subtype !== 'json' || !file.name.endsWith('.json')) {
-            alert("Please select a JSON file")
-            // Remove the file input after use
-            input.remove()
-            return
-        }
-
-        const fr = new FileReader()
-        fr.onload = (e) => {
-            try {
-                const saveData = JSON.parse(e.target?.result as string)
-                if (!saveData.track.pieces) {
-                    alert("Invalid save file - no track data found")
-                    // Remove the file input after use
-                    input.remove()
-                    return
-                }
-                // Load the track data into the current track
-                const track = Track.fromData(saveData.track)
-                console.log("Track loaded successfully")
-
-                // Update the track in the game
-                game.track = track
-                game.start = track.startingPoint
-                game.direction = track.startingDirection
-
-                alert("Track loaded successfully!")
-            } catch (error) {
-                console.error("Error loading track:", error)
-                alert("Error loading track file")
-            }
-        }
-        fr.readAsText(file.file)
-
-        // Remove the file input after use
-        input.remove()
-    })
-
-    // Trigger the file input
-    input.elt.click()
-}
-
-export function setTrack(game: Game, p: p5) {
-
-    editor.remove()
-    controls.remove()
-    if (advancedEditor) advancedEditor.remove()
-    if (trackSelector) trackSelector.remove()
-
-    game.gameMenu = buildGameMenu(game, p)
-
-    game.setPhase("setup")
-}
-
-function createAdvancedTrackEditor(p: p5, game: Game, trackWidth: number) {
-    advancedEditor = p.createElement("div")
-    advancedEditor.style(style({
-        ...containerStyle,
-        position: 'absolute',
-        top: '1rem',
-        right: '1rem',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '.5rem',
-        width: '200px'
-    }))
-
-    const title = p.createElement("h3", "Advanced Track Editor")
-    title.style(style({
-        margin: '0',
-        textAlign: 'center',
-        color: 'black'
-    }))
-    advancedEditor.child(title)
-
-    // Piece Type Selector
-    const pieceTypeLabel = p.createElement("label", "Piece Type:")
-    pieceTypeLabel.style(style({ color: 'black', fontSize: '12px' }))
-    advancedEditor.child(pieceTypeLabel)
-
-    const pieceTypeSelect = p.createSelect()
-    pieceTypeSelect.option("Straight")
-    pieceTypeSelect.option("Arc")
-    pieceTypeSelect.style(style({ width: '100%' }))
-    advancedEditor.child(pieceTypeSelect)
-
-    // Length Input
-    const lengthLabel = p.createElement("label", "Length (units):")
-    lengthLabel.style(style({ color: 'black', fontSize: '12px' }))
-    advancedEditor.child(lengthLabel)
-
-    const lengthInput = p.createInput("2.0", "number")
-    lengthInput.style(style({ width: '100%' }))
-    lengthInput.attribute("step", "0.1")
-    lengthInput.attribute("min", "0.1")
-    advancedEditor.child(lengthInput)
-
-    // Radius Input (for arcs only)
-    const radiusLabel = p.createElement("label", "Radius (units):")
-    radiusLabel.style(style({ color: 'black', fontSize: '12px' }))
-    advancedEditor.child(radiusLabel)
-
-    const radiusInput = p.createInput("2.5", "number")
-    radiusInput.style(style({ width: '100%' }))
-    radiusInput.attribute("step", "0.1")
-    radiusInput.attribute("min", "0.1")
-    advancedEditor.child(radiusInput)
-
-    // Direction (for arcs only)
-    const directionLabel = p.createElement("label", "Direction:")
-    directionLabel.style(style({ color: 'black', fontSize: '12px' }))
-    advancedEditor.child(directionLabel)
-
-    const directionSelect = p.createSelect()
-    directionSelect.option("Left")
-    directionSelect.option("Right")
-    directionSelect.style(style({ width: '100%' }))
-    advancedEditor.child(directionSelect)
-
-    // Update visibility based on piece type
-    const updateVisibility = () => {
-        const isArc = pieceTypeSelect.value() === "Arc"
-        radiusLabel.style(style({ display: isArc ? 'block' : 'none' }))
-        radiusInput.style(style({ display: isArc ? 'block' : 'none' }))
-        directionLabel.style(style({ display: isArc ? 'block' : 'none' }))
-        directionSelect.style(style({ display: isArc ? 'block' : 'none' }))
+function sync(game: Game) {
+    const first=pieces(game.track)[0]
+    if(first) {
+        game.track.startingPoint=copy(first.start)
+        game.track.startingDirection=Track.getTrackPieceStartDirection(first)
+        game.start=copy(first.start); game.direction=game.track.startingDirection
     }
-    
-    pieceTypeSelect.changed(updateVisibility)
-    updateVisibility()
-
-    // Preview Button
-    const previewButton = p.createButton("Preview Piece")
-    previewButton.style(wideButtonStyle)
-    previewButton.mouseClicked(() => {
-        const pieceType = pieceTypeSelect.value() as string
-        const length = parseFloat(lengthInput.value() as string)
-        
-        if (pieceType === "Straight") {
-            game.track.appendStraight(length * trackWidth, trackWidth, true)
-        } else if (pieceType === "Arc") {
-            const radius = parseFloat(radiusInput.value() as string)
-            const isClockwise = directionSelect.value() === "Right"
-            const angle = length / radius // Convert length to angle (length = arc length)
-            game.track.appendArc(radius * trackWidth, angle, isClockwise, trackWidth, true)
-        }
-    })
-    advancedEditor.child(previewButton)
-
-    // Build Button  
-    const buildButton = p.createButton("Build Piece")
-    buildButton.style(wideButtonStyle)
-    buildButton.mouseClicked(() => {
-        game.track.buildPreviewTrackPieces()
-    })
-    advancedEditor.child(buildButton)
-}
-
-function createTrackSelector(p: p5, game: Game, trackWidth: number) {
-    trackSelector = p.createElement("div")
-    trackSelector.style(style({
-        ...containerStyle,
-        position: 'absolute',
-        bottom: '1rem',
-        right: '1rem',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '.5rem',
-        width: '200px'
-    }))
-
-    const title = p.createElement("h3", "Track Editor")
-    title.style(style({
-        margin: '0',
-        textAlign: 'center',
-        color: 'black'
-    }))
-    trackSelector.child(title)
-
-    // Cursor Info
-    const cursorInfo = p.createElement("div", "Piece: 0 / 0")
-    cursorInfo.style(style({ color: 'black', fontSize: '12px', textAlign: 'center' }))
-    trackSelector.child(cursorInfo)
-
-    // Navigation buttons
-    const navRow = p.createElement("div")
-    navRow.style(style({
-        display: 'flex',
-        gap: '.5rem',
-        width: '100%'
-    }))
-
-    const prevButton = p.createButton("◀ Prev")
-    prevButton.style(style({ flex: '1' }))
-    prevButton.mouseClicked(() => {
-        if (game.track.pieces.length > 0) {
-            trackCursorIndex = (trackCursorIndex - 1 + game.track.pieces.length) % game.track.pieces.length
-            updateCursorInfo()
-        }
-    })
-    navRow.child(prevButton)
-
-    const nextButton = p.createButton("Next ▶")
-    nextButton.style(style({ flex: '1' }))
-    nextButton.mouseClicked(() => {
-        if (game.track.pieces.length > 0) {
-            trackCursorIndex = (trackCursorIndex + 1) % game.track.pieces.length
-            updateCursorInfo()
-        }
-    })
-    navRow.child(nextButton)
-
-    trackSelector.child(navRow)
-
-    // Selection controls
-    const selectionRow = p.createElement("div")
-    selectionRow.style(style({
-        display: 'flex',
-        gap: '.5rem',
-        width: '100%'
-    }))
-
-    const startSelectButton = p.createButton("Start Select")
-    startSelectButton.style(style({ flex: '1' }))
-    startSelectButton.mouseClicked(() => {
-        selectionStart = trackCursorIndex
-        selectionEnd = null
-        updateCursorInfo()
-    })
-    selectionRow.child(startSelectButton)
-
-    const endSelectButton = p.createButton("End Select")
-    endSelectButton.style(style({ flex: '1' }))
-    endSelectButton.mouseClicked(() => {
-        if (selectionStart !== null) {
-            selectionEnd = trackCursorIndex
-            updateCursorInfo()
-        }
-    })
-    selectionRow.child(endSelectButton)
-
-    trackSelector.child(selectionRow)
-
-    // Selection info
-    const selectionInfo = p.createElement("div", "No selection")
-    selectionInfo.style(style({ color: 'black', fontSize: '12px', textAlign: 'center' }))
-    trackSelector.child(selectionInfo)
-
-    // Replace button
-    const replaceButton = p.createButton("Replace Selection")
-    replaceButton.style(wideButtonStyle)
-    replaceButton.mouseClicked(() => {
-        replaceSelectedTrackPieces(game, trackWidth)
-    })
-    trackSelector.child(replaceButton)
-
-    // Build Replacement button
-    const buildReplacementButton = p.createButton("Build Replacement")
-    buildReplacementButton.style(wideButtonStyle)
-    buildReplacementButton.mouseClicked(() => {
-        buildReplacementPieces(game)
-    })
-    trackSelector.child(buildReplacementButton)
-
-    // Clear selection button
-    const clearButton = p.createButton("Clear Selection")
-    clearButton.style(wideButtonStyle)
-    clearButton.mouseClicked(() => {
-        selectionStart = null
-        selectionEnd = null
-        updateCursorInfo()
-    })
-    trackSelector.child(clearButton)
-
-    // Help section
-    const helpTitle = p.createElement("h4", "Controls:")
-    helpTitle.style(style({
-        margin: '10px 0 5px 0',
-        color: 'black',
-        fontSize: '14px'
-    }))
-    trackSelector.child(helpTitle)
-
-    const helpText = p.createElement("div", "A/D or ← →: Move cursor<br>Space: Start/End selection<br>Esc: Clear selection")
-    helpText.style(style({
-        color: 'black',
-        fontSize: '11px',
-        lineHeight: '1.3'
-    }))
-    trackSelector.child(helpText)
-
-    function updateCursorInfo() {
-        const totalPieces = game.track.pieces.length
-        cursorInfo.html(`Piece: ${trackCursorIndex + 1} / ${totalPieces}`)
-        
-        if (selectionStart !== null && selectionEnd !== null) {
-            const start = Math.min(selectionStart, selectionEnd)
-            const end = Math.max(selectionStart, selectionEnd)
-            selectionInfo.html(`Selected: ${start + 1} to ${end + 1} (${end - start + 1} pieces)`)
-        } else if (selectionStart !== null) {
-            selectionInfo.html(`Selection start: ${selectionStart + 1}`)
-        } else {
-            selectionInfo.html("No selection")
-        }
-    }
-
-    // Store updateCursorInfo globally for keyboard updates
-    (window as any).updateTrackBuilderUI = updateCursorInfo
-}
-
-function replaceSelectedTrackPieces(game: Game, trackWidth: number) {
-    if (selectionStart === null || selectionEnd === null) {
-        alert("Please select a range of track pieces first")
-        return
-    }
-
-    const start = Math.min(selectionStart, selectionEnd)
-    const end = Math.max(selectionStart, selectionEnd)
-
-    if (start === 0 || end === game.track.pieces.length - 1) {
-        alert("Cannot replace the first or last piece of the track")
-        return
-    }
-
-    // Get connection points
-    const startPiece = game.track.pieces[start - 1] // Piece before selection
-    const endPiece = game.track.pieces[end + 1] // Piece after selection
-
-    if (!startPiece || !endPiece) {
-        alert("Invalid selection for replacement")
-        return
-    }
-
-    const startPoint = startPiece.end
-    const startDirection = Track.getTrackPieceEndDirection(startPiece)
-    const endPoint = endPiece.start  
-    const endDirection = Track.getTrackPieceStartDirection(endPiece)
-
-    // Use connectPoints function to generate replacement pieces
-    const replacementPieces = Track.connectPoints(startPoint, startDirection, endPoint, endDirection, trackWidth)
-
-    if (replacementPieces) {
-        // Set as preview
-        game.track.setPreviewTrackPieces(replacementPieces)
-        console.log("Generated replacement pieces:", replacementPieces)
-    } else {
-        alert("Could not generate replacement pieces for this selection")
-    }
-}
-
-function buildReplacementPieces(game: Game) {
-    if (selectionStart === null || selectionEnd === null) {
-        alert("No replacement pieces to build")
-        return
-    }
-
-    if (game.track.previewTrackPieces.length === 0) {
-        alert("No preview pieces to build. Generate replacement first.")
-        return
-    }
-
-    const start = Math.min(selectionStart, selectionEnd)
-    const end = Math.max(selectionStart, selectionEnd)
-
-    // Remove selected pieces
-    const removedCount = end - start + 1
-    game.track.pieces.splice(start, removedCount)
-
-    // Insert replacement pieces
-    const replacementPieces = [...game.track.previewTrackPieces]
-    game.track.pieces.splice(start, 0, ...replacementPieces)
-
-    // Clear preview
-    game.track.previewTrackPieces = []
-
-    // Regenerate analytic pieces
     game.track.generateAnalyticPieces()
-
-    // Clear selection
-    selectionStart = null
-    selectionEnd = null
-
-    console.log("Replacement pieces built successfully")
 }
-
-// Function to draw track selection visual indicators
-export function drawTrackSelection(p: p5, track: Track) {
-    if (track.pieces.length === 0) return
-
-    p.push()
-    
-    // Draw cursor highlight
-    if (trackCursorIndex >= 0 && trackCursorIndex < track.pieces.length) {
-        const cursorPiece = track.pieces[trackCursorIndex]
-        drawPieceHighlight(p, cursorPiece, 'rgba(255, 255, 0, 0.3)', 8) // Yellow cursor
+function icon(track: Track,zoom: number) {
+    const first=pieces(track)[0]
+    return first ? new Vector(first.start.x,first.start.y-(first.width/2+24/zoom)) : null
+}
+function findHit(track: Track,pos: Vector,zoom: number): Hit | null {
+    const all=pieces(track)
+    for(const key of ['start','end','control1','control2'] as const) {
+        for(const piece of all) if(dist(piece[key],pos)<=9/zoom) return {piece,key}
     }
-
-    // Draw selection highlight
-    if (selectionStart !== null && selectionEnd !== null) {
-        const start = Math.min(selectionStart, selectionEnd)
-        const end = Math.max(selectionStart, selectionEnd)
-        
-        for (let i = start; i <= end; i++) {
-            if (i >= 0 && i < track.pieces.length) {
-                const piece = track.pieces[i]
-                drawPieceHighlight(p, piece, 'rgba(255, 0, 0, 0.2)', 6) // Red selection
-            }
+    return null
+}
+export function createTrackBuilder(p: p5, initialPosition: Vector, initialDirection: number, trackWidth: number, _renderTrack: p5.Graphics, _trackMap: number[][], _renderMap: p5.Graphics, _resolution: number, game: Game, track: Track) {
+    panel?.remove(); width=trackWidth
+    track.pieces=[]; track.closed=false
+    const start=copy(game.start), end=copy(initialPosition)
+    const span=Math.max(trackWidth,dist(start,end))
+    end.x=start.x+span*Math.cos(initialDirection); end.y=start.y+span*Math.sin(initialDirection)
+    track.addSpline(start,mix(start,end,1/3),mix(start,end,2/3),end,width)
+    sync(game)
+    panel=p.createDiv()
+    panel.style('position','absolute').style('top','1rem').style('left','1rem').style('background','#fff').style('padding','12px').style('max-width','260px')
+    panel.child(p.createDiv('Click empty space to extend; click road to split. Click endpoints to remove; drag endpoints or handles to reshape. Ctrl + drag to pan; wheel to zoom. Use the start link icon to close or reopen.'))
+    const button=(label:string,action:()=>void)=>{const b=p.createButton(label); b.parent(panel!); b.mouseClicked(action)}
+    button('Reset',()=>{panel?.remove(); game.setPhase('resetTrack')})
+    button('Load',()=>{
+        const input=document.createElement('input'); input.type='file'; input.accept='.json'
+        input.onchange=async()=>{
+            const file=input.files?.[0]; if(!file)return
+            try {const data=JSON.parse(await file.text());game.track=Track.fromData(data.track ?? data);sync(game)}
+            catch {alert('Unable to load track JSON')}
+        }; input.click()
+    })
+    button('Done',()=>setTrack(game,p))
+}
+export function setTrack(game: Game,p: p5) {
+    if(!game.track.pieces.length) return
+    sync(game); panel?.remove(); panel=undefined
+    game.gameMenu=buildGameMenu(game,p); game.setPhase('setup')
+}
+export function editorPressed(track: Track,pos: Vector,zoom: number) {
+    pressed=pos; dragged=false; hit=findHit(track,pos,zoom)
+}
+export function editorDragged(game: Game,pos: Vector,zoom: number) {
+    if(!pressed)return
+    if(dist(pos,pressed)>3/zoom)dragged=true
+    if(!dragged || !hit)return
+    const {piece,key}=hit, target=piece[key], dx=pos.x-target.x,dy=pos.y-target.y
+    if(key==='start'||key==='end') {
+        for(const s of pieces(game.track)) {
+            if(s.start===target){s.control1.x+=dx;s.control1.y+=dy}
+            if(s.end===target){s.control2.x+=dx;s.control2.y+=dy}
+        }
+        target.x=pos.x; target.y=pos.y
+    } else {
+        target.x=pos.x; target.y=pos.y
+        const anchor=key==='control1'?piece.start:piece.end
+        const vx=anchor.x-target.x,vy=anchor.y-target.y,mag=Math.hypot(vx,vy)
+        if(mag>0.000001)for(const s of pieces(game.track)) {
+            const opposite=key==='control1'&&s.end===anchor?s.control2:key==='control2'&&s.start===anchor?s.control1:null
+            if(opposite){const len=dist(opposite,anchor);opposite.x=anchor.x+vx/mag*len;opposite.y=anchor.y+vy/mag*len}
         }
     }
-
+    sync(game)
+}
+export function editorReleased(){pressed=null;hit=null}
+export function editorClick(game: Game,pos: Vector,zoom: number) {
+    if(dragged){dragged=false;return}
+    const track=game.track, all=pieces(track), first=all[0],last=all[all.length-1], link=icon(track,zoom)
+    if(link && dist(pos,link)<13/zoom) {
+        if(track.closed){all.pop();track.closed=false}
+        else if(first && last) {
+            const len=Math.max(dist(last.end,first.start)/3,1)
+            const a=Track.getTrackPieceEndDirection(last),b=Track.getTrackPieceStartDirection(first)
+            all.push({type:TrackPieceType.Spline,start:last.end,control1:new Vector(last.end.x+Math.cos(a)*len,last.end.y+Math.sin(a)*len),control2:new Vector(first.start.x-Math.cos(b)*len,first.start.y-Math.sin(b)*len),end:first.start,width:last.width});track.closed=true
+        }
+        sync(game);return
+    }
+    const selected=findHit(track,pos,zoom)
+    if(selected) {
+        if(selected.key==='control1'||selected.key==='control2')return
+        const anchor=selected.piece[selected.key]
+        const before=all.findIndex(s=>s.end===anchor),after=all.findIndex(s=>s.start===anchor)
+        if(before>=0 && after>=0 && before!==after) {
+            const a=all[before],b=all[after]
+            a.end=b.end; a.control2=b.control2
+            all.splice(after,1)
+            if(all.length<2)track.closed=false
+        } else if(before>=0)all.splice(before,1)
+        else if(after>=0)all.splice(after,1)
+        sync(game);return
+    }
+    let nearest: {s:SplinePiece,t:number,d:number} | null=null
+    for(const s of all) {
+        let t=0,d=Infinity
+        for(let i=0;i<=100;i++){const test=i/100,delta=dist(point(s,test),pos);if(delta<d){d=delta;t=test}}
+        let lo=Math.max(0,t-.01),hi=Math.min(1,t+.01)
+        for(let i=0;i<24;i++){const a=lo+(hi-lo)/3,b=hi-(hi-lo)/3;if(dist(point(s,a),pos)<dist(point(s,b),pos))hi=b;else lo=a}
+        t=(lo+hi)/2;d=dist(point(s,t),pos)
+        if(d<=s.width/2 && (!nearest||d<nearest.d))nearest={s,t,d}
+    }
+    if(nearest) {
+        const {s,t}=nearest
+        if(t<.0001||t>.9999)return
+        const a=mix(s.start,s.control1,t),b=mix(s.control1,s.control2,t),c=mix(s.control2,s.end,t),d=mix(a,b,t),e=mix(b,c,t),m=mix(d,e,t)
+        all.splice(all.indexOf(s),1,{...s,control1:a,control2:d,end:m},{...s,start:m,control1:e,control2:c})
+    } else if(!track.closed) {
+        const start=last?last.end:copy(track.startingPoint)
+        if(!last){const len=dist(start,pos)/3,a=track.startingDirection;track.addSpline(start,new Vector(start.x+Math.cos(a)*len,start.y+Math.sin(a)*len),mix(start,pos,2/3),copy(pos),width)}
+        else {
+            const len=dist(start,pos)/3,a=Track.getTrackPieceEndDirection(last)
+            all.push({type:TrackPieceType.Spline,start,control1:new Vector(start.x+Math.cos(a)*len,start.y+Math.sin(a)*len),control2:mix(start,pos,2/3),end:copy(pos),width:last.width})
+        }
+    }
+    sync(game)
+}
+export function drawTrackSelection(p: p5,track: Track,zoom=1) {
+    p.push();p.strokeWeight(1/zoom)
+    for(const s of pieces(track)) {
+        p.stroke('#55bfff');p.line(s.start.x,s.start.y,s.control1.x,s.control1.y);p.line(s.end.x,s.end.y,s.control2.x,s.control2.y)
+        for(const key of ['start','end','control1','control2'] as const){p.fill(key==='start'||key==='end'?'#fff':'#55bfff');p.circle(s[key].x,s[key].y,12/zoom)}
+    }
+    const link=icon(track,zoom)
+    if(link){p.fill(track.closed?'#f8b84e':'#60e5a0');p.stroke('#222');p.circle(link.x,link.y,26/zoom);p.fill('#111');p.noStroke();p.textAlign(p.CENTER,p.CENTER);p.textSize(16/zoom);p.text(track.closed?'×':'↗',link.x,link.y)}
     p.pop()
 }
-
-function drawPieceHighlight(p: p5, piece: any, color: string, strokeWeight: number) {
-    p.stroke(color)
-    p.strokeWeight(strokeWeight)
-    p.fill(color)
-
-    switch (piece.type) {
-        case TrackPieceType.Straight:
-            p.line(piece.start.x, piece.start.y, piece.end.x, piece.end.y)
-            break
-        case TrackPieceType.Arc:
-            const radius = Math.sqrt((piece.center.x - piece.start.x) ** 2 + (piece.center.y - piece.start.y) ** 2)
-            const angleStart = Math.atan2(piece.start.y - piece.center.y, piece.start.x - piece.center.x)
-            const angleEnd = Math.atan2(piece.end.y - piece.center.y, piece.end.x - piece.center.x)
-            const actualAngleStart = piece.clockwise ? angleStart : angleEnd
-            const actualAngleEnd = piece.clockwise ? angleEnd : angleStart
-            p.arc(piece.center.x, piece.center.y, radius * 2, radius * 2, actualAngleStart, actualAngleEnd)
-            break
-        case TrackPieceType.Spline:
-            p.bezier(piece.start.x, piece.start.y, piece.control1.x, piece.control1.y, piece.control2.x, piece.control2.y, piece.end.x, piece.end.y)
-            break
-    }
-}
-
-// Function to get current track selection state (for external access)
-export function getTrackSelectionState() {
-    return {
-        cursorIndex: trackCursorIndex,
-        selectionStart,
-        selectionEnd,
-        isSelectionMode
-    }
-}
-
-// Functions for external control of track selection
-export function setTrackCursor(index: number) {
-    trackCursorIndex = index
-}
-
-export function setSelectionStart(index: number) {
-    selectionStart = index
-    selectionEnd = null
-}
-
-export function setSelectionEnd(index: number) {
-    if (selectionStart !== null) {
-        selectionEnd = index
-    }
-}
-
-export function clearSelection() {
-    selectionStart = null
-    selectionEnd = null
-}
-
-// Handle keyboard input for track builder
-export function handleTrackBuilderKeyPress(key: string, track: Track) {
-    switch (key) {
-        case 'ArrowLeft':
-        case 'a':
-        case 'A':
-            // Move cursor left (with looping)
-            if (track.pieces.length > 0) {
-                trackCursorIndex = (trackCursorIndex - 1 + track.pieces.length) % track.pieces.length
-                updateUI()
-            }
-            break
-        case 'ArrowRight':
-        case 'd':
-        case 'D':
-            // Move cursor right (with looping)
-            if (track.pieces.length > 0) {
-                trackCursorIndex = (trackCursorIndex + 1) % track.pieces.length
-                updateUI()
-            }
-            break
-        case ' ':
-            // Spacebar: Start/End selection
-            if (selectionStart === null) {
-                selectionStart = trackCursorIndex
-                selectionEnd = null
-            } else {
-                selectionEnd = trackCursorIndex
-            }
-            updateUI()
-            break
-        case 'Escape':
-            // Clear selection
-            selectionStart = null
-            selectionEnd = null
-            updateUI()
-            break
-    }
-}
-
-function updateUI() {
-    if ((window as any).updateTrackBuilderUI) {
-        (window as any).updateTrackBuilderUI()
-    }
-}
+export function handleTrackBuilderKeyPress(_key: string,_track: Track) {}

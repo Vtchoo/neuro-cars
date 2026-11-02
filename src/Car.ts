@@ -282,8 +282,8 @@ export default class Car {
             const prevIdx = previousCarPositionInTrack.segmentIndex
             const currIdx = currentCarPositionInTrack.segmentIndex
             const totalSegments = track.analyticPieces.length
-            const forwardCrossing = prevIdx === totalSegments - 1 && currIdx === 0
-            const backwardCrossing = prevIdx === 0 && currIdx === totalSegments - 1
+            const forwardCrossing = track.closed && prevIdx - currIdx > totalSegments / 2
+            const backwardCrossing = track.closed && currIdx - prevIdx > totalSegments / 2
 
             // Accumulate the furthest segment reached during this timed lap
             this.lapMaxSegment = Math.max(this.lapMaxSegment, prevIdx)
@@ -294,8 +294,8 @@ export default class Car {
                 // distPastLine = distance into segment 0 at the current tick
                 // fraction = distToLine / totalDistance → how far through this tick the crossing happened
                 const lastSegLen = Track.getTrackPieceLength(track.analyticPieces[totalSegments - 1])
-                const distToLine = lastSegLen - previousCarPositionInTrack.distanceFromTrackPieceStart
-                const distPastLine = currentCarPositionInTrack.distanceFromTrackPieceStart
+                const distToLine = track.analyticPieces.slice(prevIdx, -1).reduce((sum,piece) => sum + Track.getTrackPieceLength(piece), 0) + lastSegLen - previousCarPositionInTrack.distanceFromTrackPieceStart
+                const distPastLine = track.analyticPieces.slice(0, currIdx).reduce((sum,piece) => sum + Track.getTrackPieceLength(piece), 0) + currentCarPositionInTrack.distanceFromTrackPieceStart
                 const totalDist = distToLine + distPastLine
                 const fraction = totalDist > 0 ? distToLine / totalDist : 0
                 const exactCrossingTick = gameTick + fraction
@@ -326,34 +326,16 @@ export default class Car {
             return 0
         }
 
-        // if the index difference is 2 or bigger, let's ignore, also check for lap completion (index goes from last to 0)
-        const indexDifference = currentCarPositionInTrack.segmentIndex - previousCarPositionInTrack.segmentIndex
-        if (Math.abs(indexDifference) > 1 && !(currentCarPositionInTrack.segmentIndex === 0 && previousCarPositionInTrack.segmentIndex === track.analyticPieces.length - 1)) {
-            return 0
-        }
-
-
-        // there are 3 situations:
-        // 1. the car is in the same track piece, so we reward it based on the distance it advanced in that piece
-        // 2. the car advanced to the next piece, so we reward it based on the distance to the end of the previous piece and the distance from the start of the new piece
-        // 3. the car went backward, so we penalize it based on the distance it moved backward
-        // the car can also complete a lap, in that case the index resets to 0, so we also check for that and reward the car for completing a lap
-
-        if (currentCarPositionInTrack.segmentIndex === previousCarPositionInTrack.segmentIndex) {
-            // case 1
-            return currentCarPositionInTrack.distanceFromTrackPieceStart - previousCarPositionInTrack.distanceFromTrackPieceStart
-        } else if (currentCarPositionInTrack.segmentIndex === 0 && previousCarPositionInTrack.segmentIndex === track.analyticPieces.length - 1) {
-            // case 3 - lap completed
-            const piece1Length = Track.getTrackPieceLength(track.analyticPieces[previousCarPositionInTrack.segmentIndex])
-            return (piece1Length - previousCarPositionInTrack.distanceFromTrackPieceStart) + currentCarPositionInTrack.distanceFromTrackPieceStart
-        } else if (currentCarPositionInTrack.segmentIndex > previousCarPositionInTrack.segmentIndex) {
-            // case 2 - advanced to next piece
-            const piece1Length = Track.getTrackPieceLength(track.analyticPieces[previousCarPositionInTrack.segmentIndex])
-            return (piece1Length - previousCarPositionInTrack.distanceFromTrackPieceStart) + currentCarPositionInTrack.distanceFromTrackPieceStart
-        } else {
-            // case 4 - went backward
-            return currentCarPositionInTrack.distanceFromTrackPieceStart - previousCarPositionInTrack.distanceFromTrackPieceStart
-        }
+        const all=track.analyticPieces, n=all.length
+        let steps=currentCarPositionInTrack.segmentIndex-previousCarPositionInTrack.segmentIndex
+        if(track.closed && steps>n/2) steps-=n
+        if(track.closed && steps< -n/2) steps+=n
+        let reward=currentCarPositionInTrack.distanceFromTrackPieceStart-previousCarPositionInTrack.distanceFromTrackPieceStart
+        const from=previousCarPositionInTrack.segmentIndex
+        if(steps>0) for(let i=0;i<steps;i++) reward+=Track.getTrackPieceLength(all[(from+i)%n])
+        else for(let i=-1;i>=steps;i--) reward-=Track.getTrackPieceLength(all[(from+i+n)%n])
+        // Ignore jumps across nearby but disconnected stretches of road.
+        return Math.abs(reward)<=Math.max(100,Math.abs(this.speed)*10) ? reward : 0
     }
 
     showInputs(p: p5) {

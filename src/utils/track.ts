@@ -187,10 +187,8 @@ function closestPointOnSegment(seg: TrackSegment, q: XY): ClosestPointResult {
     }
 }
 
-// Search radius for neighbour-hint queries: checks hint ± NEIGHBOR_SEARCH_RADIUS segments.
-// A car travelling at 80 m/s × 1/60 s × UNITS_PER_METER fits well within 1 segment, so
-// radius 2 gives a comfortable safety margin while keeping the scan to 5 segments max.
-const NEIGHBOR_SEARCH_RADIUS = 2;
+// Bézier collision geometry uses short line segments; allow several segments per tick.
+const NEIGHBOR_SEARCH_RADIUS = 16;
 
 function findClosestOnTrack(
     track: TrackSegment[],

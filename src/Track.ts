@@ -120,6 +120,7 @@ export interface TrackOptions {
 }
 
 export default class Track {
+    closed = false
     pieces: TrackPiece[] = []
     startingPoint: Vector = new Vector(0, 0)
     startingDirection: number = 0
@@ -406,7 +407,7 @@ export default class Track {
         }
 
 
-        for (let piece of this.analyticPieces) {
+        for (let piece of this.pieces) {
             p.strokeWeight(piece.width)
             switch (piece.type) {
                 case TrackPieceType.Straight:
@@ -884,6 +885,7 @@ export default class Track {
                 x: this.startingPoint.x,
                 y: this.startingPoint.y
             },
+            closed: this.closed,
             startingDirection: this.startingDirection,
             pieces: this.pieces.map(piece => {
                 switch (piece.type) {
@@ -962,6 +964,8 @@ export default class Track {
         }
 
         // Generate optimized analytic pieces in batch for much better performance
+        track.closed = data.closed ?? (track.pieces.length > 1 && length(sub(track.pieces[0].start, track.pieces[track.pieces.length - 1].end)) < 0.001);
+        track.convertToSplines();
         track.generateAnalyticPieces();
 
         return track;
@@ -971,22 +975,63 @@ export default class Track {
      * Generates optimized analytic pieces from the current pieces array.
      * This merges consecutive pieces of the same type and properties for better performance.
      */
-    generateAnalyticPieces() {
-        this.analyticPieces = [];
-
-        for (const piece of this.pieces) {
-            const lastAnalytic = this.analyticPieces[this.analyticPieces.length - 1];
-
-            // Try to merge with the last analytic piece if possible
-            if (this.canMergeWithLast(piece, lastAnalytic)) {
-                this.mergeWithLastAnalytic(piece);
-            } else {
-                // Add as new analytic piece
-                this.analyticPieces.push(this.clonePiece(piece));
-            }
+    convertToSplines() {
+        this.pieces = this.pieces.flatMap(piece => {
+            if (piece.type === TrackPieceType.Spline) return [piece];
+            const mix = (a: Vector, b: Vector, t: number) => new Vector(a.x + (b.x-a.x)*t, a.y + (b.y-a.y)*t);
+            if (piece.type === TrackPieceType.Straight) return [{type: TrackPieceType.Spline, start: piece.start, control1: mix(piece.start,piece.end,1/3), control2: mix(piece.start,piece.end,2/3), end: piece.end, width: piece.width} as SplinePiece];
+            const r = length(sub(piece.start,piece.center));
+            const a = Math.atan2(piece.start.y-piece.center.y,piece.start.x-piece.center.x);
+            let sweep = Math.atan2(piece.end.y-piece.center.y,piece.end.x-piece.center.x)-a;
+            if (piece.clockwise && sweep < 0) sweep += Math.PI*2;
+            if (!piece.clockwise && sweep > 0) sweep -= Math.PI*2;
+            const n = Math.max(1,Math.ceil(Math.abs(sweep)/(Math.PI/2)));
+            return Array.from({length:n},(_,i) => {
+                const a0=a+sweep*i/n, a1=a+sweep*(i+1)/n, k=4/3*Math.tan((a1-a0)/4)*r;
+                const start=i===0?piece.start:new Vector(piece.center.x+r*Math.cos(a0),piece.center.y+r*Math.sin(a0));
+                const end=i===n-1?piece.end:new Vector(piece.center.x+r*Math.cos(a1),piece.center.y+r*Math.sin(a1));
+                return {type:TrackPieceType.Spline,start,end,control1:new Vector(start.x-k*Math.sin(a0),start.y+k*Math.cos(a0)),control2:new Vector(end.x+k*Math.sin(a1),end.y-k*Math.cos(a1)),width:piece.width} as SplinePiece;
+            });
+        });
+        for (let i=1;i<this.pieces.length;i++) this.pieces[i].start=this.pieces[i-1].end;
+        if(this.closed && this.pieces.length) this.pieces[this.pieces.length-1].end=this.pieces[0].start;
+        // Legacy joins may have corners. Keep handle lengths while aligning their tangents.
+        const splines=this.pieces as SplinePiece[];
+        for(let i=0;i<splines.length;i++) {
+            if(i===0 && !this.closed) continue;
+            const previous=splines[(i+splines.length-1)%splines.length], next=splines[i];
+            const dx=previous.end.x-previous.control2.x, dy=previous.end.y-previous.control2.y;
+            const mag=Math.hypot(dx,dy), handle=length(sub(next.control1,next.start));
+            if(mag>0.000001) next.control1=new Vector(next.start.x+dx/mag*handle,next.start.y+dy/mag*handle);
         }
 
-        console.log(`Generated ${this.analyticPieces.length} analytic pieces from ${this.pieces.length} original pieces`);
+    }
+
+    generateAnalyticPieces() {
+        this.analyticPieces = [];
+        for (const piece of this.pieces) {
+            if (piece.type !== TrackPieceType.Spline) {
+                const last=this.analyticPieces[this.analyticPieces.length-1];
+                if(this.canMergeWithLast(piece,last)) this.mergeWithLastAnalytic(piece);
+                else this.analyticPieces.push(this.clonePiece(piece));
+                continue;
+            }
+            // Subdivide until the control polygon is flat and short enough for sensors and progress.
+            const flatten = (a: XY,b: XY,c: XY,d: XY,depth: number) => {
+                const chord=length(sub(d,a));
+                const polygon=length(sub(b,a))+length(sub(c,b))+length(sub(d,c));
+                if(depth>=16 || (polygon-chord<0.02 && polygon<=8)) {
+                    if(chord>0.000001) this.analyticPieces.push({type:TrackPieceType.Straight,start:new Vector(a.x,a.y),end:new Vector(d.x,d.y),width:piece.width});
+                    return;
+                }
+                const mid=(u:XY,v:XY)=>({x:(u.x+v.x)/2,y:(u.y+v.y)/2});
+                const ab=mid(a,b),bc=mid(b,c),cd=mid(c,d),abc=mid(ab,bc),bcd=mid(bc,cd),m=mid(abc,bcd);
+                flatten(a,ab,abc,m,depth+1); flatten(m,bcd,cd,d,depth+1);
+            };
+            flatten(piece.start,piece.control1,piece.control2,piece.end,0);
+        }
+        this.quadTree=null;
+        this.trackMapCache.clear();
     }
 
     /**
@@ -1590,10 +1635,31 @@ export default class Track {
             point = new Vector(piece.center.x + radius * Math.cos(angle), piece.center.y + radius * Math.sin(angle))
             direction = angle + (piece.clockwise ? Math.PI / 2 : -Math.PI / 2)
         } else {
-            throw new Error('getPointAtDistance: unsupported piece type')
+            const samples=Track.splineSamples(piece);
+            const total=samples[samples.length-1].distance;
+            const target=Math.max(0,Math.min(offset,total));
+            const upper=Math.max(1,samples.findIndex(sample=>sample.distance>=target));
+            const a=samples[upper-1],b=samples[upper];
+            const fraction=(target-a.distance)/Math.max(b.distance-a.distance,0.000001);
+            const u=(upper-1+fraction)/(samples.length-1),v=1-u;
+            point=new Vector(v*v*v*piece.start.x+3*v*v*u*piece.control1.x+3*v*u*u*piece.control2.x+u*u*u*piece.end.x,
+                v*v*v*piece.start.y+3*v*v*u*piece.control1.y+3*v*u*u*piece.control2.y+u*u*u*piece.end.y);
+            direction=Math.atan2(3*v*v*(piece.control1.y-piece.start.y)+6*v*u*(piece.control2.y-piece.control1.y)+3*u*u*(piece.end.y-piece.control2.y),
+                3*v*v*(piece.control1.x-piece.start.x)+6*v*u*(piece.control2.x-piece.control1.x)+3*u*u*(piece.end.x-piece.control2.x));
         }
 
         return { point, direction, pieceIndex: idx, offsetInPiece: offset }
+    }
+
+    private static splineSamples(piece: SplinePiece) {
+        let previous: XY=piece.start, distance=0;
+        return Array.from({length:101},(_,i)=>{
+            const t=i/100,u=1-t;
+            const point={x:u*u*u*piece.start.x+3*u*u*t*piece.control1.x+3*u*t*t*piece.control2.x+t*t*t*piece.end.x,
+                y:u*u*u*piece.start.y+3*u*u*t*piece.control1.y+3*u*t*t*piece.control2.y+t*t*t*piece.end.y};
+            distance+=length(sub(point,previous));previous=point;
+            return {point,distance};
+        });
     }
 
     static getTrackPieceLength(piece: TrackPiece): number {
@@ -1611,9 +1677,10 @@ export default class Track {
                     angleDiff += 2 * Math.PI;
                 }
                 return Math.abs(angleDiff) * radius;
-            case TrackPieceType.Spline:
-            default:
-                throw new Error("Length calculation not implemented for this piece type");
+            case TrackPieceType.Spline: {
+                const samples=Track.splineSamples(piece);
+                return samples[samples.length-1].distance;
+            }
         }
     }
 }

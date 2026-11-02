@@ -1,6 +1,6 @@
 
 import p5 from 'p5';
-import { createTrackBuilder, setTrack, drawTrackSelection, handleTrackBuilderKeyPress } from "./ui/trackBuilder"
+import { createTrackBuilder, drawTrackSelection, handleTrackBuilderKeyPress, editorPressed, editorDragged, editorClick, editorReleased } from "./ui/trackBuilder"
 import { newVector, Vector } from './Vector';
 import Car from './Car';
 import { supercarPreset, f1CarPreset, CarPreset, unoWithLadderPreset } from './cars/carPresets';
@@ -260,20 +260,22 @@ export default class Game {
 			p.mouseClicked = (e) => {
 				console.log('Mouse clicked:', e)
 				// if CTRL is pressed, we don't want to trigger mouseClicked because the user is probably trying to save or load the game, so we check if CTRL is pressed and if the click is on the canvas before triggering mouseClicked
-				if (e?.ctrlKey) {
+				if ((e as MouseEvent)?.ctrlKey) {
 					return
 				}
 
 
-				if (e?.target === this.canvas.elt) {
+				if ((e as MouseEvent)?.target === this.canvas.elt) {
 					this.mouseClicked()
 				}
 			}
 
 			p.mousePressed = (e) => {
 				console.log('Mouse pressed:', e)
-				this.mousePressed()
+				if ((e as MouseEvent)?.target === this.canvas.elt) this.mousePressed()
 			}
+
+			p.mouseReleased = () => editorReleased()
 
 			p.mouseWheel = (event) => {
 				this.mouseWheel(event)
@@ -390,7 +392,7 @@ export default class Game {
 			case "buildTrack": {
 
 				this.track.draw(this.p)
-				drawTrackSelection(this.p, this.track)
+				drawTrackSelection(this.p, this.track, this.cameraZoom)
 				// this.p.image(this.renderTrack, 0, 0)
 				if (this.showGrid == true) { this.p.image(this.grid, 0, 0) }
 				break
@@ -730,6 +732,10 @@ export default class Game {
 	}
 
 	mouseClicked() {
+        if (phase === "buildTrack") {
+            const pos = this.convertMousePositionToWorldCoordinates(this.p.mouseX,this.p.mouseY)
+            editorClick(this,new Vector(pos.x,pos.y),this.cameraZoom); return
+        }
 
 		switch (phase) {
 			case "resetTrack":
@@ -972,11 +978,16 @@ export default class Game {
 	mousePressed() {
 		this.previousMouseX = this.p.mouseX
 		this.previousMouseY = this.p.mouseY
+        if (phase === "buildTrack" && !this.p.keyIsDown(this.p.CONTROL)) {
+            const pos=this.convertMousePositionToWorldCoordinates(this.p.mouseX,this.p.mouseY)
+            editorPressed(this.track,new Vector(pos.x,pos.y),this.cameraZoom)
+        }
 	}
 
 	mouseDragged() {
 		console.log("dragging")
 		switch (phase) {
+            case "rotateStart":
 			case "setStart":
 				// only move in this phase if CTRL is pressed, otherwise the user is probably trying to move the camera, so we check if CTRL is pressed before allowing the user to move the starting point
 				if (this.p.keyIsDown(this.p.CONTROL)) {
@@ -987,15 +998,22 @@ export default class Game {
 				}
 				break
 			case "buildTrack":
-			case "running":
-				// move camera around
-				this.cameraOffsetX += (this.p.mouseX - this.previousMouseX) / this.cameraZoom
-				this.cameraOffsetY += (this.p.mouseY - this.previousMouseY) / this.cameraZoom
-				this.previousMouseX = this.p.mouseX
-				this.previousMouseY = this.p.mouseY
+                if (!this.p.keyIsDown(this.p.CONTROL)) {
+                    const pos=this.convertMousePositionToWorldCoordinates(this.p.mouseX,this.p.mouseY)
+                    editorDragged(this,new Vector(pos.x,pos.y),this.cameraZoom); break
+                }
+                this.panCamera(); break
+            case "running":
+                this.panCamera()
 				break
 		}
 	}
+
+    private panCamera() {
+        this.cameraOffsetX += (this.p.mouseX-this.previousMouseX)/this.cameraZoom
+        this.cameraOffsetY += (this.p.mouseY-this.previousMouseY)/this.cameraZoom
+        this.previousMouseX=this.p.mouseX; this.previousMouseY=this.p.mouseY
+    }
 
 	mouseWheel(event: any) {
 		// Zoom in/out
