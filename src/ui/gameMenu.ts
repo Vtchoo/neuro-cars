@@ -18,6 +18,13 @@ export function buildGameMenu(game: Game, p: p5) {
     }))
     
     const ticksLabel = p.createElement("span", `Ticks: ${game.maxTicks}`)
+    const updateTicksLabel = () => ticksLabel.html(`Ticks: ${game.maxTicks}`)
+    game.events.addEventListener("maxTicksChanged", updateTicksLabel)
+    const removeMenu = menu.remove.bind(menu)
+    menu.remove = () => {
+        game.events.removeEventListener("maxTicksChanged", updateTicksLabel)
+        removeMenu()
+    }
     ticksLabel.style(style({
         fontSize: '.75rem',
         fontWeight: 'bold',
@@ -34,23 +41,19 @@ export function buildGameMenu(game: Game, p: p5) {
     minus5PercentButton.mouseClicked(() => {
         const decrement = Math.floor(game.maxTicks * 0.05)
         game.incrementMaxTicks(-decrement)
-        ticksLabel.html(`Ticks: ${game.maxTicks}`)
     })
     const minus100Button = p.createButton("-100")
     minus100Button.mouseClicked(() => {
         game.incrementMaxTicks(-100)
-        ticksLabel.html(`Ticks: ${game.maxTicks}`)
     })
     const plus5PercentButton = p.createButton("+5%")
     plus5PercentButton.mouseClicked(() => {
         const increment = Math.ceil(game.maxTicks * 0.05)
         game.incrementMaxTicks(increment)
-        ticksLabel.html(`Ticks: ${game.maxTicks}`)
     })
     const plus100Button = p.createButton("+100")
     plus100Button.mouseClicked(() => {
         game.incrementMaxTicks(100)
-        ticksLabel.html(`Ticks: ${game.maxTicks}`)
     })
     minus5PercentButton.parent(ticksRow)
     minus100Button.parent(ticksRow)

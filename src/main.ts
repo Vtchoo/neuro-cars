@@ -226,7 +226,16 @@ export default class Game {
 
 	ticks = 0
 	generation = 0
-	maxTicks = 1000
+	readonly events = new EventTarget()
+	private _maxTicks = 1000
+	get maxTicks() {
+		return this._maxTicks
+	}
+	set maxTicks(value: number) {
+		if (value === this._maxTicks) return
+		this._maxTicks = value
+		this.events.dispatchEvent(new CustomEvent<number>('maxTicksChanged', { detail: value }))
+	}
 
 	/**
 	 * Cycles through track's track pieces as starting points for the race, instead of always starting at the same point. This makes the AI more robust and able to handle different parts of the track.
