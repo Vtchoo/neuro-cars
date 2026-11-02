@@ -148,6 +148,44 @@ export default class Track {
     analyticPieces: TrackPiece[] = []
     private distanceIndexPieces: TrackPiece[] | null = null
     private distanceIndex: number[] = []
+    private splineCurbCache = new WeakMap<SplinePiece, { coordinates: number[], edges: Path2D[] }>()
+
+    private getSplineCurbPaths(piece: SplinePiece): Path2D[] {
+        const coordinates = [piece.start.x, piece.start.y, piece.control1.x, piece.control1.y,
+        piece.control2.x, piece.control2.y, piece.end.x, piece.end.y, piece.width]
+        const cached = this.splineCurbCache.get(piece)
+        if (cached && coordinates.every((value, i) => value === cached.coordinates[i])) return cached.edges
+
+        // Rendering samples stay separate from the simulation's adaptive chords.
+        // Cache native paths so normal calculation and path construction only happen after edits.
+        const samples = Track.splineSamples(piece)
+        const edges = [new Path2D(), new Path2D()]
+        const offset = piece.width / 2 + 5
+        for (let i = 0; i < samples.length; i++) {
+            const t = i / (samples.length - 1), u = 1 - t
+            let dx = 3 * u * u * (piece.control1.x - piece.start.x) + 6 * u * t * (piece.control2.x - piece.control1.x) + 3 * t * t * (piece.end.x - piece.control2.x)
+            let dy = 3 * u * u * (piece.control1.y - piece.start.y) + 6 * u * t * (piece.control2.y - piece.control1.y) + 3 * t * t * (piece.end.y - piece.control2.y)
+            // Coincident endpoint handles can have a zero derivative.
+            if (Math.hypot(dx, dy) < 1e-9) {
+                const before = samples[Math.max(0, i - 1)].point
+                const after = samples[Math.min(samples.length - 1, i + 1)].point
+                dx = after.x - before.x
+                dy = after.y - before.y
+            }
+            const magnitude = Math.hypot(dx, dy)
+            const nx = magnitude > 0 ? -dy / magnitude : 0
+            const ny = magnitude > 0 ? dx / magnitude : 1
+            for (let side = 0; side < 2; side++) {
+                const sign = side === 0 ? -1 : 1
+                const x = samples[i].point.x + sign * nx * offset
+                const y = samples[i].point.y + sign * ny * offset
+                if (i === 0) edges[side].moveTo(x, y)
+                else edges[side].lineTo(x, y)
+            }
+        }
+        this.splineCurbCache.set(piece, { coordinates, edges })
+        return edges
+    }
 
     get cumulativeLengths(): number[] {
         if (this.distanceIndexPieces !== this.analyticPieces || this.distanceIndex.length !== this.analyticPieces.length + 1) {
@@ -517,6 +555,17 @@ export default class Track {
                     p.stroke(asphaltColor)
                     p.strokeWeight(piece.width)
                     p.bezier(piece.start.x, piece.start.y, piece.control1.x, piece.control1.y, piece.control2.x, piece.control2.y, piece.end.x, piece.end.y)
+                    // Match straight/arc curbs: 10-unit bands just outside each edge.
+                    p.strokeWeight(10)
+                    p.strokeJoin(p.ROUND)
+                    p.stroke("lightgray")
+                    const curbPaths = this.getSplineCurbPaths(piece)
+                    const context = p.drawingContext as CanvasRenderingContext2D
+                    for (const path of curbPaths) context.stroke(path)
+                    p.stroke("darkred")
+                    context.setLineDash([10, 10])
+                    for (const path of curbPaths) context.stroke(path)
+                    context.setLineDash([])
                     p.pop()
                     break
             }
