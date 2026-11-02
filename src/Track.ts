@@ -554,7 +554,16 @@ export default class Track {
                     p.bezier(piece.start.x, piece.start.y, piece.control1.x, piece.control1.y, piece.control2.x, piece.control2.y, piece.end.x, piece.end.y)
                     p.stroke(asphaltColor)
                     p.strokeWeight(piece.width)
-                    p.bezier(piece.start.x, piece.start.y, piece.control1.x, piece.control1.y, piece.control2.x, piece.control2.y, piece.end.x, piece.end.y)
+                    // Overlap adjoining pieces by one pixel to cover white end seams.
+                    const startDirection = Track.getTrackPieceStartDirection(piece)
+                    const endDirection = Track.getTrackPieceEndDirection(piece)
+                    const startDx = Math.cos(startDirection), startDy = Math.sin(startDirection)
+                    const endDx = Math.cos(endDirection), endDy = Math.sin(endDirection)
+                    p.bezier(
+                        piece.start.x - startDx, piece.start.y - startDy,
+                        piece.control1.x - startDx, piece.control1.y - startDy,
+                        piece.control2.x + endDx, piece.control2.y + endDy,
+                        piece.end.x + endDx, piece.end.y + endDy)
                     // Match straight/arc curbs: 10-unit bands just outside each edge.
                     p.strokeWeight(10)
                     p.strokeJoin(p.ROUND)
