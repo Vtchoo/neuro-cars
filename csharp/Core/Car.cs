@@ -49,6 +49,7 @@ namespace SmartRace.Core
         bool Closed { get; }
         ITrackPiece[] Pieces { get; }
         ITrackPiece[] AnalyticPieces { get; }
+        TrackDistanceIndex DistanceIndex { get; }
     }
 
     public class Car
@@ -293,7 +294,8 @@ namespace SmartRace.Core
             var currentCarPositionInTrack = TrackMath.QueryTrack(
                 CachedTrackSegments ?? track.AnalyticPieces.Select(ConvertToTrackSegment).ToArray(),
                 new XY(Position.X, Position.Y), this.Direction,
-                previousCarPositionInTrack?.SegmentIndex ?? -1);
+                previousCarPositionInTrack?.SegmentIndex ?? -1, track.DistanceIndex.CumulativeLengths, track.Closed,
+                Math.Max(1, Math.Abs(Speed * avgDeltaTime * Constants.UNITS_PER_METER) * 2 + (previousCarPositionInTrack?.Distance ?? 0) * 2));
             this.LastCarPositionInTrack = currentCarPositionInTrack;
 
             var fitnessReward = CalculateFitnessReward(track, previousCarPositionInTrack, currentCarPositionInTrack);
@@ -312,17 +314,13 @@ namespace SmartRace.Core
             var previousPosition = previousCarPositionInTrack.Value;
             var currentPosition = currentCarPositionInTrack.Value;
 
-            var pieces = track.AnalyticPieces;
-            int n = pieces.Length;
-            int steps = currentPosition.SegmentIndex - previousPosition.SegmentIndex;
-            if (track.Closed && steps > n / 2.0) steps -= n;
-            if (track.Closed && steps < -n / 2.0) steps += n;
-            double reward = currentPosition.DistanceFromTrackPieceStart - previousPosition.DistanceFromTrackPieceStart;
-            int from = previousPosition.SegmentIndex;
-            if (steps > 0)
-                for (int i = 0; i < steps; i++) reward += pieces[(from + i) % n].Length;
-            else
-                for (int i = -1; i >= steps; i--) reward -= pieces[(from + i + n) % n].Length;
+            var lengths = track.DistanceIndex.CumulativeLengths;
+            int n = track.AnalyticPieces.Length;
+            int from = previousPosition.SegmentIndex, to = currentPosition.SegmentIndex;
+            double reward = lengths[to] + currentPosition.DistanceFromTrackPieceStart
+                - lengths[from] - previousPosition.DistanceFromTrackPieceStart;
+            if (track.Closed && reward > lengths[n]/2) reward -= lengths[n];
+            else if (track.Closed && reward < -lengths[n]/2) reward += lengths[n];
             // Ignore jumps across nearby but disconnected stretches of road.
             return Math.Abs(reward) <= Math.Max(100, Math.Abs(Speed) * 10) ? reward : 0;
         }
@@ -524,77 +522,10 @@ namespace SmartRace.Core
 
             for (int i = 0; i < totalQueryPoints; i++)
             {
-                double remainingDistance = (i + 1) * distanceBetweenPoints;
-                int segmentIndex = currentCarPositionInTrack.SegmentIndex;
-                double ptX = currentCarPositionInTrack.Point.X;
-                double ptY = currentCarPositionInTrack.Point.Y;
-
-                while (remainingDistance > 0)
-                {
-                    ITrackPiece segment = track.AnalyticPieces[segmentIndex];
-
-                    switch (segment.Type)
-                    {
-                        case TrackPieceType.Straight:
-                            {
-                                double dX = segment.End.X - ptX;
-                                double dY = segment.End.Y - ptY;
-                                double availableDistance = Math.Sqrt(dX * dX + dY * dY);
-                                if (remainingDistance <= availableDistance)
-                                {
-                                    double sdX = segment.End.X - segment.Start.X;
-                                    double sdY = segment.End.Y - segment.Start.Y;
-                                    double invMag = 1.0 / Math.Sqrt(sdX * sdX + sdY * sdY);
-                                    ptX += sdX * invMag * remainingDistance;
-                                    ptY += sdY * invMag * remainingDistance;
-                                    remainingDistance = 0;
-                                }
-                                else
-                                {
-                                    remainingDistance -= availableDistance;
-                                    segmentIndex = (segmentIndex + 1) % track.AnalyticPieces.Length;
-                                    ptX = track.AnalyticPieces[segmentIndex].Start.X;
-                                    ptY = track.AnalyticPieces[segmentIndex].Start.Y;
-                                }
-                                break;
-                            }
-                        case TrackPieceType.Arc:
-                            {
-                                IArcPiece arcSegment = segment as IArcPiece;
-                                double cX = arcSegment.Center.X;
-                                double cY = arcSegment.Center.Y;
-                                double rDx = segment.Start.X - cX;
-                                double rDy = segment.Start.Y - cY;
-                                double radius = Math.Sqrt(rDx * rDx + rDy * rDy);
-
-                                double finalAngle = (Math.Atan2(segment.End.Y - cY, segment.End.X - cX) + 2 * Math.PI) % (2 * Math.PI);
-                                double startAngle = (Math.Atan2(ptY - cY, ptX - cX) + 2 * Math.PI) % (2 * Math.PI);
-
-                                double availableAngle = arcSegment.Clockwise ? finalAngle - startAngle : startAngle - finalAngle;
-                                double availableDistance = Math.Abs((availableAngle + 2 * Math.PI) % (2 * Math.PI)) * radius;
-
-                                if (remainingDistance <= availableDistance)
-                                {
-                                    double angleDirection = arcSegment.Clockwise ? 1 : -1;
-                                    double angleToPoint = Math.Atan2(ptY - cY, ptX - cX) + angleDirection * (remainingDistance / radius);
-                                    ptX = cX + radius * Math.Cos(angleToPoint);
-                                    ptY = cY + radius * Math.Sin(angleToPoint);
-                                    remainingDistance = 0;
-                                }
-                                else
-                                {
-                                    remainingDistance -= availableDistance;
-                                    segmentIndex = (segmentIndex + 1) % track.AnalyticPieces.Length;
-                                    ptX = track.AnalyticPieces[segmentIndex].Start.X;
-                                    ptY = track.AnalyticPieces[segmentIndex].Start.Y;
-                                }
-                                break;
-                            }
-                    }
-                }
-
-                lookAheadX[i] = ptX;
-                lookAheadY[i] = ptY;
+                var ahead = track.DistanceIndex.PointAhead(currentCarPositionInTrack.SegmentIndex,
+                    currentCarPositionInTrack.DistanceFromTrackPieceStart, (i+1)*distanceBetweenPoints, track.Closed);
+                lookAheadX[i] = ahead.point.X;
+                lookAheadY[i] = ahead.point.Y;
             }
 
             // Update LastLookAheadPoints (used externally for visualization only)

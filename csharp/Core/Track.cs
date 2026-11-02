@@ -66,6 +66,7 @@ namespace SmartRace.Core
         public bool Closed { get; set; }
         public ITrackPiece[] Pieces { get; set; }
         public ITrackPiece[] AnalyticPieces { get; private set; }
+        public TrackDistanceIndex DistanceIndex { get; private set; } = null!;
         public Vector StartingPoint { get; set; }
         public double StartingDirection { get; set; }
 
@@ -237,7 +238,7 @@ namespace SmartRace.Core
             {
                 if (piece is SplinePiece spline)
                 {
-                    // Keep short spline chords separate for progress and sensor queries.
+                    // Keep adaptive chords in track order for progress and sensor queries.
                     optimizedPieces.AddRange(spline.Flatten());
                 }
                 else if (CanMergeWithLast(piece, optimizedPieces.LastOrDefault()))
@@ -246,6 +247,7 @@ namespace SmartRace.Core
                     optimizedPieces.Add(ClonePiece(piece));
             }
             AnalyticPieces = optimizedPieces.ToArray();
+            DistanceIndex = new TrackDistanceIndex(AnalyticPieces);
             trackSegments = AnalyticPieces.Select(ConvertToTrackSegment).ToList();
             TrackMapCache.Clear();
             BuildQuadTree();

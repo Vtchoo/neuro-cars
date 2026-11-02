@@ -382,14 +382,14 @@ namespace SmartRace.Utils
             }
         }
 
-        public static TrackQueryResult QueryTrack(TrackSegment[] track, XY carPos, double carAngle, int hintSegmentIndex = -1)
+        public static TrackQueryResult QueryTrack(TrackSegment[] track, XY carPos, double carAngle, int hintSegmentIndex = -1, double[]? cumulativeLengths = null, bool closed = true, double searchDistance = 1)
         {
             if (track.Length == 0)
             {
                 throw new ArgumentException("Track must contain at least one segment.");
             }
 
-            ClosestPointOnTrackResult best = FindClosestOnTrack(track, carPos, hintSegmentIndex);
+            ClosestPointOnTrackResult best = FindClosestOnTrack(track, carPos, hintSegmentIndex, cumulativeLengths, closed, searchDistance);
 
             XY tangent = Normalize(best.Tangent);
             XY delta = Sub(carPos, best.Point);
@@ -416,45 +416,36 @@ namespace SmartRace.Utils
             };
         }
 
-        // Spline collision geometry uses short chords; allow several segments per tick.
-        private const int NeighborSearchRadius = 16;
-
-        private static ClosestPointOnTrackResult FindClosestOnTrack(TrackSegment[] track, XY carPos, int hint)
+        private static ClosestPointOnTrackResult FindClosestOnTrack(TrackSegment[] track, XY carPos, int hint,
+            double[]? lengths, bool closed, double searchDistance)
         {
-            // When a valid hint is supplied and there are enough segments, scan only the
-            // hint's neighbourhood.  If the nearest neighbour result looks implausibly far
-            // (distance > half the track width, which we approximate conservatively as 1e9
-            // sq-units to stay unit-agnostic) fall back to the full scan so we never return
-            // a wrong segment after a teleport or a reset.
-            if (hint >= 0 && hint < track.Length && track.Length > NeighborSearchRadius * 2)
+            static ClosestPointOnTrackResult Result(ClosestPointResult r, int i) => new()
             {
-                ClosestPointOnTrackResult neighborBest = default;
-                bool found = false;
-
-                for (int offset = -NeighborSearchRadius; offset <= NeighborSearchRadius; offset++)
+                Point=r.Point, Tangent=r.Tangent, Distance=r.Distance, DistanceSq=r.DistanceSq,
+                T=r.T, SegmentIndex=i, DistanceFromTrackPieceStart=r.DistanceFromTrackPieceStart
+            };
+            if (lengths != null && hint >= 0 && hint < track.Length)
+            {
+                var initial = ClosestPointOnSegment(track[hint], carPos);
+                var best = Result(initial, hint);
+                double budget = Math.Max(1, searchDistance);
+                int visited = 1;
+                for (int direction = -1; direction <= 1; direction += 2)
                 {
-                    int i = (hint + offset + track.Length) % track.Length;
-                    ClosestPointResult r = ClosestPointOnSegment(track[i], carPos);
-                    if (!found || r.DistanceSq < neighborBest.DistanceSq)
+                    double travel = direction < 0 ? initial.DistanceFromTrackPieceStart
+                        : lengths[hint+1]-lengths[hint]-initial.DistanceFromTrackPieceStart;
+                    for (int step = 1; visited < track.Length && travel <= budget; step++)
                     {
-                        neighborBest = new ClosestPointOnTrackResult
-                        {
-                            Point = r.Point,
-                            Tangent = r.Tangent,
-                            Distance = r.Distance,
-                            DistanceSq = r.DistanceSq,
-                            T = r.T,
-                            SegmentIndex = i,
-                            DistanceFromTrackPieceStart = r.DistanceFromTrackPieceStart,
-                        };
-                        found = true;
+                        int index = hint + direction*step;
+                        if (!closed && (index < 0 || index >= track.Length)) break;
+                        int i = (index + track.Length) % track.Length;
+                        visited++;
+                        var r = ClosestPointOnSegment(track[i], carPos);
+                        if (r.DistanceSq < best.DistanceSq) best = Result(r, i);
+                        travel += lengths[i+1]-lengths[i];
                     }
                 }
-
-                // Sanity check: if distance is unreasonably large the car has teleported;
-                // fall through to the full scan.
-                if (neighborBest.DistanceSq < 1e9)
-                    return neighborBest;
+                if (best.DistanceSq <= budget*budget) return best;
             }
 
             // Full scan fallback (first call, after reset, or implausible neighbour result).

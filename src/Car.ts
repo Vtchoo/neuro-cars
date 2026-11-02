@@ -274,7 +274,10 @@ export default class Car {
         )
 
         const trackSegments = this.cachedTrackSegments ?? (this.cachedTrackSegments = track.analyticPieces.map(convertToTrackSegment))
-        const currentCarPositionInTrack = queryTrack(trackSegments, this.pos, this.direction, this.lastCarPositionInTrack?.segmentIndex ?? -1)
+        const currentCarPositionInTrack = queryTrack(trackSegments, this.pos, this.direction, this.lastCarPositionInTrack?.segmentIndex ?? -1, {
+            cumulativeLengths: track.cumulativeLengths, closed: track.closed,
+            searchDistance: Math.max(1, Math.abs(this.speed * avgDeltaTime * UNITS_PER_METER) * 2 + (previousCarPositionInTrack?.distance ?? 0) * 2)
+        })
         this.lastCarPositionInTrack = currentCarPositionInTrack
 
         // Lap timing — detect crossing the start/finish line (boundary between last and first segment)
@@ -282,8 +285,11 @@ export default class Car {
             const prevIdx = previousCarPositionInTrack.segmentIndex
             const currIdx = currentCarPositionInTrack.segmentIndex
             const totalSegments = track.analyticPieces.length
-            const forwardCrossing = track.closed && prevIdx - currIdx > totalSegments / 2
-            const backwardCrossing = track.closed && currIdx - prevIdx > totalSegments / 2
+            const lengths = track.cumulativeLengths
+            const progressDelta = lengths[currIdx] + currentCarPositionInTrack.distanceFromTrackPieceStart
+                - lengths[prevIdx] - previousCarPositionInTrack.distanceFromTrackPieceStart
+            const forwardCrossing = track.closed && progressDelta < -lengths[totalSegments] / 2
+            const backwardCrossing = track.closed && progressDelta > lengths[totalSegments] / 2
 
             // Accumulate the furthest segment reached during this timed lap
             this.lapMaxSegment = Math.max(this.lapMaxSegment, prevIdx)
@@ -293,9 +299,8 @@ export default class Car {
                 // distToLine  = remaining distance in the last segment at the previous tick
                 // distPastLine = distance into segment 0 at the current tick
                 // fraction = distToLine / totalDistance → how far through this tick the crossing happened
-                const lastSegLen = Track.getTrackPieceLength(track.analyticPieces[totalSegments - 1])
-                const distToLine = track.analyticPieces.slice(prevIdx, -1).reduce((sum,piece) => sum + Track.getTrackPieceLength(piece), 0) + lastSegLen - previousCarPositionInTrack.distanceFromTrackPieceStart
-                const distPastLine = track.analyticPieces.slice(0, currIdx).reduce((sum,piece) => sum + Track.getTrackPieceLength(piece), 0) + currentCarPositionInTrack.distanceFromTrackPieceStart
+                const distToLine = track.cumulativeLengths[totalSegments] - track.cumulativeLengths[prevIdx] - previousCarPositionInTrack.distanceFromTrackPieceStart
+                const distPastLine = track.cumulativeLengths[currIdx] + currentCarPositionInTrack.distanceFromTrackPieceStart
                 const totalDist = distToLine + distPastLine
                 const fraction = totalDist > 0 ? distToLine / totalDist : 0
                 const exactCrossingTick = gameTick + fraction
@@ -326,16 +331,14 @@ export default class Car {
             return 0
         }
 
-        const all=track.analyticPieces, n=all.length
-        let steps=currentCarPositionInTrack.segmentIndex-previousCarPositionInTrack.segmentIndex
-        if(track.closed && steps>n/2) steps-=n
-        if(track.closed && steps< -n/2) steps+=n
-        let reward=currentCarPositionInTrack.distanceFromTrackPieceStart-previousCarPositionInTrack.distanceFromTrackPieceStart
-        const from=previousCarPositionInTrack.segmentIndex
-        if(steps>0) for(let i=0;i<steps;i++) reward+=Track.getTrackPieceLength(all[(from+i)%n])
-        else for(let i=-1;i>=steps;i--) reward-=Track.getTrackPieceLength(all[(from+i+n)%n])
+        const lengths = track.cumulativeLengths, n = track.analyticPieces.length
+        const from = previousCarPositionInTrack.segmentIndex, to = currentCarPositionInTrack.segmentIndex
+        let reward = lengths[to] + currentCarPositionInTrack.distanceFromTrackPieceStart
+            - lengths[from] - previousCarPositionInTrack.distanceFromTrackPieceStart
+        if (track.closed && reward > lengths[n] / 2) reward -= lengths[n]
+        else if (track.closed && reward < -lengths[n] / 2) reward += lengths[n]
         // Ignore jumps across nearby but disconnected stretches of road.
-        return Math.abs(reward)<=Math.max(100,Math.abs(this.speed)*10) ? reward : 0
+        return Math.abs(reward) <= Math.max(100, Math.abs(this.speed) * 10) ? reward : 0
     }
 
     showInputs(p: p5) {
@@ -517,53 +520,10 @@ export default class Car {
         const distanceBetweenPoints = maxLookaheadDistance / totalqueryPoints
 
         for (let i = 1; i <= totalqueryPoints; i++) {
-            const lookaheadDistance = i * distanceBetweenPoints
-            let remainingDistance = lookaheadDistance
-            let segmentIndex = currentCarPositionInTrack.segmentIndex
-            let pointOnTrack = currentCarPositionInTrack.point
-
-            while (remainingDistance > 0) {
-                const segment = track.analyticPieces[segmentIndex]
-
-                switch (segment.type) {
-                    case TrackPieceType.Straight: {
-                        const availableDistanceInCurrentSegment = Vector.sub(segment.end, pointOnTrack).mag()
-                        if (remainingDistance <= availableDistanceInCurrentSegment) {
-                            const segmentDirection = Vector.sub(segment.end, segment.start)
-                            const unitVector = new Vector(segmentDirection.x / segmentDirection.mag(), segmentDirection.y / segmentDirection.mag())
-                            pointOnTrack = new Vector(pointOnTrack.x + unitVector.x * remainingDistance, pointOnTrack.y + unitVector.y * remainingDistance)
-                            remainingDistance = 0
-                        } else {
-                            remainingDistance -= availableDistanceInCurrentSegment
-                            segmentIndex = (segmentIndex + 1) % track.analyticPieces.length
-                            pointOnTrack = track.analyticPieces[segmentIndex].start
-                        }
-                        break
-                    }
-                    case TrackPieceType.Arc: {
-                        const center = segment.center
-                        const radius = Vector.sub(segment.start, center).mag()
-
-                        const finalAngle = (Math.atan2(segment.end.y - center.y, segment.end.x - center.x) + 2 * Math.PI) % (2 * Math.PI)
-                        const startAngle = (Math.atan2(pointOnTrack.y - center.y, pointOnTrack.x - center.x) + 2 * Math.PI) % (2 * Math.PI)
-
-                        const availableAngleInCurrentSegment = segment.clockwise ? finalAngle - startAngle : startAngle - finalAngle
-                        const availableDistanceInCurrentSegment = Math.abs((availableAngleInCurrentSegment + 2 * Math.PI) % (2 * Math.PI)) * radius
-
-                        if (remainingDistance <= availableDistanceInCurrentSegment) {
-                            const angleDirection = segment.clockwise ? 1 : -1
-                            const angleToPoint = Math.atan2(pointOnTrack.y - center.y, pointOnTrack.x - center.x) + angleDirection * (remainingDistance / radius)
-                            pointOnTrack = new Vector(center.x + radius * Math.cos(angleToPoint), center.y + radius * Math.sin(angleToPoint))
-                            remainingDistance = 0
-                        } else {
-                            remainingDistance -= availableDistanceInCurrentSegment
-                            segmentIndex = (segmentIndex + 1) % track.analyticPieces.length
-                            pointOnTrack = track.analyticPieces[segmentIndex].start
-                        }
-                        break
-                    }
-                }
-            }
+            const { point: pointOnTrack } = track.getPointAhead(
+                currentCarPositionInTrack.segmentIndex,
+                currentCarPositionInTrack.distanceFromTrackPieceStart,
+                i * distanceBetweenPoints)
 
             lookAheadPoints.push(pointOnTrack)
         }

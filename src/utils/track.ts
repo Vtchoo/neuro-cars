@@ -187,34 +187,38 @@ function closestPointOnSegment(seg: TrackSegment, q: XY): ClosestPointResult {
     }
 }
 
-// Bézier collision geometry uses short line segments; allow several segments per tick.
-const NEIGHBOR_SEARCH_RADIUS = 16;
+export type TrackSearchOptions = {
+    cumulativeLengths: number[];
+    closed: boolean;
+    searchDistance: number;
+};
 
 function findClosestOnTrack(
     track: TrackSegment[],
     carPos: XY,
-    hint: number
+    hint: number,
+    options?: TrackSearchOptions
 ): ClosestPointOnTrackResult {
-    // When a valid hint is supplied and there are enough segments, scan only the
-    // hint's neighbourhood.  If the nearest neighbour result looks implausibly far
-    // (distance² > 1e9 sq-units) fall back to the full scan so we never return
-    // a wrong segment after a teleport or a reset.
-    if (hint >= 0 && hint < track.length && track.length > NEIGHBOR_SEARCH_RADIUS * 2) {
-        let neighborBest: ClosestPointOnTrackResult | null = null;
-
-        for (let offset = -NEIGHBOR_SEARCH_RADIUS; offset <= NEIGHBOR_SEARCH_RADIUS; offset++) {
-            const i = (hint + offset + track.length) % track.length;
-            const r = closestPointOnSegment(track[i], carPos);
-            if (!neighborBest || r.distanceSq < neighborBest.distanceSq) {
-                neighborBest = { ...r, segmentIndex: i };
+    if (options && hint >= 0 && hint < track.length) {
+        const initial = closestPointOnSegment(track[hint], carPos);
+        let neighborBest = { ...initial, segmentIndex: hint };
+        const budget = Math.max(1, options.searchDistance);
+        const lengths = options.cumulativeLengths;
+        let visited = 1;
+        for (const direction of [-1, 1]) {
+            let travel = direction < 0 ? initial.distanceFromTrackPieceStart
+                : lengths[hint + 1] - lengths[hint] - initial.distanceFromTrackPieceStart;
+            for (let step = 1; visited < track.length && travel <= budget; step++) {
+                const index = hint + direction * step;
+                if (!options.closed && (index < 0 || index >= track.length)) break;
+                const i = (index + track.length) % track.length;
+                visited++;
+                const r = closestPointOnSegment(track[i], carPos);
+                if (r.distanceSq < neighborBest.distanceSq) neighborBest = { ...r, segmentIndex: i };
+                travel += lengths[i + 1] - lengths[i];
             }
         }
-
-        // Sanity check: if distance is unreasonably large the car has teleported;
-        // fall through to the full scan.
-        if (neighborBest!.distanceSq < 1e9) {
-            return neighborBest!;
-        }
+        if (neighborBest.distanceSq <= budget * budget) return neighborBest;
     }
 
     // Full scan fallback (first call, after reset, or implausible neighbour result).
@@ -232,13 +236,14 @@ export function queryTrack(
     track: TrackSegment[],
     carPos: XY,
     carAngle: number,
-    hintSegmentIndex = -1
+    hintSegmentIndex = -1,
+    options?: TrackSearchOptions
 ): TrackQueryResult {
     if (track.length === 0) {
         throw new Error("Track must contain at least one segment.");
     }
 
-    const best = findClosestOnTrack(track, carPos, hintSegmentIndex);
+    const best = findClosestOnTrack(track, carPos, hintSegmentIndex, options);
 
     const tangent = normalize(best.tangent);
     const delta = sub(carPos, best.point);

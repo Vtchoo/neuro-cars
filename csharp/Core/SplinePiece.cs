@@ -41,15 +41,15 @@ namespace SmartRace.Core
                 u*u*u*Start.Y + 3*u*u*t*Control1.Y + 3*u*t*t*Control2.Y + t*t*t*End.Y);
         }
 
-        // Match the browser's adaptive collision geometry: at most 8 world units per chord,
-        // and less than 0.02 units between control-polygon and chord lengths.
+        // Control-hull distance to the finite chord bounds error, including S-curves.
+        public const double FlatteningError = 0.25;
         public IEnumerable<ITrackPiece> Flatten() => Flatten(Start, Control1, Control2, End, 0);
 
         private IEnumerable<ITrackPiece> Flatten(Vector a, Vector b, Vector c, Vector d, int depth)
         {
             double chord = Distance(a, d);
-            double polygon = Distance(a, b) + Distance(b, c) + Distance(c, d);
-            if (depth >= 16 || (polygon - chord < 0.02 && polygon <= 8))
+            if (depth >= 16 || (DistanceToChordSq(b,a,d) <= FlatteningError*FlatteningError &&
+                                DistanceToChordSq(c,a,d) <= FlatteningError*FlatteningError))
             {
                 if (chord > 0.000001) yield return new StraightPiece(a, d, Width);
                 yield break;
@@ -61,6 +61,12 @@ namespace SmartRace.Core
         }
 
         internal static double Distance(Vector a, Vector b) => Math.Sqrt(Math.Pow(a.X-b.X, 2) + Math.Pow(a.Y-b.Y, 2));
+        private static double DistanceToChordSq(Vector p, Vector a, Vector d)
+        {
+            double dx=d.X-a.X, dy=d.Y-a.Y, lenSq=dx*dx+dy*dy;
+            double t=lenSq==0 ? 0 : Math.Clamp(((p.X-a.X)*dx+(p.Y-a.Y)*dy)/lenSq,0,1);
+            return Math.Pow(p.X-a.X-t*dx,2)+Math.Pow(p.Y-a.Y-t*dy,2);
+        }
         internal static Vector Mix(Vector a, Vector b, double t) => new Vector(a.X+(b.X-a.X)*t, a.Y+(b.Y-a.Y)*t);
     }
 }

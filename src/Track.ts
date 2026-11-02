@@ -146,6 +146,22 @@ export default class Track {
      * for collision detection and other calculations that require a more continuous representation of the track.
      */
     analyticPieces: TrackPiece[] = []
+    private distanceIndexPieces: TrackPiece[] | null = null
+    private distanceIndex: number[] = []
+
+    get cumulativeLengths(): number[] {
+        if (this.distanceIndexPieces !== this.analyticPieces || this.distanceIndex.length !== this.analyticPieces.length + 1) {
+            this.distanceIndex = [0]
+            for (const piece of this.analyticPieces)
+                this.distanceIndex.push(this.distanceIndex[this.distanceIndex.length - 1] + Track.getTrackPieceLength(piece))
+            this.distanceIndexPieces = this.analyticPieces
+        }
+        return this.distanceIndex
+    }
+
+    getPointAhead(segmentIndex: number, offset: number, distance: number) {
+        return Track.getPointAtDistance(this.analyticPieces, segmentIndex, offset, distance, this.cumulativeLengths, this.closed)
+    }
 
     /**
      * QuadTree root node for efficient spatial queries
@@ -171,6 +187,7 @@ export default class Track {
     }
 
     addStraight(start: Vector, end: Vector, width: number, preview: boolean = false) {
+        this.distanceIndexPieces = null
         if (preview) {
             this.previewTrackPieces = [{
                 type: TrackPieceType.Straight,
@@ -213,6 +230,7 @@ export default class Track {
     }
 
     addArc(start: Vector, center: Vector, end: Vector, clockwise: boolean, width: number, preview: boolean = false) {
+        this.distanceIndexPieces = null
         if (preview) {
             this.previewTrackPieces = [{
                 type: TrackPieceType.Arc,
@@ -1011,24 +1029,30 @@ export default class Track {
         this.analyticPieces = [];
         for (const piece of this.pieces) {
             if (piece.type !== TrackPieceType.Spline) {
-                const last=this.analyticPieces[this.analyticPieces.length-1];
-                if(this.canMergeWithLast(piece,last)) this.mergeWithLastAnalytic(piece);
+                const last = this.analyticPieces[this.analyticPieces.length - 1];
+                if (this.canMergeWithLast(piece, last)) this.mergeWithLastAnalytic(piece);
                 else this.analyticPieces.push(this.clonePiece(piece));
                 continue;
             }
-            // Subdivide until the control polygon is flat and short enough for sensors and progress.
-            const flatten = (a: XY,b: XY,c: XY,d: XY,depth: number) => {
-                const chord=length(sub(d,a));
-                const polygon=length(sub(b,a))+length(sub(c,b))+length(sub(d,c));
-                if(depth>=16 || (polygon-chord<0.02 && polygon<=8)) {
-                    if(chord>0.000001) this.analyticPieces.push({type:TrackPieceType.Straight,start:new Vector(a.x,a.y),end:new Vector(d.x,d.y),width:piece.width});
+            // The curve is inside its control hull. Distance of both controls to the
+            // finite chord bounds the geometric error, including S-curves and overshoot.
+            const errorSq = 0.25 * 0.25;
+            const distanceToChordSq = (p: XY, a: XY, d: XY) => {
+                const dx = d.x - a.x, dy = d.y - a.y, lenSq = dx * dx + dy * dy;
+                const t = lenSq === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
+                return (p.x - a.x - t * dx) ** 2 + (p.y - a.y - t * dy) ** 2;
+            };
+            const flatten = (a: XY, b: XY, c: XY, d: XY, depth: number) => {
+                const chord = length(sub(d, a));
+                if (depth >= 16 || (distanceToChordSq(b, a, d) <= errorSq && distanceToChordSq(c, a, d) <= errorSq)) {
+                    if (chord > 0.000001) this.analyticPieces.push({ type: TrackPieceType.Straight, start: new Vector(a.x, a.y), end: new Vector(d.x, d.y), width: piece.width });
                     return;
                 }
-                const mid=(u:XY,v:XY)=>({x:(u.x+v.x)/2,y:(u.y+v.y)/2});
-                const ab=mid(a,b),bc=mid(b,c),cd=mid(c,d),abc=mid(ab,bc),bcd=mid(bc,cd),m=mid(abc,bcd);
-                flatten(a,ab,abc,m,depth+1); flatten(m,bcd,cd,d,depth+1);
+                const mid = (u: XY, v: XY) => ({ x: (u.x + v.x) / 2, y: (u.y + v.y) / 2 });
+                const ab = mid(a, b), bc = mid(b, c), cd = mid(c, d), abc = mid(ab, bc), bcd = mid(bc, cd), m = mid(abc, bcd);
+                flatten(a, ab, abc, m, depth + 1); flatten(m, bcd, cd, d, depth + 1);
             };
-            flatten(piece.start,piece.control1,piece.control2,piece.end,0);
+            flatten(piece.start, piece.control1, piece.control2, piece.end, 0);
         }
         this.quadTree=null;
         this.trackMapCache.clear();
@@ -1586,35 +1610,36 @@ export default class Track {
     }
 
     /**
-     * Walk `distance` units forward along the track starting from `offsetInPiece` into piece `pieceIndex`.
+     * Locate a signed distance from an offset using cumulative lengths and binary search.
+     * Closed tracks wrap; open tracks clamp to their endpoints.
      * Returns the world position, tangent direction, and the new piece index + offset.
      */
     static getPointAtDistance(
         pieces: TrackPiece[],
         pieceIndex: number,
         offsetInPiece: number,
-        distance: number
+        distance: number,
+        cumulativeLengths?: number[],
+        closed = true
     ): { point: Vector, direction: number, pieceIndex: number, offsetInPiece: number } {
-        let idx = pieceIndex
-        let offset = offsetInPiece
-
-        while (distance > 0) {
-            const piece = pieces[idx]
-            const pieceLen = Track.getTrackPieceLength(piece)
-            const remaining = pieceLen - offset
-
-            if (distance < remaining) {
-                offset += distance
-                distance = 0
-            } else {
-                distance -= remaining
-                idx = (idx + 1) % pieces.length
-                offset = 0
-            }
+        const lengths = cumulativeLengths ?? [0]
+        if (!cumulativeLengths) {
+            for (const piece of pieces) lengths.push(lengths[lengths.length - 1] + Track.getTrackPieceLength(piece))
         }
+        const total = lengths[pieces.length]
+        if (!pieces.length || total <= 0) throw new Error("Track contains no drivable geometry.")
+        let target = lengths[pieceIndex] + offsetInPiece + distance
+        target = closed ? ((target % total) + total) % total : Math.max(0, Math.min(target, total))
+        let lo = 0, hi = pieces.length - 1
+        while (lo < hi) {
+            const mid = (lo + hi) >>> 1
+            if (lengths[mid + 1] <= target) lo = mid + 1
+            else hi = mid
+        }
+        const idx = lo, offset = target - lengths[idx]
 
         const piece = pieces[idx]
-        const t = offset / Track.getTrackPieceLength(piece)
+        const t = offset / Math.max(lengths[idx + 1] - lengths[idx], 1e-12)
 
         let point: Vector
         let direction: number
@@ -1635,17 +1660,17 @@ export default class Track {
             point = new Vector(piece.center.x + radius * Math.cos(angle), piece.center.y + radius * Math.sin(angle))
             direction = angle + (piece.clockwise ? Math.PI / 2 : -Math.PI / 2)
         } else {
-            const samples=Track.splineSamples(piece);
-            const total=samples[samples.length-1].distance;
-            const target=Math.max(0,Math.min(offset,total));
-            const upper=Math.max(1,samples.findIndex(sample=>sample.distance>=target));
-            const a=samples[upper-1],b=samples[upper];
-            const fraction=(target-a.distance)/Math.max(b.distance-a.distance,0.000001);
-            const u=(upper-1+fraction)/(samples.length-1),v=1-u;
-            point=new Vector(v*v*v*piece.start.x+3*v*v*u*piece.control1.x+3*v*u*u*piece.control2.x+u*u*u*piece.end.x,
-                v*v*v*piece.start.y+3*v*v*u*piece.control1.y+3*v*u*u*piece.control2.y+u*u*u*piece.end.y);
-            direction=Math.atan2(3*v*v*(piece.control1.y-piece.start.y)+6*v*u*(piece.control2.y-piece.control1.y)+3*u*u*(piece.end.y-piece.control2.y),
-                3*v*v*(piece.control1.x-piece.start.x)+6*v*u*(piece.control2.x-piece.control1.x)+3*u*u*(piece.end.x-piece.control2.x));
+            const samples = Track.splineSamples(piece);
+            const total = samples[samples.length - 1].distance;
+            const target = Math.max(0, Math.min(offset, total));
+            const upper = Math.max(1, samples.findIndex(sample => sample.distance >= target));
+            const a = samples[upper - 1], b = samples[upper];
+            const fraction = (target - a.distance) / Math.max(b.distance - a.distance, 0.000001);
+            const u = (upper - 1 + fraction) / (samples.length - 1), v = 1 - u;
+            point = new Vector(v * v * v * piece.start.x + 3 * v * v * u * piece.control1.x + 3 * v * u * u * piece.control2.x + u * u * u * piece.end.x,
+                v * v * v * piece.start.y + 3 * v * v * u * piece.control1.y + 3 * v * u * u * piece.control2.y + u * u * u * piece.end.y);
+            direction = Math.atan2(3 * v * v * (piece.control1.y - piece.start.y) + 6 * v * u * (piece.control2.y - piece.control1.y) + 3 * u * u * (piece.end.y - piece.control2.y),
+                3 * v * v * (piece.control1.x - piece.start.x) + 6 * v * u * (piece.control2.x - piece.control1.x) + 3 * u * u * (piece.end.x - piece.control2.x));
         }
 
         return { point, direction, pieceIndex: idx, offsetInPiece: offset }
