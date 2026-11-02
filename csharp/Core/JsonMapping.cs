@@ -29,6 +29,9 @@ namespace SmartRace.Core
 
     public class TrackDataJson
     {
+        [JsonPropertyName("closed")]
+        public bool? Closed { get; set; }
+
         [JsonPropertyName("startingPoint")]
         public PositionJson StartingPoint { get; set; }
         
@@ -184,7 +187,7 @@ namespace SmartRace.Core
     public class TrackPieceJson
     {
         [JsonPropertyName("type")]
-        public string Type { get; set; }  // "Straight", "Arc"
+        public string Type { get; set; }  // "Straight", "Arc", "Spline"
         
         [JsonPropertyName("start")]
         public PositionJson Start { get; set; }
@@ -195,6 +198,12 @@ namespace SmartRace.Core
         [JsonPropertyName("width")]
         public double Width { get; set; }
         
+        [JsonPropertyName("control1")]
+        public PositionJson Control1 { get; set; }
+
+        [JsonPropertyName("control2")]
+        public PositionJson Control2 { get; set; }
+
         // Arc-specific properties (optional)
         [JsonPropertyName("center")]
         public PositionJson Center { get; set; }
@@ -261,6 +270,7 @@ namespace SmartRace.Core
             {
                 "Straight" => TrackPieceType.Straight,
                 "Arc" => TrackPieceType.Arc,
+                "Spline" => TrackPieceType.Spline,
                 _ => TrackPieceType.Straight
             };
         }
@@ -271,6 +281,7 @@ namespace SmartRace.Core
             {
                 TrackPieceType.Straight => "Straight",
                 TrackPieceType.Arc => "Arc",
+                TrackPieceType.Spline => "Spline",
                 _ => "Straight"
             };
         }

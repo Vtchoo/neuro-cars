@@ -430,8 +430,12 @@ namespace SmartRace.Core
         private static (Vector point, double direction, int pieceIndex, double offsetInPiece) GetPointAtDistance(
             ITrackPiece[] pieces, int pieceIndex, double offsetInPiece, double distance)
         {
-            int idx = pieceIndex;
-            double offset = offsetInPiece;
+            if (pieces.Length == 0) throw new ArgumentException("Track contains no drivable geometry.", nameof(pieces));
+            int idx = ((pieceIndex % pieces.Length) + pieces.Length) % pieces.Length;
+            double offset = Math.Clamp(offsetInPiece, 0, pieces[idx].Length);
+            double totalLength = pieces.Sum(piece => piece.Length);
+            if (totalLength <= 0) throw new ArgumentException("Track has zero length.", nameof(pieces));
+            distance %= totalLength;
 
             while (distance > 0)
             {
@@ -488,6 +492,10 @@ namespace SmartRace.Core
         {
             switch (piece.Type)
             {
+                case TrackPieceType.Spline:
+                    var spline = (SplinePiece)piece;
+                    return Math.Atan2(spline.Control1.Y-spline.Start.Y, spline.Control1.X-spline.Start.X);
+
                 case TrackPieceType.Straight:
                     // For straight pieces, direction is from start to end
                     var direction = Vector.Sub(piece.End, piece.Start);
@@ -576,6 +584,9 @@ namespace SmartRace.Core
                     
                     // Create the actual track object from JSON data
                     track = Track.FromJsonData(saveData.Track);
+                    if (track.AnalyticPieces.Length == 0)
+                        throw new InvalidOperationException("Loaded track contains no drivable geometry.");
+                    startPointOffset = 0;
                     RefreshTrackSegmentCache();
                     StatusUpdated?.Invoke($"Track loaded: {saveData.Track.Pieces.Count} pieces");
                 }

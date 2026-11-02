@@ -63,6 +63,7 @@ namespace SmartRace.Core
     // Concrete Track implementation
     public class Track : ITrack
     {
+        public bool Closed { get; set; }
         public ITrackPiece[] Pieces { get; set; }
         public ITrackPiece[] AnalyticPieces { get; private set; }
         public Vector StartingPoint { get; set; }
@@ -83,15 +84,13 @@ namespace SmartRace.Core
         public Track(ITrackPiece[] pieces, Vector startingPoint, double startingDirection)
         {
             Pieces = pieces;
-            AnalyticPieces = pieces;
+            AnalyticPieces = Array.Empty<ITrackPiece>();
             StartingPoint = startingPoint;
             StartingDirection = startingDirection;
             
             // Convert pieces to TrackSegments for geometry calculations
-            trackSegments = pieces.Select(ConvertToTrackSegment).ToList();
-            
-            // Build quadtree for spatial queries
-            BuildQuadTree();
+            trackSegments = new List<TrackSegment>();
+            GenerateOptimizedAnalyticPieces();
         }
 
         // Basic track boundary check using track pieces
@@ -125,10 +124,10 @@ namespace SmartRace.Core
             var point = new XY(x, y);
             
             // Check if point is within reasonable distance of any track segment
-            foreach (var segment in trackSegments)
+            for (int i = 0; i < trackSegments.Count; i++)
             {
-                var closest = TrackMath.ClosestPointOnSegment(segment, point);
-                if (closest.Distance < GetTrackWidthAtSegment() / 2)
+                var closest = TrackMath.ClosestPointOnSegment(trackSegments[i], point);
+                if (closest.Distance <= AnalyticPieces[i].Width / 2)
                 {
                     TrackMapCache.TryAdd(cacheKey, true);
                     return true;
@@ -152,12 +151,6 @@ namespace SmartRace.Core
             }
 
             return _quadTree.Query(x, y);
-        }
-
-        private double GetTrackWidthAtSegment()
-        {
-            // For now, use the first piece's width, but could be made more sophisticated
-            return AnalyticPieces.Length > 0 ? AnalyticPieces[0].Width : 120;
         }
 
         private TrackSegment ConvertToTrackSegment(ITrackPiece piece)
@@ -213,54 +206,91 @@ namespace SmartRace.Core
                         pieces.Add(new ArcPiece(start, end, center, clockwise, pieceJson.Width));
                         break;
                         
+                    case "Spline":
+                        if (pieceJson.Control1 == null || pieceJson.Control2 == null)
+                            throw new InvalidOperationException("Spline piece missing control points");
+                        pieces.Add(new SplinePiece(start,
+                            new Vector(pieceJson.Control1.X, pieceJson.Control1.Y),
+                            new Vector(pieceJson.Control2.X, pieceJson.Control2.Y), end, pieceJson.Width));
+                        break;
                     default:
                         throw new NotSupportedException($"Unknown track piece type: {pieceJson.Type}");
                 }
             }
 
+            bool closed = trackJson.Closed ?? (pieces.Count > 1 && SplinePiece.Distance(pieces[0].Start, pieces[pieces.Count-1].End) < 0.001);
+            var splines = ConvertToSplines(pieces, closed);
             var startingPoint = new Vector(trackJson.StartingPoint.X, trackJson.StartingPoint.Y);
-            var track = new Track(pieces.ToArray(), startingPoint, trackJson.StartingDirection);
-            
-            // Generate optimized analytic pieces for better performance
-            track.GenerateOptimizedAnalyticPieces();
-            
-            // Build quadtree for spatial queries
-            track.BuildQuadTree();
-            
+            var track = new Track(splines, startingPoint, trackJson.StartingDirection) { Closed = closed };
+
             return track;
         }
 
         /// <summary>
-        /// Generates optimized analytic pieces by merging consecutive pieces of the same type.
-        /// This significantly improves performance with tracks that have many small pieces.
+        /// Rebuilds simulation geometry from source pieces. Béziers use adaptive line chords;
+        /// legacy straight/arc pieces retain their merging optimization.
         /// </summary>
         public void GenerateOptimizedAnalyticPieces()
         {
-            if (AnalyticPieces == null || AnalyticPieces.Length == 0)
-                return;
-
-            var originalCount = AnalyticPieces.Length;
             var optimizedPieces = new List<ITrackPiece>();
-            
-            foreach (var piece in AnalyticPieces)
+            foreach (var piece in Pieces)
             {
-                var lastOptimized = optimizedPieces.LastOrDefault();
-                
-                if (CanMergeWithLast(piece, lastOptimized))
+                if (piece is SplinePiece spline)
                 {
-                    MergeWithLast(optimizedPieces, piece);
+                    // Keep short spline chords separate for progress and sensor queries.
+                    optimizedPieces.AddRange(spline.Flatten());
                 }
+                else if (CanMergeWithLast(piece, optimizedPieces.LastOrDefault()))
+                    MergeWithLast(optimizedPieces, piece);
                 else
-                {
                     optimizedPieces.Add(ClonePiece(piece));
+            }
+            AnalyticPieces = optimizedPieces.ToArray();
+            trackSegments = AnalyticPieces.Select(ConvertToTrackSegment).ToList();
+            TrackMapCache.Clear();
+            BuildQuadTree();
+        }
+
+        private static ITrackPiece[] ConvertToSplines(IEnumerable<ITrackPiece> pieces, bool closed)
+        {
+            var result = new List<SplinePiece>();
+            foreach (var piece in pieces)
+            {
+                if (piece is SplinePiece spline) result.Add(spline);
+                else if (piece.Type == TrackPieceType.Straight)
+                    result.Add(new SplinePiece(piece.Start, SplinePiece.Mix(piece.Start, piece.End, 1.0/3),
+                        SplinePiece.Mix(piece.Start, piece.End, 2.0/3), piece.End, piece.Width));
+                else if (piece is IArcPiece arc)
+                {
+                    double radius = SplinePiece.Distance(arc.Start, arc.Center);
+                    double angle = Math.Atan2(arc.Start.Y-arc.Center.Y, arc.Start.X-arc.Center.X);
+                    double sweep = Math.Atan2(arc.End.Y-arc.Center.Y, arc.End.X-arc.Center.X)-angle;
+                    if (arc.Clockwise && sweep < 0) sweep += Math.PI*2;
+                    if (!arc.Clockwise && sweep > 0) sweep -= Math.PI*2;
+                    int count = Math.Max(1, (int)Math.Ceiling(Math.Abs(sweep)/(Math.PI/2)));
+                    for (int i=0; i<count; i++)
+                    {
+                        double a=angle+sweep*i/count, b=angle+sweep*(i+1)/count;
+                        double k=4.0/3*Math.Tan((b-a)/4)*radius;
+                        var start=i==0 ? arc.Start : new Vector(arc.Center.X+radius*Math.Cos(a),arc.Center.Y+radius*Math.Sin(a));
+                        var end=i==count-1 ? arc.End : new Vector(arc.Center.X+radius*Math.Cos(b),arc.Center.Y+radius*Math.Sin(b));
+                        result.Add(new SplinePiece(start, new Vector(start.X-k*Math.Sin(a),start.Y+k*Math.Cos(a)),
+                            new Vector(end.X+k*Math.Sin(b),end.Y-k*Math.Cos(b)),end,piece.Width));
+                    }
                 }
             }
-            
-            AnalyticPieces = optimizedPieces.ToArray();
-            Console.WriteLine($"Optimized track: {optimizedPieces.Count} analytic pieces from {originalCount} original pieces");
-            
-            // Rebuild quadtree after optimization
-            BuildQuadTree();
+            for (int i=1; i<result.Count; i++) result[i].Start=result[i-1].End;
+            if (closed && result.Count>0) result[result.Count-1].End=result[0].Start;
+            // Match the browser's legacy-join conversion, retaining each handle's length.
+            for (int i=0; i<result.Count; i++)
+            {
+                if (i==0 && !closed) continue;
+                var previous=result[(i+result.Count-1)%result.Count]; var next=result[i];
+                double dx=previous.End.X-previous.Control2.X,dy=previous.End.Y-previous.Control2.Y;
+                double magnitude=Math.Sqrt(dx*dx+dy*dy),handle=SplinePiece.Distance(next.Start,next.Control1);
+                if (magnitude>0.000001) next.Control1=new Vector(next.Start.X+dx/magnitude*handle,next.Start.Y+dy/magnitude*handle);
+            }
+            return result.Cast<ITrackPiece>().ToArray();
         }
 
         private bool CanMergeWithLast(ITrackPiece piece, ITrackPiece lastOptimized)
@@ -363,11 +393,17 @@ namespace SmartRace.Core
                     pieceJson.Clockwise = arcPiece.Clockwise;
                 }
 
+                if (piece is SplinePiece spline)
+                {
+                    pieceJson.Control1 = new PositionJson { X = spline.Control1.X, Y = spline.Control1.Y };
+                    pieceJson.Control2 = new PositionJson { X = spline.Control2.X, Y = spline.Control2.Y };
+                }
                 return pieceJson;
             }).ToList();
 
             return new TrackDataJson
             {
+                Closed = Closed,
                 StartingPoint = new PositionJson { X = StartingPoint.X, Y = StartingPoint.Y },
                 StartingDirection = StartingDirection,
                 Pieces = pieces

@@ -416,10 +416,8 @@ namespace SmartRace.Utils
             };
         }
 
-        // Search radius for neighbour-hint queries: checks hint ± NeighborSearchRadius segments.
-        // A car travelling at 80 m/s × 1/60 s × UNITS_PER_METER fits well within 1 segment, so
-        // radius 2 gives a comfortable safety margin while keeping the scan to 5 segments max.
-        private const int NeighborSearchRadius = 2;
+        // Spline collision geometry uses short chords; allow several segments per tick.
+        private const int NeighborSearchRadius = 16;
 
         private static ClosestPointOnTrackResult FindClosestOnTrack(TrackSegment[] track, XY carPos, int hint)
         {

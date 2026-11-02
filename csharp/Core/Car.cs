@@ -17,7 +17,8 @@ namespace SmartRace.Core
     public enum TrackPieceType
     {
         Straight,
-        Arc
+        Arc,
+        Spline
     }
 
     // Placeholder interfaces for Track classes that will be converted later
@@ -45,6 +46,7 @@ namespace SmartRace.Core
         bool IsInsideTrack(double x, double y);
         TrackDataJson? ToJsonData();
 
+        bool Closed { get; }
         ITrackPiece[] Pieces { get; }
         ITrackPiece[] AnalyticPieces { get; }
     }
@@ -310,41 +312,19 @@ namespace SmartRace.Core
             var previousPosition = previousCarPositionInTrack.Value;
             var currentPosition = currentCarPositionInTrack.Value;
 
-            // if the index difference is 2 or bigger, let's ignore, also check for lap completion (index goes from last to 0)
-            var indexDifference = previousPosition.SegmentIndex - currentPosition.SegmentIndex;
-            if (Math.Abs(indexDifference) > 1 && !(currentPosition.SegmentIndex == 0 && previousPosition.SegmentIndex == track.AnalyticPieces.Length - 1))
-            {
-                return 0;
-            }
-
-            // there are 3 situations:
-            // 1. the car is in the same track piece, so we reward it based on the distance it advanced in that piece
-            // 2. the car advanced to the next piece, so we reward it based on the distance to the end of the previous piece and the distance from the start of the new piece
-            // 3. the car went backward, so we penalize it based on the distance it moved backward
-            // the car can also complete a lap, in that case the index resets to 0, so we also check for that and reward the car for completing a lap
-
-            if (currentPosition.SegmentIndex == previousPosition.SegmentIndex)
-            {
-                // case 1
-                return currentPosition.DistanceFromTrackPieceStart - previousPosition.DistanceFromTrackPieceStart;
-            }
-            else if (currentPosition.SegmentIndex == 0 && previousPosition.SegmentIndex == track.AnalyticPieces.Length - 1)
-            {
-                // case 3 - lap completed
-                var piece1Length = track.AnalyticPieces[previousPosition.SegmentIndex].Length;
-                return (piece1Length - previousPosition.DistanceFromTrackPieceStart) + currentPosition.DistanceFromTrackPieceStart;
-            }
-            else if (currentPosition.SegmentIndex > previousPosition.SegmentIndex)
-            {
-                // case 2 - advanced to next piece
-                var piece1Length = track.AnalyticPieces[previousPosition.SegmentIndex].Length;
-                return (piece1Length - previousPosition.DistanceFromTrackPieceStart) + currentPosition.DistanceFromTrackPieceStart;
-            }
+            var pieces = track.AnalyticPieces;
+            int n = pieces.Length;
+            int steps = currentPosition.SegmentIndex - previousPosition.SegmentIndex;
+            if (track.Closed && steps > n / 2.0) steps -= n;
+            if (track.Closed && steps < -n / 2.0) steps += n;
+            double reward = currentPosition.DistanceFromTrackPieceStart - previousPosition.DistanceFromTrackPieceStart;
+            int from = previousPosition.SegmentIndex;
+            if (steps > 0)
+                for (int i = 0; i < steps; i++) reward += pieces[(from + i) % n].Length;
             else
-            {
-                // case 4 - went backward
-                return currentPosition.DistanceFromTrackPieceStart - previousPosition.DistanceFromTrackPieceStart;
-            }
+                for (int i = -1; i >= steps; i--) reward -= pieces[(from + i + n) % n].Length;
+            // Ignore jumps across nearby but disconnected stretches of road.
+            return Math.Abs(reward) <= Math.Max(100, Math.Abs(Speed) * 10) ? reward : 0;
         }
 
         // Inputs for driving the car with Ackermann steering and tire slip simulation
