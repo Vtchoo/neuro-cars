@@ -136,6 +136,7 @@ export default class Track {
     drawTrackMapBounds: boolean = false
     // drawTrackMapCells: boolean = false
     drawQuadTree: boolean = false
+    drawSplineSegments: boolean = false
 
     useTrackMapCache: boolean = true
     trackMapCache = new Map<string, boolean>()
@@ -146,6 +147,7 @@ export default class Track {
      * for collision detection and other calculations that require a more continuous representation of the track.
      */
     analyticPieces: TrackPiece[] = []
+    private splineSegments: StraightPiece[] = []
     private distanceIndexPieces: TrackPiece[] | null = null
     private distanceIndex: number[] = []
     private splineCurbCache = new WeakMap<SplinePiece, { coordinates: number[], edges: Path2D[] }>()
@@ -646,6 +648,22 @@ export default class Track {
             }
         }
 
+        if (this.drawSplineSegments) {
+            p.push()
+            p.stroke("cyan")
+            p.strokeWeight(2)
+            for (const segment of this.splineSegments) {
+                p.line(segment.start.x, segment.start.y, segment.end.x, segment.end.y)
+            }
+            // Mark the joins so individual chords remain visible along nearly straight curves.
+            p.strokeWeight(5)
+            for (const segment of this.splineSegments) {
+                p.point(segment.start.x, segment.start.y)
+                p.point(segment.end.x, segment.end.y)
+            }
+            p.pop()
+        }
+
         if (this.drawLastPieceVector) {
             const lastPieceEnd = this.getLastPieceEnd()
             const lastPieceDirection = this.getLastPieceEndDirection()
@@ -1085,6 +1103,7 @@ export default class Track {
 
     generateAnalyticPieces() {
         this.analyticPieces = [];
+        this.splineSegments = [];
         for (const piece of this.pieces) {
             if (piece.type !== TrackPieceType.Spline) {
                 const last = this.analyticPieces[this.analyticPieces.length - 1];
@@ -1103,7 +1122,11 @@ export default class Track {
             const flatten = (a: XY, b: XY, c: XY, d: XY, depth: number) => {
                 const chord = length(sub(d, a));
                 if (depth >= 16 || (distanceToChordSq(b, a, d) <= errorSq && distanceToChordSq(c, a, d) <= errorSq)) {
-                    if (chord > 0.000001) this.analyticPieces.push({ type: TrackPieceType.Straight, start: new Vector(a.x, a.y), end: new Vector(d.x, d.y), width: piece.width });
+                    if (chord > 0.000001) {
+                        const segment: StraightPiece = { type: TrackPieceType.Straight, start: new Vector(a.x, a.y), end: new Vector(d.x, d.y), width: piece.width };
+                        this.analyticPieces.push(segment);
+                        this.splineSegments.push(segment);
+                    }
                     return;
                 }
                 const mid = (u: XY, v: XY) => ({ x: (u.x + v.x) / 2, y: (u.y + v.y) / 2 });
