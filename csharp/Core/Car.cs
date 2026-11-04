@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using SmartRace.Core;
@@ -330,6 +330,7 @@ namespace SmartRace.Core
         {
             // Calculate realistic acceleration based on throttle input (-1 to 1)
             var throttleInput = LastInputs[0]; // -1 to 1
+            double requestedAcceleration;
 
 
             if (throttleInput >= 0)
@@ -338,69 +339,49 @@ namespace SmartRace.Core
                 var maxTorqueForce = throttleInput * this.MaxAcceleration * this.Mass;
                 var maxPowerForce = (this.MaxPower * throttleInput) / Math.Max(Math.Abs(this.Speed), 0.5);
                 var engineForce = Math.Min(maxTorqueForce, maxPowerForce);
-                this.Acceleration = engineForce / this.Mass;
+                requestedAcceleration = engineForce / this.Mass;
             }
             else
             {
                 // Braking (negative throttle)
                 var brakingMPS2 = Math.Abs(throttleInput) * this.MaxBraking;
-                this.Acceleration = -brakingMPS2; // Convert to simulation units
+                requestedAcceleration = -brakingMPS2;
             }
 
             // Calculate target steering angle from input (-1 to 1)
             var targetSteeringInput = LastInputs[1]; // -1 to 1
             var targetSteeringAngle = targetSteeringInput * this.MaxSteeringAngle;
 
-            // Apply tire slip limitation - limit actual steering angle based on current speed
-            var maxEffectiveAngle = this.GetMaxEffectiveSteeringAngle();
+            // Fulfill the longitudinal request first, capped by total tire grip.
+            // Braking or accelerating trades cornering capacity for speed change.
+            var maxGripAcceleration = this.GetMaxGripAcceleration();
+            this.Acceleration = Math.Clamp(requestedAcceleration, -maxGripAcceleration, maxGripAcceleration);
+            var availableLateralAcceleration = Math.Sqrt(Math.Max(0.0,
+                maxGripAcceleration * maxGripAcceleration - this.Acceleration * this.Acceleration));
+            var maxEffectiveAngle = this.GetMaxEffectiveSteeringAngle(availableLateralAcceleration);
 
             // Clamp the steering angle to what the tires can actually provide
             this.SteeringAngle = Math.Sign(targetSteeringAngle) * Math.Min(Math.Abs(targetSteeringAngle), maxEffectiveAngle);
-
-            // Friction circle: tires have a finite combined grip budget.
-            // When lateral acceleration is high, less grip remains for longitudinal force.
-            if (Math.Abs(this.SteeringAngle) > 0.001 && Math.Abs(this.Speed) > 0.1)
-            {
-                var speedMPS = Math.Abs(this.Speed);
-                var downforce = 0.5 * 1.225 * this.DownforceCoefficient * this.FrontalArea * speedMPS * speedMPS + this.StationaryDownforce;
-                var maxLateralAccel = this.TireGripCoefficient * (this.Mass * 9.81 + downforce) / this.Mass;
-                var turningRadius = this.Wheelbase / Math.Tan(Math.Abs(this.SteeringAngle));
-                var lateralAccel = (speedMPS * speedMPS) / turningRadius;
-                var frictionCircleFactor = Math.Sqrt(Math.Max(0.0, 1.0 - Math.Pow(lateralAccel / maxLateralAccel, 2)));
-                this.Acceleration *= frictionCircleFactor;
-            }
 
             // Keep lastDrivingWheelDirection for neural network input consistency
             this.LastDrivingWheelDirection = targetSteeringInput;
         }
 
-        // Calculate maximum effective steering angle based on tire slip physics
-        private double GetMaxEffectiveSteeringAngle()
+        private double GetMaxGripAcceleration()
         {
-            // Convert speed from pixels/frame to m/s using consistent scaling
             var speedMPS = Math.Abs(this.Speed);
-
-            // At very low speeds, full steering is available
-            if (speedMPS < 0.5)
-            {
-                return this.MaxSteeringAngle;
-            }
-
-            // Downforce increases normal force on tires, raising the lateral grip limit
+            // Downforce increases the shared longitudinal and lateral tire grip budget.
             var downforce = 0.5 * 1.225 * this.DownforceCoefficient * this.FrontalArea * speedMPS * speedMPS + this.StationaryDownforce;
             var effectiveNormalForce = this.Mass * 9.81 + downforce;
-            var maxLateralAcceleration = this.TireGripCoefficient * (effectiveNormalForce / this.Mass); // m/s²
+            return Math.Max(0.0, this.TireGripCoefficient * effectiveNormalForce / this.Mass);
+        }
 
-            // Calculate the maximum turning radius before tire slip occurs
-            // Using the relationship: lateral_accel = v²/R
-            var maxTurningRadius = (speedMPS * speedMPS) / maxLateralAcceleration;
-
-            // Convert turning radius back to steering angle using wheelbase in meters
-            var wheelbaseMeters = this.Wheelbase;
-            var maxEffectiveAngle = Math.Atan(wheelbaseMeters / maxTurningRadius);
-
-            // Return the minimum of physical steering limit and slip-limited angle
-            return Math.Min(this.MaxSteeringAngle, maxEffectiveAngle);
+        private double GetMaxEffectiveSteeringAngle(double maxLateralAcceleration)
+        {
+            if (this.Speed == 0) return this.MaxSteeringAngle;
+            // a_lat = v? tan(steeringAngle) / wheelbase.
+            return Math.Min(this.MaxSteeringAngle,
+                Math.Atan2(this.Wheelbase * maxLateralAcceleration, this.Speed * this.Speed));
         }
 
         // Gets sensors' data

@@ -373,71 +373,52 @@ export default class Car {
         p.pop();
     }
 
-    // Calculate maximum effective steering angle based on tire slip physics
-    private getMaxEffectiveSteeringAngle(): number {
-        // Convert speed from pixels/frame to m/s using consistent scaling
+    private getMaxGripAcceleration(): number {
         const speedMPS = Math.abs(this.speed)
-
-        // At very low speeds, full steering is available
-        if (speedMPS < 0.5) {
-            return this.maxSteeringAngle
-        }
-
-        // Downforce increases normal force on tires, raising the lateral grip limit
+        // Downforce increases the shared longitudinal and lateral tire grip budget.
         const downforce = 0.5 * 1.225 * this.downforceCoefficient * this.frontalArea * speedMPS * speedMPS + this.stationaryDownforce
         const effectiveNormalForce = this.mass * 9.81 + downforce
-        const maxLateralAcceleration = this.tireGripCoefficient * (effectiveNormalForce / this.mass) // m/s²
+        return Math.max(0, this.tireGripCoefficient * effectiveNormalForce / this.mass)
+    }
 
-        // Calculate the maximum turning radius before tire slip occurs
-        // Using the relationship: lateral_accel = v²/R
-        const maxTurningRadius = (speedMPS * speedMPS) / maxLateralAcceleration
-
-        // Convert turning radius back to steering angle using wheelbase in meters
-        const wheelbaseMeters = this.wheelbase
-        const maxEffectiveAngle = Math.atan(wheelbaseMeters / maxTurningRadius)
-
-        // Return the minimum of physical steering limit and slip-limited angle
-        return Math.min(this.maxSteeringAngle, maxEffectiveAngle)
+    private getMaxEffectiveSteeringAngle(maxLateralAcceleration: number): number {
+        if (this.speed === 0) return this.maxSteeringAngle
+        // a_lat = v² tan(steeringAngle) / wheelbase.
+        return Math.min(this.maxSteeringAngle, Math.atan2(this.wheelbase * maxLateralAcceleration, this.speed * this.speed))
     }
 
     // Inputs for driving the car with Ackermann steering and tire slip simulation
     drive() {
         // Calculate realistic acceleration based on throttle input (-1 to 1)
         const throttleInput = this.lastInputs[0] // -1 to 1
+        let requestedAcceleration: number
 
         if (throttleInput >= 0) {
             // Power-limited engine force: full torque at low speed, power-capped at high speed
             const maxTorqueForce = throttleInput * this.maxAcceleration * this.mass
             const maxPowerForce = (this.maxPower * throttleInput) / Math.max(Math.abs(this.speed), 0.5)
             const engineForce = Math.min(maxTorqueForce, maxPowerForce)
-            this.acceleration = engineForce / this.mass
+            requestedAcceleration = engineForce / this.mass
         } else {
             // Braking (negative throttle)
             const brakingMPS2 = Math.abs(throttleInput) * this.maxBraking
-            this.acceleration = -brakingMPS2 // Convert to simulation units
+            requestedAcceleration = -brakingMPS2
         }
 
         // Calculate target steering angle from input (-1 to 1)
         const targetSteeringInput = this.lastInputs[1] // -1 to 1
         const targetSteeringAngle = targetSteeringInput * this.maxSteeringAngle
 
-        // Apply tire slip limitation - limit actual steering angle based on current speed
-        const maxEffectiveAngle = this.getMaxEffectiveSteeringAngle()
+        // Fulfill the longitudinal request first, capped by total tire grip.
+        // Braking or accelerating therefore trades cornering capacity for speed change.
+        const maxGripAcceleration = this.getMaxGripAcceleration()
+        this.acceleration = Math.max(-maxGripAcceleration, Math.min(maxGripAcceleration, requestedAcceleration))
+        const availableLateralAcceleration = Math.sqrt(Math.max(0,
+            maxGripAcceleration ** 2 - this.acceleration ** 2))
+        const maxEffectiveAngle = this.getMaxEffectiveSteeringAngle(availableLateralAcceleration)
 
         // Clamp the steering angle to what the tires can actually provide
         this.steeringAngle = Math.sign(targetSteeringAngle) * Math.min(Math.abs(targetSteeringAngle), maxEffectiveAngle)
-
-        // Friction circle: tires have a finite combined grip budget.
-        // When lateral acceleration is high, less grip remains for longitudinal force.
-        if (Math.abs(this.steeringAngle) > 0.001 && Math.abs(this.speed) > 0.1) {
-            const speedMPS = Math.abs(this.speed)
-            const downforce = 0.5 * 1.225 * this.downforceCoefficient * this.frontalArea * speedMPS * speedMPS + this.stationaryDownforce
-            const maxLateralAccel = this.tireGripCoefficient * (this.mass * 9.81 + downforce) / this.mass
-            const turningRadius = this.wheelbase / Math.tan(Math.abs(this.steeringAngle))
-            const lateralAccel = (speedMPS * speedMPS) / turningRadius
-            const frictionCircleFactor = Math.sqrt(Math.max(0, 1 - (lateralAccel / maxLateralAccel) ** 2))
-            this.acceleration *= frictionCircleFactor
-        }
 
         // Keep lastDrivingWheelDirection for neural network input consistency
         this.lastDrivingWheelDirection = targetSteeringInput
