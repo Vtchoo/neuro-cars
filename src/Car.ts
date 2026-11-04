@@ -373,6 +373,15 @@ export default class Car {
         p.pop();
     }
 
+    /** Tire acceleration only: aerodynamic drag and rolling resistance do not use this budget. */
+    get gripState() {
+        return {
+            limit: this.getMaxGripAcceleration(),
+            longitudinal: this.acceleration,
+            lateral: this.speed * this.speed * Math.tan(this.steeringAngle) / this.wheelbase,
+        }
+    }
+
     private getMaxGripAcceleration(): number {
         const speedMPS = Math.abs(this.speed)
         // Downforce increases the shared longitudinal and lateral tire grip budget.

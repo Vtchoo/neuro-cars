@@ -7,6 +7,7 @@ import { supercarPreset, f1CarPreset, CarPreset, unoWithLadderPreset } from './c
 import { NeuralNet, NeuralNetTrace } from './NeuralNet';
 import Track, { TrackPieceType } from './Track';
 import { drawNeuralNet } from './ui/neuralNetViz';
+import { drawGripBudget } from './ui/gripViz';
 import { tooltip } from './utils/tooltip';
 import { buildMainMenu } from './ui/mainMenu';
 import { buildGameMenu } from './ui/gameMenu';
@@ -131,6 +132,7 @@ export default class Game {
 	public showInputs: "none" | "all" | "best" | "bestActive" = "none" // Shows the sensor inputs of the cars during runtime. "all" shows for all cars, "best" only for the best car, and "none" for none.
 	public drawGraphs = false
 	public showNeuralNet = false
+	public showGripBudget = false
 	private lastNNTrace: NeuralNetTrace | null = null
 	private resolution = 3 // Get 1 out of [resolution] pixels to create the track collision map
 
@@ -833,6 +835,10 @@ export default class Game {
 					this.p.pop()
 				}
 			}
+		}
+		if (this.showGripBudget && phase === 'running') {
+			const followed = this.playerDrive ? this.player : this.getFollowedCar()
+			if (followed) drawGripBudget(this.p, followed)
 		}
 	}
 

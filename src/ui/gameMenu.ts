@@ -94,6 +94,14 @@ export function buildGameMenu(game: Game, p: p5) {
         showNeuralNetButton.html(`Show Neural Net: ${isOn ? 'On' : 'Off'}`)
     })
 
+    const showGripBudgetButton = p.createButton(`Show Grip Budget: ${game.showGripBudget ? 'On' : 'Off'}`)
+    showGripBudgetButton.parent(menu)
+    showGripBudgetButton.attribute("title", "Show the followed car's tire grip limit and current cornering/acceleration usage.")
+    showGripBudgetButton.mouseClicked(() => {
+        game.showGripBudget = !game.showGripBudget
+        showGripBudgetButton.html(`Show Grip Budget: ${game.showGripBudget ? 'On' : 'Off'}`)
+    })
+
     const showSpeciesButton = p.createButton(`Show Species: ${game.showClustering ? 'On' : 'Off'}`)
     showSpeciesButton.parent(menu)
     showSpeciesButton.attribute("title", "Color cars by neural network species (re-clustered each generation).")
