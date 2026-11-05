@@ -8,6 +8,7 @@ import { NeuralNet, NeuralNetTrace } from './NeuralNet';
 import Track, { TrackPieceType } from './Track';
 import { drawNeuralNet } from './ui/neuralNetViz';
 import { drawGripBudget } from './ui/gripViz';
+import { drawMinimap } from './ui/minimap';
 import { tooltip } from './utils/tooltip';
 import { buildMainMenu } from './ui/mainMenu';
 import { buildGameMenu } from './ui/gameMenu';
@@ -132,7 +133,13 @@ export default class Game {
 	public showInputs: "none" | "all" | "best" | "bestActive" = "none" // Shows the sensor inputs of the cars during runtime. "all" shows for all cars, "best" only for the best car, and "none" for none.
 	public drawGraphs = false
 	public showNeuralNet = false
-	public showGripBudget = false
+	public bottomRightDisplay: 'grip' | 'minimap' | 'none' = 'none'
+
+	cycleBottomRightDisplay() {
+		const modes = ['grip', 'minimap', 'none'] as const
+		this.bottomRightDisplay = modes[(modes.indexOf(this.bottomRightDisplay) + 1) % modes.length]
+		return this.bottomRightDisplay
+	}
 	private lastNNTrace: NeuralNetTrace | null = null
 	private resolution = 3 // Get 1 out of [resolution] pixels to create the track collision map
 
@@ -836,9 +843,15 @@ export default class Game {
 				}
 			}
 		}
-		if (this.showGripBudget && phase === 'running') {
+		if (phase === 'running' && this.bottomRightDisplay !== 'none') {
 			const followed = this.playerDrive ? this.player : this.getFollowedCar()
-			if (followed) drawGripBudget(this.p, followed)
+			if (this.bottomRightDisplay === 'grip') {
+				if (followed) drawGripBudget(this.p, followed)
+			} else {
+				const racers = this.playerDrive ? [...this.population, this.player] : this.population
+				drawMinimap(this.p, this.track, racers, followed, car =>
+					(this.showClustering && this.clusteringResults ? this.getClusterTint(car) : undefined) ?? car.paint)
+			}
 		}
 	}
 
