@@ -109,6 +109,20 @@ export default class Game {
 	lapRecords: { ticks: number, driverName: string, generation: number }[] = []
 	bestLapTime: number | null = null
 
+	// Crash explosion particles, keyed by the tick they were spawned on
+	private explosions: { x: number, y: number, startTick: number, particles: { angle: number, speed: number }[] }[] = []
+	private readonly explosionDurationTicks = 24
+
+	// Camera helicopters orbit their subject at a distance rather than hovering directly over it.
+	// Each entry's target is re-assigned every frame before updateAndDrawHelicopters() runs.
+	private helicopters: { target: { x: number, y: number }, centerX: number, centerY: number, orbitAngle: number, orbitDirection: 1 | -1, orbitRadius: number, rotorAngle: number, heading: number, x: number, y: number, prevX: number, prevY: number }[] = [
+		{ target: { x: 0, y: 0 }, centerX: 0, centerY: 0, orbitAngle: 0, orbitDirection: 1, orbitRadius: 160, rotorAngle: 0, heading: 0, x: 0, y: 0, prevX: 0, prevY: 0 },
+		{ target: { x: 0, y: 0 }, centerX: 0, centerY: 0, orbitAngle: Math.PI, orbitDirection: -1, orbitRadius: 160, rotorAngle: 0, heading: 0, x: 0, y: 0, prevX: 0, prevY: 0 },
+	]
+	private readonly helicopterSafeDistance = 140
+	private readonly helicopterOrbitSpeed = 0.006
+	private readonly helicopterFollowLerp = 0.03
+
 	followBestCar: 'off' | 'best' | 'bestActive' = 'off'
 	followCar: Car | null = null
 
@@ -456,6 +470,9 @@ export default class Game {
 					}
 					individual.drive()
 					individual.update(this.trackMap, this.resolution, this.track, false, this.ticks)
+					if (individual.justCrashed) {
+						this.spawnExplosion(individual.pos.x, individual.pos.y)
+					}
 					if (individual.lastCompletedLapTicks !== null) {
 						if (this.bestLapTime === null || individual.lastCompletedLapTicks < this.bestLapTime) {
 							this.bestLapTime = individual.lastCompletedLapTicks
@@ -509,6 +526,19 @@ export default class Game {
 					car.show(this.p, sprite, this.otherSprites, clusterTint)
 				}
 
+				this.drawExplosions()
+
+				if (this.population.length > 0) {
+					const activeRacers = this.playerDrive && this.player.speed > 0.001 ? [...activeCars, this.player] : activeCars
+					const averageTarget = activeRacers.length > 0
+						? {
+							x: activeRacers.reduce((sum, car) => sum + car.pos.x, 0) / activeRacers.length,
+							y: activeRacers.reduce((sum, car) => sum + car.pos.y, 0) / activeRacers.length,
+						}
+						: bestCar.pos
+					this.updateAndDrawHelicopters([bestCar.pos, averageTarget])
+				}
+
 				// Follow best car camera logic
 				const followCar = !!this.followCar || this.followBestCar !== 'off'
 				if (followCar && this.population.length > 0 && !this.playerDrive) {
@@ -524,6 +554,9 @@ export default class Game {
 					this.cameraOffsetX = -this.player.pos.x
 					this.cameraOffsetY = -this.player.pos.y
 					this.player.update(this.trackMap, this.resolution, this.track, true)
+					if (this.player.justCrashed) {
+						this.spawnExplosion(this.player.pos.x, this.player.pos.y)
+					}
 					this.player.show(this.p, this.carTypeSprites.get(this.player.spriteKey) ?? this.carSprite, this.otherSprites)
 				}
 
@@ -1302,6 +1335,126 @@ export default class Game {
 			else this.p.fill(200)
 			this.p.text(`${medal} ${timeStr}  ${record.driverName}  gen${record.generation}`, x + padding, rowY)
 		})
+		this.p.pop()
+	}
+
+	private spawnExplosion(x: number, y: number) {
+		const particleCount = 14
+		const particles = Array.from({ length: particleCount }, () => ({
+			angle: this.p.random(this.p.TWO_PI),
+			speed: this.p.random(0.5, 1.5),
+		}))
+		this.explosions.push({ x, y, startTick: this.ticks, particles })
+	}
+
+	private drawExplosions() {
+		if (this.explosions.length === 0) return
+		const maxRadius = 90
+		this.p.push()
+		this.p.noStroke()
+		for (const explosion of this.explosions) {
+			const progress = (this.ticks - explosion.startTick) / this.explosionDurationTicks
+			for (const particle of explosion.particles) {
+				const distance = particle.speed * progress * maxRadius
+				const px = explosion.x + Math.cos(particle.angle) * distance
+				const py = explosion.y + Math.sin(particle.angle) * distance
+				const size = Math.max(0, (1 - progress) * 18)
+				const flash = progress < 0.3
+				this.p.fill(255, flash ? 255 : this.p.lerp(200, 40, progress), 40, (1 - progress) * 255)
+				this.p.circle(px, py, size)
+			}
+		}
+		this.p.pop()
+		this.explosions = this.explosions.filter(e => this.ticks - e.startTick < this.explosionDurationTicks)
+	}
+
+	// Moves every camera helicopter: each orbits its (per-frame) target point rather than heading
+	// straight for it, like a film crew circling at a distance, then they get pushed apart pairwise
+	// if their orbits bring them too close.
+	private updateAndDrawHelicopters(targets: { x: number, y: number }[]) {
+		for (let i = 0; i < this.helicopters.length; i++) {
+			const heli = this.helicopters[i]
+			heli.target = targets[i] ?? heli.target
+
+			heli.centerX += (heli.target.x - heli.centerX) * this.helicopterFollowLerp
+			heli.centerY += (heli.target.y - heli.centerY) * this.helicopterFollowLerp
+			heli.orbitAngle += this.helicopterOrbitSpeed * heli.orbitDirection
+			heli.rotorAngle += 1.2
+
+			heli.x = heli.centerX + Math.cos(heli.orbitAngle) * heli.orbitRadius
+			heli.y = heli.centerY + Math.sin(heli.orbitAngle) * heli.orbitRadius
+		}
+
+		// Keep a safe distance between every pair of helicopters without disturbing their orbit state
+		for (let i = 0; i < this.helicopters.length; i++) {
+			for (let j = i + 1; j < this.helicopters.length; j++) {
+				const a = this.helicopters[i], b = this.helicopters[j]
+				const dx = b.x - a.x, dy = b.y - a.y
+				const dist = Math.hypot(dx, dy) || 0.0001
+				if (dist < this.helicopterSafeDistance) {
+					const push = (this.helicopterSafeDistance - dist) / 2
+					const nx = dx / dist, ny = dy / dist
+					a.x -= nx * push; a.y -= ny * push
+					b.x += nx * push; b.y += ny * push
+				}
+			}
+		}
+
+		// Heading follows actual world-space velocity (this frame's real displacement), not the orbit
+		// tangent, so it reflects the combined effect of orbiting plus the center drifting toward its target
+		for (const heli of this.helicopters) {
+			const vx = heli.x - heli.prevX, vy = heli.y - heli.prevY
+			if (Math.hypot(vx, vy) > 0.001) {
+				heli.heading = Math.atan2(vy, vx)
+			}
+			heli.prevX = heli.x
+			heli.prevY = heli.y
+		}
+
+		for (const heli of this.helicopters) {
+			this.drawHelicopter(heli.x, heli.y, heli.heading, heli.rotorAngle)
+		}
+	}
+
+	// Top-down helicopter: fuselage/tail point along the direction of travel, main rotor seen from above
+	private drawHelicopter(x: number, y: number, heading: number, rotorAngle: number) {
+		this.p.push()
+		this.p.translate(x, y)
+
+		// Shadow cast on the ground below, kept axis-aligned regardless of heading
+		this.p.noStroke()
+		this.p.fill(0, 0, 0, 70)
+		this.p.ellipse(5, 5, 34, 34)
+
+		this.p.rotate(heading)
+
+		// Tail boom, with a small spinning tail rotor blur at the end
+		this.p.fill(40)
+		this.p.rect(-28, -2, 20, 4, 2)
+		this.p.fill(120, 120, 120, 120)
+		this.p.ellipse(-28, 0, 10, 10)
+
+		// Main rotor blur disc, seen from directly above
+		this.p.fill(200, 200, 200, 60)
+		this.p.ellipse(0, 0, 48, 48)
+
+		// Fuselage, nose toward +x (the heading direction)
+		this.p.noStroke()
+		this.p.fill(210, 40, 40)
+		this.p.ellipse(0, 0, 32, 14)
+		this.p.fill(180, 220, 255, 220)
+		this.p.ellipse(10, 0, 12, 9)
+
+		// Stub wings/skids, perpendicular to the direction of travel
+		this.p.stroke(30)
+		this.p.strokeWeight(2)
+		this.p.line(-4, -14, -4, 14)
+
+		// Spinning main rotor blades, independent of heading
+		this.p.rotate(rotorAngle)
+		this.p.line(-24, 0, 24, 0)
+		this.p.line(0, -24, 0, 24)
+
 		this.p.pop()
 	}
 

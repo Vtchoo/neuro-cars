@@ -101,6 +101,10 @@ export default class Car {
     lastDrivingWheelDirection = 0
     lastInputs: number[] = [0, 0]
 
+    // True for exactly one update() call, the tick the car leaves the track
+    justCrashed = false
+    private wasInsideTrack = true
+
     // Ackermann steering properties
     wheelbase = 3 // 3 meters
     steeringAngle = 0 // Current front wheel angle in radians
@@ -256,6 +260,8 @@ export default class Car {
         }
 
         const isInsideTrack = track.isInsideTrack(this.pos.x, this.pos.y)
+        this.justCrashed = !isInsideTrack && this.wasInsideTrack
+        this.wasInsideTrack = isInsideTrack
         if (!isInsideTrack) {
             if (!IsPlayerCar) {
                 this.speed = 0
@@ -555,6 +561,8 @@ export default class Car {
         this.lastRayCastDistances = null
         this.lastCurrentCarPositionInTrack = null
         this.lastLookAheadPoints = null
+        this.justCrashed = false
+        this.wasInsideTrack = true
     }
 }
 
