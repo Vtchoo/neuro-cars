@@ -109,6 +109,10 @@ export default class Game {
 	lapRecords: { ticks: number, driverName: string, generation: number }[] = []
 	bestLapTime: number | null = null
 
+	// Cosmetic effects
+	public showExplosions = false
+	public showHelicopters = true
+
 	// Crash explosion particles, keyed by the tick they were spawned on
 	private explosions: { x: number, y: number, startTick: number, particles: { angle: number, speed: number }[] }[] = []
 	private readonly explosionDurationTicks = 24
@@ -528,7 +532,7 @@ export default class Game {
 
 				this.drawExplosions()
 
-				if (this.population.length > 0) {
+				if (this.showHelicopters && this.population.length > 0) {
 					const activeRacers = this.playerDrive && this.player.speed > 0.001 ? [...activeCars, this.player] : activeCars
 					const averageTarget = activeRacers.length > 0
 						? {
@@ -1339,6 +1343,7 @@ export default class Game {
 	}
 
 	private spawnExplosion(x: number, y: number) {
+		if (!this.showExplosions) return
 		const particleCount = 14
 		const particles = Array.from({ length: particleCount }, () => ({
 			angle: this.p.random(this.p.TWO_PI),
@@ -1348,6 +1353,10 @@ export default class Game {
 	}
 
 	private drawExplosions() {
+		if (!this.showExplosions) {
+			this.explosions.length = 0
+			return
+		}
 		if (this.explosions.length === 0) return
 		const maxRadius = 90
 		this.p.push()
