@@ -1,3 +1,3 @@
-export function random<T>(array: T[]): T {
-    return array[Math.floor(Math.random() * array.length)];
+export function random<T>(array: T[], next: () => number = Math.random): T {
+  return array[Math.floor(next() * array.length)];
 }

@@ -1,0 +1,149 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: #161e29;
+  color: #e4eaf2;
+  font:
+    14px/1.5 system-ui,
+    sans-serif;
+  display: flex;
+  height: 100dvh;
+}
+aside {
+  width: 280px;
+  flex-shrink: 0;
+  padding: 26px 22px;
+  background: #101720;
+  border-right: 1px solid #2d3949;
+  overflow-y: auto;
+}
+a {
+  color: #93bbf4;
+  text-decoration: none;
+}
+h1 {
+  font-size: 24px;
+  margin: 24px 0 8px;
+  letter-spacing: -0.6px;
+}
+p {
+  color: #96a5b8;
+}
+label {
+  display: block;
+  margin: 18px 0;
+}
+output {
+  float: right;
+  color: #93bbf4;
+}
+select,
+button {
+  background: #202d3d;
+  color: #e4eaf2;
+  border: 1px solid #3b4d64;
+  border-radius: 6px;
+  padding: 9px 10px;
+  font: inherit;
+}
+select,
+input[type="range"],
+#screenshot {
+  width: 100%;
+}
+select,
+input[type="range"] {
+  display: block;
+  margin-top: 8px;
+}
+button {
+  cursor: pointer;
+}
+button:hover {
+  background: #30455f;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid #93bbf4;
+}
+fieldset {
+  padding: 0;
+  margin: 22px 0;
+  border: 0;
+}
+legend {
+  margin-bottom: 8px;
+}
+.views {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.views button {
+  font-size: 12px;
+  padding: 7px 10px;
+}
+.toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+input {
+  accent-color: #7fb2ff;
+}
+input[type="color"] {
+  width: 40px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: none;
+}
+.hint,
+pre {
+  font-size: 11px;
+  color: #8293aa;
+}
+pre {
+  white-space: pre-wrap;
+  line-height: 1.8;
+  margin-top: 24px;
+}
+main {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+canvas {
+  display: block;
+}
+.badge {
+  position: absolute;
+  top: 25px;
+  left: 28px;
+  color: #8293aa;
+  font-size: 10px;
+  letter-spacing: 2px;
+  pointer-events: none;
+}
+.car-label {
+  position: absolute;
+  transform: translateX(-50%);
+  color: #d8e3ef;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: 0 1px 5px #000;
+}
+@media (max-width: 640px) {
+  aside {
+    width: 210px;
+    padding: 18px 14px;
+  }
+  h1 {
+    font-size: 20px;
+  }
+}
