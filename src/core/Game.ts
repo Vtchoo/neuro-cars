@@ -19,6 +19,28 @@ const trackWidth = 120,
   eliteSize = 7;
 const breedingMethod: "pair" | "elite" | "clone" = "pair";
 
+type CycleStartPointMode =
+  | "off"
+  | "sequential"
+  | "random"
+  | "sequentialContinuous"
+  | "randomPoint";
+
+function normalizeCycleStartPoint(value: string): CycleStartPointMode {
+  const modes: CycleStartPointMode[] = [
+    "off",
+    "sequential",
+    "random",
+    "sequentialContinuous",
+    "randomPoint",
+  ];
+  const mode = modes.find(
+    (mode) => mode.toLowerCase() === value.trim().toLowerCase(),
+  );
+  if (!mode) throw new Error(`Unknown cycleStartPoint mode: ${value}`);
+  return mode;
+}
+
 /** Simulation state and fixed-step logic; no renderer, DOM, or animation loop. */
 export default class Game<C extends Car = Car, T extends Track = Track> {
   readonly effects = new Effects();
@@ -72,6 +94,18 @@ export default class Game<C extends Car = Car, T extends Track = Track> {
   public showHelicopters = true;
   followBestCar: "off" | "best" | "bestActive" = "off";
   followCar: C | null = null;
+  helicopterCamera: number | null = null;
+  /** Only adapters capable of an onboard view advertise these camera modes. */
+  get helicopterCameraCount() {
+    return 0;
+  }
+  get followLabel() {
+    return this.helicopterCamera !== null
+      ? `Helicopter ${this.helicopterCamera + 1} camera`
+      : this.followCar
+        ? `Follow: ${this.followCar.driverName}`
+        : `Follow best: ${this.followBestCar}`;
+  }
   public readonly decisionsPerSecond = 60;
   direction = 0;
   start = new Vector(0, 0);
@@ -112,14 +146,23 @@ export default class Game<C extends Car = Car, T extends Track = Track> {
     return this.showInputs;
   }
   toggleFollowBestCar() {
-    const options = ["off", "best", "bestActive"] as const;
-    const currentIndex = options.indexOf(this.followBestCar);
-    const nextIndex = (currentIndex + 1) % options.length;
-    this.followBestCar = options[nextIndex];
     this.followCar = null;
+    if (this.helicopterCamera !== null) {
+      this.helicopterCamera++;
+      if (this.helicopterCamera >= this.helicopterCameraCount)
+        this.helicopterCamera = null;
+      this.followBestCar = "off";
+    } else if (this.followBestCar === "off") this.followBestCar = "best";
+    else if (this.followBestCar === "best") this.followBestCar = "bestActive";
+    else {
+      this.followBestCar = "off";
+      if (this.helicopterCameraCount && this.showHelicopters)
+        this.helicopterCamera = 0;
+    }
     return this.followBestCar;
   }
   followNextCar() {
+    this.helicopterCamera = null;
     // sort in alphabetical order
     const cars = [...this.population].sort((a, b) => {
       const nameA = a.driverName || "";
@@ -137,6 +180,7 @@ export default class Game<C extends Car = Car, T extends Track = Track> {
     return this.followCar;
   }
   followPreviousCar() {
+    this.helicopterCamera = null;
     // sort in alphabetical order
     const cars = [...this.population].sort((a, b) => {
       const nameA = a.driverName || "";
@@ -161,6 +205,7 @@ export default class Game<C extends Car = Car, T extends Track = Track> {
     return this.showNeuralNet;
   }
   getFollowedCar(): C | null {
+    if (this.helicopterCamera !== null) return null;
     if (this.followCar) return this.followCar;
     if (this.followBestCar === "off" || this.population.length === 0)
       return null;
@@ -193,12 +238,14 @@ export default class Game<C extends Car = Car, T extends Track = Track> {
       new CustomEvent<number>("maxTicksChanged", { detail: value }),
     );
   }
-  cycleStartPoint:
-    | "off"
-    | "sequential"
-    | "random"
-    | "sequentialContinuous"
-    | "randomPoint" = "randomPoint";
+  private _cycleStartPoint: CycleStartPointMode = "randomPoint";
+  get cycleStartPoint() {
+    return this._cycleStartPoint;
+  }
+  set cycleStartPoint(value: string) {
+    // C# saves serialize enum names in lowercase; retain the browser's canonical names.
+    this._cycleStartPoint = normalizeCycleStartPoint(value);
+  }
   startPointIndex = 0;
   startPointOffset = 0;
   sequentialContinuousStep = 1000;
@@ -233,6 +280,9 @@ export default class Game<C extends Car = Car, T extends Track = Track> {
         "Save must contain a track, game state, and a nonempty population.",
       );
     }
+    const cycleMode = normalizeCycleStartPoint(
+      saveData.game.cycleStartPoint ?? this.cycleStartPoint,
+    );
     // Invalidate clustering results from previous session
     this.clusteringResults = null;
     this.lapRecords = [];
@@ -253,8 +303,7 @@ export default class Game<C extends Car = Car, T extends Track = Track> {
     this.maxTicks = saveData.game.maxTicks;
     this.startPointIndex = saveData.game.startPointIndex;
     this.startPointOffset = saveData.game.startPointOffset ?? 0;
-    this.cycleStartPoint =
-      saveData.game.cycleStartPoint ?? this.cycleStartPoint;
+    this.cycleStartPoint = cycleMode;
 
     // Restore population
     this.population = saveData.population.map((carData: any) => {
@@ -292,6 +341,7 @@ export default class Game<C extends Car = Car, T extends Track = Track> {
       this.rng.state = saveData.randomState >>> 0;
     this.accumulatedSeconds = 0;
     this.effects.reset();
+    this.helicopterCamera = null;
     this.followCar = null;
     this.setPhase("running");
     this.events.dispatchEvent(new Event("gameLoaded"));

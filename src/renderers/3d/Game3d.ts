@@ -1,5 +1,6 @@
 import type { Explosion } from "../../core/Effects";
 import * as THREE from "three";
+import { Helicopter3d } from "./Helicopter3d";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import Game from "../../core/Game";
 import type { CarPreset } from "../../cars/carPresets";
@@ -43,6 +44,8 @@ export default class Game3d extends Game<Car3d, Track3d> {
   private readonly raycaster = new THREE.Raycaster();
   private readonly mouse = new THREE.Vector2(-2, -2);
   private readonly groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  private readonly orbitRay = new THREE.Ray();
+  private readonly orbitHit = new THREE.Vector3();
   private renderedTrack: Track3d | null = null;
   private editorSource: unknown = null;
   private editorZoom = 0;
@@ -54,7 +57,19 @@ export default class Game3d extends Game<Car3d, Track3d> {
   private referenceOpacity = 0.5;
   private grassTexture: THREE.Texture;
   private explosions = new Map<Explosion, THREE.Points>();
-  private helicopters: { object: THREE.Group; rotor: THREE.Group }[] = [];
+  private helicopters: Helicopter3d[] = [];
+  override get helicopterCameraCount() {
+    return this.effects.helicopters.length;
+  }
+  get activeCamera(): THREE.PerspectiveCamera {
+    if (
+      this.showHelicopters &&
+      (this.phase === "running" || this.phase === "breeding") &&
+      this.helicopterCamera !== null
+    )
+      return this.helicopters[this.helicopterCamera]?.camera ?? this.camera;
+    return this.camera;
+  }
   private abort = new AbortController();
   gameMenu: { remove(): void } | null = null;
 
@@ -118,9 +133,11 @@ export default class Game3d extends Game<Car3d, Track3d> {
     this.camera.position.set(0, 900, 700);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
+    this.controls.screenSpacePanning = false;
     this.controls.minDistance = 100;
     this.controls.maxDistance = 80000;
     this.controls.maxPolarAngle = Math.PI / 2 - 0.06;
+    this.controls.addEventListener("change", this.anchorFreeCamera);
     this.installInput();
     this.events.addEventListener("gameLoaded", () => this.fitCamera(), {
       signal: this.abort.signal,
@@ -154,12 +171,32 @@ export default class Game3d extends Game<Car3d, Track3d> {
     this.overlay.height = innerHeight;
   };
 
+  private anchorFreeCamera = () => {
+    if (
+      this.activeCamera !== this.camera ||
+      this.playerDrive ||
+      this.getFollowedCar()
+    )
+      return;
+    this.orbitRay.origin.copy(this.camera.position);
+    this.camera.getWorldDirection(this.orbitRay.direction);
+    // Reanchor along the existing sightline, preserving position and orientation.
+    // A horizontal/upward view has no usable intersection with the track plane.
+    if (
+      this.orbitRay.direction.y < -1e-6 &&
+      this.orbitRay.intersectPlane(this.groundPlane, this.orbitHit)
+    ) {
+      this.controls.target.copy(this.orbitHit);
+    }
+  };
+
   private fitCamera() {
     this.track.render(this.scene);
     const box = new THREE.Box3().setFromObject(this.track.object);
     if (box.isEmpty()) return;
     const center = box.getCenter(new THREE.Vector3()),
       size = box.getSize(new THREE.Vector3());
+    center.y = 0;
     const distance = Math.max(
       500,
       Math.max(size.x / this.camera.aspect, size.z) * 1.4,
@@ -468,42 +505,18 @@ export default class Game3d extends Game<Car3d, Track3d> {
       position.needsUpdate = true;
       (object.material as THREE.PointsMaterial).opacity = 1 - progress;
     }
-    if (!this.helicopters.length)
-      for (let i = 0; i < 2; i++) {
-        const object = new THREE.Group(),
-          rotor = new THREE.Group();
-        const body = new THREE.Mesh(
-          new THREE.SphereGeometry(12, 12, 8),
-          new THREE.MeshStandardMaterial({ color: 0xd72e2e }),
-        );
-        body.scale.set(1.6, 0.65, 0.7);
-        object.add(body);
-        const blade = new THREE.Mesh(
-          new THREE.BoxGeometry(52, 0.8, 2),
-          new THREE.MeshStandardMaterial({ color: 0x333333 }),
-        );
-        rotor.add(blade);
-        rotor.position.y = 12;
-        object.add(rotor);
-        const tail = new THREE.Mesh(
-          new THREE.BoxGeometry(25, 3, 3),
-          new THREE.MeshStandardMaterial({ color: 0x333333 }),
-        );
-        tail.position.x = -25;
-        object.add(tail);
-        this.scene.add(object);
-        this.helicopters.push({ object, rotor });
-      }
+    while (this.helicopters.length < this.effects.helicopters.length) {
+      const helicopter = new Helicopter3d(this.helicopters.length);
+      this.scene.add(helicopter.object);
+      this.helicopters.push(helicopter);
+    }
     this.helicopters.forEach((heli, i) => {
       heli.object.visible =
         this.showHelicopters &&
         this.population.length > 0 &&
-        this.phase === "running";
-      if (!heli.object.visible) return;
-      const state = this.effects.helicopters[i];
-      heli.object.position.set(state.x, 110, state.y);
-      heli.object.rotation.y = -state.heading;
-      heli.rotor.rotation.y = state.rotorAngle;
+        (this.phase === "running" || this.phase === "breeding");
+      if (heli.object.visible)
+        heli.update(this.effects.helicopters[i], innerWidth / innerHeight);
     });
   }
 
@@ -529,7 +542,7 @@ export default class Game3d extends Game<Car3d, Track3d> {
           ? [...this.population, this.player]
           : this.population
         : [];
-    this.raycaster.setFromCamera(this.mouse, this.camera);
+    this.raycaster.setFromCamera(this.mouse, this.activeCamera);
     const mouseWorld = this.raycaster.ray.intersectPlane(
       this.groundPlane,
       new THREE.Vector3(),
@@ -578,10 +591,11 @@ export default class Game3d extends Game<Car3d, Track3d> {
     this.controls.mouseButtons.LEFT = this.controls.enableRotate
       ? THREE.MOUSE.ROTATE
       : THREE.MOUSE.PAN;
-    this.controls.update();
+    this.controls.enabled = this.activeCamera === this.camera;
+    if (this.controls.enabled) this.controls.update();
     this.drawEditor();
     this.updateEffects();
-    this.renderer.render(this.scene, this.camera);
+    this.renderer.render(this.scene, this.activeCamera);
     this.surface.clear();
     this.hud.draw();
     if (hovered) {
@@ -589,7 +603,7 @@ export default class Game3d extends Game<Car3d, Track3d> {
         hovered.pos.x,
         10,
         hovered.pos.y,
-      ).project(this.camera);
+      ).project(this.activeCamera);
       tooltip(
         this.surface,
         [
@@ -631,7 +645,7 @@ export default class Game3d extends Game<Car3d, Track3d> {
       object.geometry.dispose();
       (object.material as THREE.Material).dispose();
     }
-    for (const heli of this.helicopters) disposeGroup(heli.object);
+    for (const heli of this.helicopters) heli.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
     this.overlay.remove();

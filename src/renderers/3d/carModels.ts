@@ -152,11 +152,13 @@ function wheels(
   halfAxle: number,
   track: number,
   radius: number,
-  width: number,
+  rearWidth: number,
   openWheel = false,
+  frontWidth = rearWidth,
 ) {
   for (const x of [-halfAxle, halfAxle])
     for (const side of [-1, 1]) {
+      const width = x > 0 ? frontWidth : rearWidth;
       const pivot = new THREE.Group();
       pivot.name = x > 0 ? "front-wheel-pivot" : "rear-wheel-pivot";
       pivot.position.set(x, radius, (side * track) / 2);
@@ -195,7 +197,7 @@ function wheels(
           );
           const ring = new THREE.Mesh(stripe, white);
           ring.name = "tire-sidewall";
-          ring.position.z = edge * (width / 2 + 0.04);
+          ring.position.z = edge * (width / 2);
           rotor.add(ring);
         }
       if (x > 0) model.frontWheels.push(pivot);
@@ -331,8 +333,11 @@ function supercar(model: CarModel, halfAxle: number, paint: THREE.Material) {
 }
 
 function formula1(model: CarModel, halfAxle: number, paint: THREE.Material) {
-  const rear = -halfAxle - 9,
-    front = halfAxle + 12;
+  // 10 units = 1 m: 5.5 m overall length at the preset's 3.6 m wheelbase.
+  // Rear wheel outer faces (including hubs) and front wing stay within 2 m.
+  const rear = -halfAxle - 6.5,
+    front = halfAxle + 9,
+    wheelTrack = 15.75;
   prism(
     model.root,
     "f1-monocoque",
@@ -360,51 +365,51 @@ function formula1(model: CarModel, halfAxle: number, paint: THREE.Material) {
         [9, 3],
         [9, 2.7],
       ],
-      5.3,
+      4.2,
       paint,
     );
-    sidepod.position.z = side * 5.3;
+    sidepod.position.z = side * 4.3;
     box(
       model.root,
       "sidepod-intake",
-      [0.55, 2.1, 4.4],
-      [7.5, 5.2, side * 5.3],
+      [0.55, 2.1, 3.4],
+      [7.5, 5.2, side * 4.3],
       carbon,
     );
     box(
       model.root,
       "rear-wing-endplate",
       [5.5, 5.5, 0.5],
-      [rear + 1, 8.6, side * 10.7],
+      [rear + 1, 8.6, side * 9],
       paint,
     );
     box(
       model.root,
       "front-wing-endplate",
       [5.5, 2.1, 0.4],
-      [front - 1, 2.7, side * 12],
+      [front - 1, 2.7, side * 9.8],
       paint,
     );
     for (const axle of [-halfAxle, halfAxle])
       for (const offset of [-4, 4]) {
         const dx = -offset,
-          dz = side * 8;
+          dz = side * (wheelTrack / 2 - 3);
         const arm = box(
           model.root,
           "suspension-arm",
           [Math.hypot(dx, dz), 0.4, 0.45],
-          [axle + offset / 2, 3.7, side * 7],
+          [axle + offset / 2, 3.6, (side * (3 + wheelTrack / 2)) / 2],
           carbon,
         );
         arm.rotation.y = -Math.atan2(dz, dx);
       }
   }
-  box(model.root, "floor", [halfAxle * 1.6, 0.55, 18], [-3, 2, 0], carbon);
+  box(model.root, "floor", [halfAxle * 1.6, 0.55, 14], [-3, 2, 0], carbon);
   for (let i = 0; i < 3; i++)
     box(
       model.root,
       "front-wing-element",
-      [1.1, 0.45, 24 - i * 1.8],
+      [1.1, 0.45, 19.6 - i * 1.8],
       [front - 3 + i * 1.3, 1.9 + i * 0.45, 0],
       i === 2 ? paint : carbon,
     );
@@ -412,7 +417,7 @@ function formula1(model: CarModel, halfAxle: number, paint: THREE.Material) {
     box(
       model.root,
       "rear-wing-element",
-      [4, 0.6, 21],
+      [4, 0.6, 18],
       [rear + 1, 8.8 + i * 2.2, 0],
       i ? paint : carbon,
     );
@@ -448,7 +453,7 @@ function formula1(model: CarModel, halfAxle: number, paint: THREE.Material) {
   halo.position.set(-0.5, 10, 0);
   model.root.add(halo);
   box(model.root, "halo-pillar", [0.45, 2.6, 0.45], [2.2, 9, 0], carbon);
-  wheels(model, halfAxle, 22, 4.3, 4.5, true);
+  wheels(model, halfAxle, wheelTrack, 3.6, 4.05, true, 3.05);
 }
 
 function uno(model: CarModel, halfAxle: number, paint: THREE.Material) {
@@ -553,7 +558,7 @@ export function createCarModel(
     root: new THREE.Group(),
     frontWheels: [],
     wheelRotors: [],
-    wheelRadius: key === "formula1" ? 4.3 : key === "uno" ? 3.1 : 3.7,
+    wheelRadius: key === "formula1" ? 3.6 : key === "uno" ? 3.1 : 3.7,
   };
   model.root.name = `model:${key}`;
   const halfAxle = Math.max(8, (wheelbase * 10) / 2);

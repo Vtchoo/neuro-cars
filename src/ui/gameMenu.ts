@@ -169,9 +169,7 @@ export function buildGameMenu(game: BrowserGame) {
     followBestCarButton.html(`Follow: ${car.driverName}`);
   });
 
-  const followBestCarButton = p.createButton(
-    `Follow best: ${game.followBestCar}`,
-  );
+  const followBestCarButton = p.createButton(game.followLabel);
   followBestCarButton.style(
     style({
       flex: 1,
@@ -183,8 +181,8 @@ export function buildGameMenu(game: BrowserGame) {
   );
   followBestCarButton.parent(followButtonsContainer);
   followBestCarButton.mouseClicked(() => {
-    const nextMode = game.toggleFollowBestCar();
-    followBestCarButton.html(`Follow best: ${nextMode}`);
+    game.toggleFollowBestCar();
+    followBestCarButton.html(game.followLabel);
   });
 
   const followNextCarButton = p.createButton(">");

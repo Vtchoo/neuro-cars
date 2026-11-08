@@ -56,6 +56,24 @@ function exercise(CarType,TrackType) {
     });
 }
 const base=exercise(Car,Track);
+// C# writes these enum values in lowercase; they must still move generation spawns.
+for(const CarType of [Car,Car2d,Car3d])for(const mode of ['randompoint','sequentialcontinuous']) {
+    const cycling=variant(CarType,Track);
+    const save=JSON.parse(JSON.stringify(base));save.game.cycleStartPoint=mode;
+    cycling.restoreGameState(save);cycling.performClusteringAnalysis=()=>{};
+    cycling.increaseMaxTicksIfBestCarIsRunning=false;
+    assert.equal(cycling.cycleStartPoint,mode==='randompoint'?'randomPoint':'sequentialContinuous');
+    // Isolate the distance selection from spawn scatter and breeding randomness.
+    cycling.random=()=>.5;
+    for(let generation=0;generation<2;generation++) {
+        cycling.breedGeneration();
+        assert.ok(cycling.population.every(car=>Number.isFinite(car.pos.x)&&car.pos.x>900),`${CarType.name}: ${mode} spawns away from the start line`);
+    }
+    assert.equal(cycling.exportState().game.cycleStartPoint,cycling.cycleStartPoint);
+}
+const modeCheck=new Game(1);
+assert.throws(()=>{modeCheck.cycleStartPoint='typo'},/Unknown cycleStartPoint/,'Invalid modes cannot silently disable cycling');
+assert.equal(modeCheck.cycleStartPoint,'randomPoint');
 assert.equal(hash(exercise(Car2d,Track2d)),hash(base),'2D subclass must preserve simulation results');
 assert.equal(hash(exercise(Car3d,Track3d)),hash(base),'3D subclass must preserve simulation results');
 
@@ -88,10 +106,48 @@ effects.spawn(1,2);effects.update([],undefined,false,false);
 assert.equal(effects.explosions.length,0,'Disabled explosions are cleared');
 effects.update(clock.population,undefined,false,true);
 const [a,b]=effects.helicopters;
-assert.ok(Math.hypot(a.x-b.x,a.y-b.y)>=140-1e-8,'Helicopters keep their shared safe distance');
+assert.ok(b.minAltitude-a.maxAltitude>=600,'Helicopter flight bands have at least 60 m vertical clearance');
 const previous=JSON.stringify(effects.helicopters);
 effects.update(clock.population,undefined,false,false);
 assert.equal(JSON.stringify(effects.helicopters),previous,'Disabled helicopters stop updating');
+
+// Coincident horizontal flight paths must stay independent: no sideways avoidance.
+const flight=new Effects();
+Object.assign(flight.helicopters[1],{
+    orbitAngle:flight.helicopters[0].orbitAngle,
+    orbitDirection:flight.helicopters[0].orbitDirection,
+    orbitRadius:flight.helicopters[0].orbitRadius,
+});
+const stationary=new Car(100,200,0);
+for(let tick=0;tick<3600;tick++) {
+    const previous=flight.helicopters.map(heli=>({vx:heli.velocityX,vy:heli.velocityY,altitude:heli.altitude}));
+    flight.update([stationary],undefined,false,true);
+    for(const [i,heli] of flight.helicopters.entries()) {
+        assert.ok(heli.altitude>=heli.minAltitude && heli.altitude<=heli.maxAltitude);
+        assert.ok(Math.hypot(heli.velocityX,heli.velocityY)<=550+1e-8,'Flight speed stays below 55 m/s');
+        assert.ok(Math.hypot(heli.velocityX-previous[i].vx,heli.velocityY-previous[i].vy)<=40/60+1e-8,'Acceleration stays below 4 m/s²');
+        if(tick>0)assert.ok(Math.abs(heli.altitude-previous[i].altitude)<1/6,'Altitude changes stay below 1 m/s');
+    }
+    assert.equal(flight.helicopters[0].x,flight.helicopters[1].x);
+    assert.equal(flight.helicopters[0].y,flight.helicopters[1].y);
+}
+const {Helicopter3d}=require('../src/renderers/3d/Helicopter3d.ts');
+const filming=new Helicopter3d(0),flightState=flight.helicopters[0];
+flightState.heading=1.3;flightState.bank=.2;filming.update(flightState,16/9);
+const opticalAxis=filming.camera.getWorldDirection(new THREE.Vector3());
+const targetDirection=new THREE.Vector3(flightState.targetX,4,flightState.targetY).sub(filming.camera.getWorldPosition(new THREE.Vector3())).normalize();
+assert.ok(opticalAxis.dot(targetDirection)>1-1e-10,'Onboard camera aims at target regardless of aircraft bank and heading');
+assert.equal(filming.camera.aspect,16/9);filming.dispose();
+const cameraGame=new class extends Game {get helicopterCameraCount(){return 2}}();
+cameraGame.population=[stationary];
+const followModes=[];
+for(let i=0;i<5;i++){cameraGame.toggleFollowBestCar();followModes.push(cameraGame.followLabel)}
+assert.deepEqual(followModes,['Follow best: best','Follow best: bestActive','Helicopter 1 camera','Helicopter 2 camera','Follow best: off']);
+for(let i=0;i<3;i++)cameraGame.toggleFollowBestCar();
+assert.equal(cameraGame.getFollowedCar(),null,'A helicopter view does not select a car HUD');
+assert.equal(cameraGame.followNextCar(),stationary);assert.equal(cameraGame.helicopterCamera,null);
+cameraGame.toggleFollowBestCar();cameraGame.toggleFollowBestCar();cameraGame.toggleFollowBestCar();
+assert.equal(cameraGame.followPreviousCar(),stationary);assert.equal(cameraGame.helicopterCamera,null);
 
 // Moving world-space sensor vertices must also move Three.js's culling bounds.
 const sensorCar=new Car3d(0,0,0),sensorScene=new THREE.Scene();
@@ -116,6 +172,12 @@ sensorCar.dispose();
 
 // Preset-specific shapes, axle dimensions, steering, and legacy configuration.
 const presets=require('../src/cars/carPresets.ts');
+const {createCarModel}=require('../src/renderers/3d/carModels.ts');
+const f1Model=createCarModel('formula1',presets.f1CarPreset.wheelbase,new THREE.MeshStandardMaterial());
+const f1Size=new THREE.Box3().setFromObject(f1Model.root).getSize(new THREE.Vector3());
+assert.ok(Math.abs(f1Size.x-55)<1e-5,'F1 overall length is 5.5 m at ten units per meter');
+assert.ok(Math.abs(f1Size.z-20)<1e-5,'F1 overall width is 2 m, including wheels and wings');
+assert.equal(f1Model.wheelRadius*2,7.2,'F1 tire diameter is 0.72 m');
 for(const [preset,part] of [[presets.supercarPreset,'coupe-glass'],[presets.f1CarPreset,'cockpit-halo'],[presets.unoWithLadderPreset,'ladder-rail']]) {
     const car=new Car3d(0,0,0,0,preset),scene=new THREE.Scene();car.steeringAngle=.2;car.render(scene);
     const parts=[],front=[],rear=[];let meshCount=0;

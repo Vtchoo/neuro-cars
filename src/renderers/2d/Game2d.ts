@@ -836,9 +836,7 @@ export default class Game2d extends Game<Car2d, Track2d> {
     this.p.pop();
   }
 
-  // Moves every camera helicopter: each orbits its (per-frame) target point rather than heading
-  // straight for it, like a film crew circling at a distance, then they get pushed apart pairwise
-  // if their orbits bring them too close.
+  // Flight paths and independent altitude bands live in the shared Effects state.
 
   // Top-down helicopter: fuselage/tail point along the direction of travel, main rotor seen from above
   private drawHelicopter(
