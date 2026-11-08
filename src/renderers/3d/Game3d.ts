@@ -49,8 +49,13 @@ export default class Game3d extends Game<Car3d, Track3d> {
   private renderedTrack: Track3d | null = null;
   private editorSource: unknown = null;
   private editorZoom = 0;
-  private pointerStart: { x: number; y: number; editing: boolean; blockCamera: boolean; moved: boolean } | null =
-    null;
+  private pointerStart: {
+    x: number;
+    y: number;
+    editing: boolean;
+    blockCamera: boolean;
+    moved: boolean;
+  } | null = null;
   private lastPhase = this.phase;
   private lastTime = 0;
   private reference: THREE.Mesh | null = null;
@@ -281,12 +286,22 @@ export default class Game3d extends Game<Car3d, Track3d> {
         if (editing) {
           const point = this.worldPoint(event);
           if (this.phase === "buildTrack")
-            blockCamera = point ? editorPressed(this.track, point, this.zoom) : false;
+            blockCamera = point
+              ? editorPressed(this.track, point, this.zoom)
+              : false;
         }
-        this.pointerStart = { x: event.clientX, y: event.clientY, editing, blockCamera, moved: false };
-        this.controls.enabled = this.activeCamera === this.camera && !blockCamera;
+        this.pointerStart = {
+          x: event.clientX,
+          y: event.clientY,
+          editing,
+          blockCamera,
+          moved: false,
+        };
+        this.controls.enabled =
+          this.activeCamera === this.camera && !blockCamera;
         // Empty editor space pans directly; Ctrl + ROTATE also maps to pan.
-        this.controls.mouseButtons.LEFT = editing && !blockCamera ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
+        this.controls.mouseButtons.LEFT =
+          editing && !blockCamera ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
       },
       // Disable OrbitControls before its pointerdown handler can begin a pan.
       { signal, capture: true },
@@ -299,9 +314,20 @@ export default class Game3d extends Game<Car3d, Track3d> {
           ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
           (-(event.clientY - bounds.top) / bounds.height) * 2 + 1,
         );
-        if (this.pointerStart && Math.hypot(event.clientX-this.pointerStart.x,event.clientY-this.pointerStart.y)>3)
+        if (
+          this.pointerStart &&
+          Math.hypot(
+            event.clientX - this.pointerStart.x,
+            event.clientY - this.pointerStart.y,
+          ) > 3
+        )
           this.pointerStart.moved = true;
-        if (!this.pointerStart?.editing || !this.pointerStart.blockCamera || this.phase !== "buildTrack") return;
+        if (
+          !this.pointerStart?.editing ||
+          !this.pointerStart.blockCamera ||
+          this.phase !== "buildTrack"
+        )
+          return;
         const point = this.worldPoint(event);
         if (point) editorDragged(this, point, this.zoom);
       },
@@ -318,9 +344,9 @@ export default class Game3d extends Game<Car3d, Track3d> {
         editorReleased();
         if (!point) return;
         if (this.phase === "buildTrack") {
-          if (!start.moved || start.blockCamera) editorClick(this, point, this.zoom);
-        }
-        else if (
+          if (!start.moved || start.blockCamera)
+            editorClick(this, point, this.zoom);
+        } else if (
           Math.hypot(event.clientX - start.x, event.clientY - start.y) < 5
         ) {
           if (this.phase === "setStart") {
@@ -337,11 +363,15 @@ export default class Game3d extends Game<Car3d, Track3d> {
       },
       { signal },
     );
-    window.addEventListener("pointercancel", () => {
-      this.pointerStart = null;
-      editorReleased();
-      this.controls.enabled = this.activeCamera === this.camera;
-    }, { signal });
+    window.addEventListener(
+      "pointercancel",
+      () => {
+        this.pointerStart = null;
+        editorReleased();
+        this.controls.enabled = this.activeCamera === this.camera;
+      },
+      { signal },
+    );
   }
 
   saveGame() {
@@ -351,7 +381,7 @@ export default class Game3d extends Game<Car3d, Track3d> {
     loadGameFile(this, onLoad);
   }
   loadReferenceImage(onLoad?: () => void) {
-    chooseFile("image/*", (file) => {
+    chooseFile("image/*", async (file) => {
       const input = prompt(
         "Enter the distance from top to bottom of the image in meters:",
       );
@@ -361,40 +391,50 @@ export default class Game3d extends Game<Car3d, Track3d> {
         alert("Please enter a valid positive number for distance");
         return;
       }
-      const url = URL.createObjectURL(file);
-      new THREE.TextureLoader().load(
-        url,
-        (texture) => {
-          URL.revokeObjectURL(url);
-          this.removeReference();
-          texture.colorSpace = THREE.SRGBColorSpace;
-          const image = texture.image as HTMLImageElement,
-            height = distance * 10;
-          this.reference = new THREE.Mesh(
-            new THREE.PlaneGeometry(
-              (height * image.width) / image.height,
-              height,
-            ),
-            new THREE.MeshBasicMaterial({
-              map: texture,
-              transparent: true,
-              opacity: this.referenceOpacity,
-              depthWrite: false,
-            }),
-          );
-          this.reference.rotation.x = -Math.PI / 2;
-          this.reference.position.y = -1;
-          this.scene.add(this.reference);
-          this.setPhase("setStart");
-          onLoad?.();
-        },
-        undefined,
-        () => {
-          URL.revokeObjectURL(url);
-          alert("Failed to load image. Please try a different file.");
-        },
-      );
+      try {
+        await this.setReferenceImage(file, distance);
+        onLoad?.();
+      } catch {
+        alert("Failed to load image. Please try a different file.");
+      }
     });
+  }
+
+  async setReferenceImage(blob: Blob, heightMeters: number): Promise<void> {
+    if (!Number.isFinite(heightMeters) || heightMeters <= 0)
+      throw new Error("Invalid reference height");
+    const url = URL.createObjectURL(blob);
+    let texture: THREE.Texture;
+    try {
+      texture = await new THREE.TextureLoader().loadAsync(url);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+    this.removeReference();
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const image = texture.image as HTMLImageElement,
+      height = heightMeters * 10;
+    const width = (height * image.width) / image.height;
+    this.reference = new THREE.Mesh(
+      new THREE.PlaneGeometry(width, height),
+      new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        opacity: this.referenceOpacity,
+        depthWrite: false,
+      }),
+    );
+    this.reference.rotation.x = -Math.PI / 2;
+    this.reference.position.y = -1;
+    this.scene.add(this.reference);
+    this.setPhase("setStart");
+    this.controls.target.set(0, 0, 0);
+    const distance =
+      (Math.max(height, width / this.camera.aspect) /
+        (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)))) *
+      1.1;
+    this.camera.position.set(0, distance, 0.01);
+    this.controls.update();
   }
   private removeReference() {
     if (!this.reference) return;
@@ -601,7 +641,8 @@ export default class Game3d extends Game<Car3d, Track3d> {
     }
     this.controls.enableRotate =
       this.phase === "running" || this.phase === "menu";
-    this.controls.enabled = this.activeCamera === this.camera && !this.pointerStart?.blockCamera;
+    this.controls.enabled =
+      this.activeCamera === this.camera && !this.pointerStart?.blockCamera;
     if (this.controls.enabled) this.controls.update();
     this.drawEditor();
     this.updateEffects();

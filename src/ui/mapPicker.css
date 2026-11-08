@@ -1,0 +1,144 @@
+.map-picker {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  color: #e7edf5;
+  background: #17212e;
+  border: 1px solid #4c6079;
+  border-radius: 10px;
+  padding: 0;
+  width: min(1200px, 95vw);
+  max-width: 95vw;
+  max-height: 92dvh;
+  font:
+    14px/1.5 system-ui,
+    sans-serif;
+}
+.map-picker::backdrop {
+  background: #070c16c9;
+}
+.map-picker-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  height: min(780px, 88dvh);
+}
+.map-picker-controls {
+  padding: 22px;
+  overflow: auto;
+}
+.map-picker h2 {
+  margin: 0 0 18px;
+  font-size: 21px;
+}
+.map-picker label {
+  display: block;
+  margin: 10px 0;
+}
+.map-picker input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin-top: 4px;
+  padding: 8px;
+  background: #0c1520;
+  color: #e7edf5;
+  border: 1px solid #50627b;
+  border-radius: 4px;
+}
+.map-picker button {
+  padding: 8px 12px;
+  margin: 4px 0;
+  border: 1px solid #5e7697;
+  border-radius: 5px;
+  background: #263c58;
+  color: #e7edf5;
+  cursor: pointer;
+  font: inherit;
+}
+.map-picker button:hover {
+  background: #365477;
+}
+.map-picker button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.map-picker-bounds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 10px;
+}
+.map-picker-bounds label {
+  font-size: 12px;
+}
+.map-note {
+  color: #aebed1;
+  font-size: 12px;
+}
+.map-picker-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.map-picker-stage {
+  position: relative;
+  min-height: 250px;
+  overflow: hidden;
+  background: #0c1520;
+}
+#mapbox-map {
+  position: absolute;
+  inset: 0;
+}
+#mapbox-selection {
+  position: absolute;
+  pointer-events: none;
+  box-sizing: border-box;
+  background: #4eafff26;
+  border: 2px solid #87c9ff;
+}
+#mapbox-placeholder {
+  padding: 30px;
+  position: relative;
+  pointer-events: none;
+}
+#mapbox-status {
+  overflow-wrap: anywhere;
+}
+.map-picker-downloads {
+  padding: 25px;
+}
+.map-picker-previews {
+  display: flex;
+  gap: 20px;
+}
+.map-picker-previews figure {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+}
+.map-picker-previews img {
+  width: 100%;
+  height: min(48vh, 420px);
+  object-fit: contain;
+  background: #0c1520;
+}
+.map-picker-previews figcaption {
+  color: #aebed1;
+  text-align: center;
+}
+@media (max-width: 700px) {
+  .map-picker-layout {
+    display: flex;
+    flex-direction: column;
+    height: 88dvh;
+    overflow: auto;
+  }
+  .map-picker-controls {
+    flex-shrink: 0;
+    overflow: visible;
+  }
+  .map-picker-stage {
+    min-height: 360px;
+    flex-shrink: 0;
+  }
+}

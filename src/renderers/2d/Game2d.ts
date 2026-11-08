@@ -553,6 +553,32 @@ export default class Game2d extends Game<Car2d, Track2d> {
     }
   }
 
+  public async setReferenceImage(
+    blob: Blob,
+    heightMeters: number,
+  ): Promise<void> {
+    if (!Number.isFinite(heightMeters) || heightMeters <= 0)
+      throw new Error("Invalid reference height");
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = await new Promise<p5.Image>((resolve, reject) =>
+        this.p.loadImage(url, resolve, reject),
+      );
+      this.referenceImage = img;
+      this.referenceImageScale = (heightMeters * 10) / img.height;
+      this.cameraZoom =
+        0.85 *
+        Math.min(
+          this.p.width / (img.width * this.referenceImageScale),
+          this.p.height / (heightMeters * 10),
+        );
+      this.cameraOffsetX = this.cameraOffsetY = 0;
+      this.setPhase("setStart");
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
   public loadReferenceImage(onLoadCallback?: () => void) {
     // Create file input
     const input = this.p.createFileInput((file: any) => {

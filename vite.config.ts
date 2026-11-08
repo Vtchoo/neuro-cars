@@ -22,6 +22,7 @@ export default defineConfig({
   root: '.',
   publicDir: 'public',
   base: './',
+  optimizeDeps: { include: ['mapbox-gl', 'fflate'] },
   server: {
     open: true
   },

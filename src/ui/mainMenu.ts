@@ -2,6 +2,7 @@ import { style } from "@/utils/css";
 import { containerStyle } from "./styles";
 import type { BrowserGame } from "./BrowserGame";
 import { dom } from "./dom";
+import { loadMapPackage } from "./files";
 
 export function buildMainMenu(game: BrowserGame) {
   const p = dom;
@@ -66,4 +67,21 @@ export function buildMainMenu(game: BrowserGame) {
       menu.remove();
     });
   });
+
+  const pickLocationButton = p.createButton("Pick a location on map");
+  pickLocationButton.style(
+    style({ width: "100%", padding: "0.5rem", fontSize: "1.25rem" }),
+  );
+  pickLocationButton.parent(menu);
+  pickLocationButton.mouseClicked(async () => {
+    const { openMapPicker } = await import("./mapPicker");
+    openMapPicker(game, () => menu.remove());
+  });
+
+  const loadMapButton = p.createButton("Load map (.ncmap)");
+  loadMapButton.style(
+    style({ width: "100%", padding: "0.5rem", fontSize: "1.25rem" }),
+  );
+  loadMapButton.parent(menu);
+  loadMapButton.mouseClicked(() => loadMapPackage(game, () => menu.remove()));
 }

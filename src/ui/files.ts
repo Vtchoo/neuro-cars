@@ -26,6 +26,23 @@ export function downloadState(data: unknown) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+export function loadMapPackage(game: BrowserGame, onLoad?: () => void) {
+  chooseFile(".ncmap", async (file) => {
+    try {
+      const { readNcMap } = await import("../maps/ncmap");
+      const result = await readNcMap(file);
+      await game.setReferenceImage(result.map, result.data.map.heightMeters);
+      onLoad?.();
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Could not load the .ncmap package.",
+      );
+    }
+  });
+}
+
 export function chooseFile(accept: string, onFile: (file: File) => void) {
   const input = document.createElement("input");
   input.type = "file";

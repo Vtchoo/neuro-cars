@@ -11,7 +11,7 @@
     "tsc-build": "tsc && vite build",
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
-    "test:core": "node tests/core.cjs && node tests/track-performance.cjs",
+    "test:core": "node tests/core.cjs && node tests/track-performance.cjs && node tests/maps.cjs",
     "test:browser": "playwright test"
   },
   "devDependencies": {
@@ -22,6 +22,8 @@
     "vite": "^5.0.0"
   },
   "dependencies": {
+    "fflate": "^0.8.3",
+    "mapbox-gl": "^3.34.1",
     "p5": "^1.7.0",
     "three": "^0.187.0"
   },

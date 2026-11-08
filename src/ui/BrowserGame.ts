@@ -4,4 +4,5 @@ export type BrowserGame = Game & {
   gameMenu: { remove(): void } | null;
   loadGame(onLoad?: () => void): void;
   loadReferenceImage(onLoad?: () => void): void;
+  setReferenceImage(image: Blob, heightMeters: number): Promise<void>;
 };
