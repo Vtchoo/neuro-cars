@@ -49,7 +49,7 @@ export default class Game3d extends Game<Car3d, Track3d> {
   private renderedTrack: Track3d | null = null;
   private editorSource: unknown = null;
   private editorZoom = 0;
-  private pointerStart: { x: number; y: number; editing: boolean } | null =
+  private pointerStart: { x: number; y: number; editing: boolean; blockCamera: boolean; moved: boolean } | null =
     null;
   private lastPhase = this.phase;
   private lastTime = 0;
@@ -277,15 +277,19 @@ export default class Game3d extends Game<Car3d, Track3d> {
         if (event.button !== 0) return;
         const editing =
           this.phase !== "running" && this.phase !== "menu" && !event.ctrlKey;
-        this.pointerStart = { x: event.clientX, y: event.clientY, editing };
+        let blockCamera = editing;
         if (editing) {
-          this.controls.enabled = false;
           const point = this.worldPoint(event);
-          if (point && this.phase === "buildTrack")
-            editorPressed(this.track, point, this.zoom);
+          if (this.phase === "buildTrack")
+            blockCamera = point ? editorPressed(this.track, point, this.zoom) : false;
         }
+        this.pointerStart = { x: event.clientX, y: event.clientY, editing, blockCamera, moved: false };
+        this.controls.enabled = this.activeCamera === this.camera && !blockCamera;
+        // Empty editor space pans directly; Ctrl + ROTATE also maps to pan.
+        this.controls.mouseButtons.LEFT = editing && !blockCamera ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
       },
-      { signal },
+      // Disable OrbitControls before its pointerdown handler can begin a pan.
+      { signal, capture: true },
     );
     canvas.addEventListener(
       "pointermove",
@@ -295,7 +299,9 @@ export default class Game3d extends Game<Car3d, Track3d> {
           ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
           (-(event.clientY - bounds.top) / bounds.height) * 2 + 1,
         );
-        if (!this.pointerStart?.editing || this.phase !== "buildTrack") return;
+        if (this.pointerStart && Math.hypot(event.clientX-this.pointerStart.x,event.clientY-this.pointerStart.y)>3)
+          this.pointerStart.moved = true;
+        if (!this.pointerStart?.editing || !this.pointerStart.blockCamera || this.phase !== "buildTrack") return;
         const point = this.worldPoint(event);
         if (point) editorDragged(this, point, this.zoom);
       },
@@ -306,12 +312,14 @@ export default class Game3d extends Game<Car3d, Track3d> {
       (event) => {
         const start = this.pointerStart;
         this.pointerStart = null;
-        this.controls.enabled = true;
+        this.controls.enabled = this.activeCamera === this.camera;
         if (!start?.editing) return;
         const point = this.worldPoint(event);
         editorReleased();
         if (!point) return;
-        if (this.phase === "buildTrack") editorClick(this, point, this.zoom);
+        if (this.phase === "buildTrack") {
+          if (!start.moved || start.blockCamera) editorClick(this, point, this.zoom);
+        }
         else if (
           Math.hypot(event.clientX - start.x, event.clientY - start.y) < 5
         ) {
@@ -329,6 +337,11 @@ export default class Game3d extends Game<Car3d, Track3d> {
       },
       { signal },
     );
+    window.addEventListener("pointercancel", () => {
+      this.pointerStart = null;
+      editorReleased();
+      this.controls.enabled = this.activeCamera === this.camera;
+    }, { signal });
   }
 
   saveGame() {
@@ -588,10 +601,7 @@ export default class Game3d extends Game<Car3d, Track3d> {
     }
     this.controls.enableRotate =
       this.phase === "running" || this.phase === "menu";
-    this.controls.mouseButtons.LEFT = this.controls.enableRotate
-      ? THREE.MOUSE.ROTATE
-      : THREE.MOUSE.PAN;
-    this.controls.enabled = this.activeCamera === this.camera;
+    this.controls.enabled = this.activeCamera === this.camera && !this.pointerStart?.blockCamera;
     if (this.controls.enabled) this.controls.update();
     this.drawEditor();
     this.updateEffects();

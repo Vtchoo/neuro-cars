@@ -126,6 +126,7 @@ export function editorPressed(track: Track, pos: Vector, zoom: number) {
   pressed = pos;
   dragged = false;
   hit = findHit(track, pos, zoom);
+  return hit !== null;
 }
 export function editorDragged(game: Game, pos: Vector, zoom: number) {
   if (!pressed) return;

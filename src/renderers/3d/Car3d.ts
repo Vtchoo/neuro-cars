@@ -9,11 +9,14 @@ export default class Car3d extends Car {
   get object() {
     return (this._object ??= new THREE.Group());
   }
-  private _paintMaterial?: THREE.MeshStandardMaterial;
+  private _paintMaterial?: THREE.MeshPhysicalMaterial;
   private get paintMaterial() {
-    return (this._paintMaterial ??= new THREE.MeshStandardMaterial({
-      roughness: 0.4,
-      metalness: 0.25,
+    return (this._paintMaterial ??= new THREE.MeshPhysicalMaterial({
+      // Metallic basecoat beneath a smooth, nonmetallic automotive clearcoat.
+      roughness: 0.3,
+      metalness: 0.6,
+      clearcoat: 1,
+      clearcoatRoughness: 0.15,
     }));
   }
   private _sensorGeometry?: THREE.BufferGeometry;

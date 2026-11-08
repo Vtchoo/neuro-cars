@@ -33,12 +33,12 @@ const rubber = new THREE.MeshStandardMaterial({
 const carbon = new THREE.MeshStandardMaterial({
   color: 0x23272e,
   roughness: 0.7,
-  metalness: 0.15,
+  metalness: 0,
 });
 const glass = new THREE.MeshStandardMaterial({
   color: 0x294352,
   roughness: 0.16,
-  metalness: 0.45,
+  metalness: 0,
 });
 const alloy = new THREE.MeshStandardMaterial({
   color: 0xc6cdd5,
