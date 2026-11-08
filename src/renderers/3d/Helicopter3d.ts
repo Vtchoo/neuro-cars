@@ -243,13 +243,25 @@ export class Helicopter3d {
     this.gimbal.add(this.camera);
   }
 
-  update(state: Helicopter, aspect: number) {
-    this.object.position.set(state.x, state.altitude, state.y);
+  update(
+    state: Helicopter,
+    aspect: number,
+    groundHeight: (x: number, y: number) => number = () => 0,
+  ) {
+    this.object.position.set(
+      state.x,
+      groundHeight(state.x, state.y) + state.altitude,
+      state.y,
+    );
     this.object.rotation.set(-state.bank, -state.heading, -0.04, "YXZ");
     this.rotor.rotation.y = state.rotorAngle;
     this.tailRotor.rotation.z = state.rotorAngle * 5;
     this.object.updateMatrixWorld(true);
-    this.target.set(state.targetX, 4, state.targetY);
+    this.target.set(
+      state.targetX,
+      groundHeight(state.targetX, state.targetY) + 4,
+      state.targetY,
+    );
     // Group.lookAt points +Z at the target; our camera and lens face -Z.
     this.gimbal.lookAt(this.target);
     this.gimbal.rotateY(Math.PI);

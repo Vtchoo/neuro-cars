@@ -104,7 +104,10 @@ export function createTrackBuilder(
       if (!file) return;
       try {
         const data = JSON.parse(await file.text());
+        const heightmap = game.track.heightmap;
         game.track = game.createTrack(data.track ?? data);
+        if (!game.track.heightmap && heightmap)
+          game.track.setHeightmap(heightmap);
         sync(game);
       } catch {
         alert("Unable to load track JSON");

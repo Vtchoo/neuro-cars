@@ -1,4 +1,5 @@
 import { Vector } from "./Vector";
+import { Heightmap } from "./maps/Heightmap";
 import {
   closestPointOnArcSegment,
   closestPointOnLineSegment,
@@ -161,6 +162,29 @@ export interface TrackOptions {
 }
 
 export default class Track {
+  heightmap: Heightmap | null = null;
+  elevationRevision = 0;
+  setHeightmap(heightmap: Heightmap | null) {
+    this.heightmap = heightmap;
+    this.applyNodeElevations();
+  }
+  applyNodeElevations() {
+    for (const piece of [...this.pieces, ...this.previewTrackPieces]) {
+      const nodes =
+        piece.type === TrackPieceType.Spline
+          ? [piece.start, piece.control1, piece.control2, piece.end]
+          : [piece.start, piece.end];
+      for (const node of nodes) {
+        if (this.heightmap)
+          node.elevation = this.heightmap.sampleMeters(node.x, node.y);
+        else delete node.elevation;
+      }
+    }
+    this.elevationRevision++;
+  }
+  getWorldHeight(x: number, y: number) {
+    return this.heightmap?.worldHeight(x, y) ?? 0;
+  }
   closed = false;
   pieces: TrackPiece[] = [];
   startingPoint: Vector = new Vector(0, 0);
@@ -822,6 +846,7 @@ export default class Track {
   // Export track data for saving
   exportData(): any {
     return {
+      ...(this.heightmap ? { heightmap: this.heightmap.toData() } : {}),
       startingPoint: {
         x: this.startingPoint.x,
         y: this.startingPoint.y,
@@ -916,6 +941,7 @@ export default class Track {
         ) < 0.001);
     track.convertToSplines();
     track.generateAnalyticPieces();
+    if (data.heightmap) track.setHeightmap(Heightmap.fromData(data.heightmap));
 
     return track;
   }
@@ -1008,6 +1034,7 @@ export default class Track {
   }
 
   generateAnalyticPieces() {
+    if (this.heightmap) this.applyNodeElevations();
     this.analyticPieces = [];
     this.splineSegments = [];
     for (const piece of this.pieces) {

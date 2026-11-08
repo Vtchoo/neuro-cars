@@ -3,6 +3,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import "./mapPicker.css";
 import { generateMap, type GeneratedMap } from "../maps/generateMap";
 import { createNcMap } from "../maps/ncmap";
+import { Heightmap } from "../maps/Heightmap";
 import { mapboxErrorMessage } from "../maps/mapboxErrors";
 import { INTERLAGOS, mapDimensions } from "../maps/mapGeometry";
 import type { BrowserGame } from "./BrowserGame";
@@ -284,7 +285,7 @@ export function openMapPicker(game: BrowserGame, onContinue: () => void) {
     dialog.innerHTML = `<section class="map-picker-downloads"><h2>Your map is ready</h2><p>Save these images to reuse them later.</p>
             <div class="map-picker-previews"><figure><img id="mapbox-map-preview" alt="Selected satellite map"><figcaption>Satellite map</figcaption></figure>
             <figure><img id="mapbox-height-preview" alt="Generated heightmap"><figcaption>16-bit heightmap</figcaption></figure></div>
-            <p id="mapbox-result-details"></p><p class="map-note">The PNGs include bounds and scale metadata. The heightmap is saved for later use; it is not applied to the track yet.</p>
+            <p id="mapbox-result-details"></p><p class="map-note">The PNGs include bounds and scale metadata. The heightmap adds elevation to the 3D track.</p>
             <div class="map-picker-actions"><button id="mapbox-save-package">Save .ncmap</button><button id="mapbox-save-map">Save map</button><button id="mapbox-save-heightmap">Save heightmap</button><button id="mapbox-continue">Continue</button><button id="mapbox-cancel">Cancel</button></div>
             <p id="mapbox-status" role="status"></p></section>`;
     element<HTMLImageElement>("map-preview").src = mapURL;
@@ -325,7 +326,9 @@ export function openMapPicker(game: BrowserGame, onContinue: () => void) {
       const button = element<HTMLButtonElement>("continue");
       button.disabled = true;
       try {
+        const heightmap = await Heightmap.fromNcMap(result);
         await game.setReferenceImage(result.map, result.heightMeters);
+        game.track.setHeightmap(heightmap);
         onContinue();
         close();
       } catch {

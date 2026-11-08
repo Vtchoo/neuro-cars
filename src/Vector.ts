@@ -1,6 +1,8 @@
 export class Vector {
   x: number;
   y: number;
+  /** Optional presentation-only absolute elevation in meters. */
+  declare elevation?: number;
 
   constructor(x: number, y: number) {
     this.x = x;

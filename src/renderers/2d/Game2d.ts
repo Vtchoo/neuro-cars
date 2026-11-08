@@ -565,6 +565,7 @@ export default class Game2d extends Game<Car2d, Track2d> {
         this.p.loadImage(url, resolve, reject),
       );
       this.referenceImage = img;
+      this.track.setHeightmap(null);
       this.referenceImageScale = (heightMeters * 10) / img.height;
       this.cameraZoom =
         0.85 *

@@ -1,5 +1,6 @@
 import type { BrowserGame } from "./BrowserGame";
 import { buildGameMenu } from "./gameMenu";
+import { Heightmap } from "../maps/Heightmap";
 
 export function loadGameFile(game: BrowserGame, onLoad?: () => void) {
   chooseFile(".json", async (file) => {
@@ -31,7 +32,9 @@ export function loadMapPackage(game: BrowserGame, onLoad?: () => void) {
     try {
       const { readNcMap } = await import("../maps/ncmap");
       const result = await readNcMap(file);
+      const heightmap = await Heightmap.fromNcMap(result);
       await game.setReferenceImage(result.map, result.data.map.heightMeters);
+      game.track.setHeightmap(heightmap);
       onLoad?.();
     } catch (error) {
       alert(

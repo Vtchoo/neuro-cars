@@ -254,7 +254,11 @@ export default class Game<C extends Car = Car, T extends Track = Track> {
   }
   setPhase(newPhase: string) {
     this.phase = newPhase === "resetTrack" ? "setStart" : newPhase;
-    if (newPhase === "resetTrack") this.track = this.createTrack();
+    if (newPhase === "resetTrack") {
+      const heightmap = this.track.heightmap;
+      this.track = this.createTrack();
+      if (heightmap) this.track.setHeightmap(heightmap);
+    }
     this.events.dispatchEvent(
       new CustomEvent("phaseChanged", { detail: this.phase }),
     );
@@ -289,7 +293,9 @@ export default class Game<C extends Car = Car, T extends Track = Track> {
     this.bestLapTime = null;
 
     // Restore track
+    const heightmap = this.track.heightmap;
     this.track = this.createTrack(saveData.track);
+    if (!this.track.heightmap && heightmap) this.track.setHeightmap(heightmap);
 
     // Regenerate track graphics
 

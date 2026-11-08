@@ -115,6 +115,7 @@ export default class Track3d extends Track {
   }
   private source: TrackPiece[] | null = null;
   private previewSource: TrackPiece[] | null = null;
+  private elevationSource = -1;
 
   private ribbon(
     samples: RoadSample[],
@@ -130,10 +131,10 @@ export default class Track3d extends Track {
     for (const s of samples) {
       vertices.push(
         s.x + s.nx * a,
-        height,
+        this.getWorldHeight(s.x + s.nx * a, s.y + s.ny * a) + height,
         s.y + s.ny * a,
         s.x + s.nx * b,
-        height,
+        this.getWorldHeight(s.x + s.nx * b, s.y + s.ny * b) + height,
         s.y + s.ny * b,
       );
       const c = new THREE.Color(
@@ -170,11 +171,21 @@ export default class Track3d extends Track {
     if (this.object.parent !== scene) scene.add(this.object);
     if (
       this.source === this.analyticPieces &&
-      this.previewSource === this.previewTrackPieces
+      this.previewSource === this.previewTrackPieces &&
+      this.elevationSource === this.elevationRevision
     )
       return;
     this.source = this.analyticPieces;
     this.previewSource = this.previewTrackPieces;
+    this.elevationSource = this.elevationRevision;
+    // Preview nodes are created independently from the analytic geometry.
+    if (this.heightmap)
+      for (const piece of this.previewTrackPieces) {
+        for (const node of piece.type === TrackPieceType.Spline
+          ? [piece.start, piece.control1, piece.control2, piece.end]
+          : [piece.start, piece.end])
+          node.elevation = this.heightmap.sampleMeters(node.x, node.y);
+      }
     disposeGroup(this.object);
     for (const piece of [...this.pieces, ...this.previewTrackPieces]) {
       const samples = sampleRoad(piece),
@@ -206,12 +217,28 @@ export default class Track3d extends Track {
             first.start.x +
               along * Math.cos(heading) -
               across * Math.sin(heading),
-            0.2,
+            this.getWorldHeight(first.start.x, first.start.y) + 0.2,
             first.start.y +
               along * Math.sin(heading) +
               across * Math.cos(heading),
           );
           tile.rotateZ(-heading);
+          if (this.heightmap) {
+            tile.updateMatrix();
+            const vertices = tile.geometry.getAttribute("position"),
+              point = new THREE.Vector3();
+            for (let vertex = 0; vertex < vertices.count; vertex++) {
+              point
+                .set(vertices.getX(vertex), vertices.getY(vertex), 0)
+                .applyMatrix4(tile.matrix);
+              vertices.setZ(
+                vertex,
+                this.getWorldHeight(point.x, point.z) + 0.2 - tile.position.y,
+              );
+            }
+            vertices.needsUpdate = true;
+            tile.geometry.computeVertexNormals();
+          }
           this.object.add(tile);
         }
     }

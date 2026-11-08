@@ -11,7 +11,7 @@
     "tsc-build": "tsc && vite build",
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
-    "test:core": "node tests/core.cjs && node tests/track-performance.cjs && node tests/maps.cjs",
+    "test:core": "node tests/core.cjs && node tests/track-performance.cjs && node tests/maps.cjs && node tests/heights.cjs",
     "test:browser": "playwright test"
   },
   "devDependencies": {

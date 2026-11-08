@@ -1,6 +1,7 @@
 import type { Explosion } from "../../core/Effects";
 import * as THREE from "three";
 import { Helicopter3d } from "./Helicopter3d";
+import type { Heightmap } from "../../maps/Heightmap";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import Game from "../../core/Game";
 import type { CarPreset } from "../../cars/carPresets";
@@ -30,6 +31,23 @@ export default class Game3d extends Game<Car3d, Track3d> {
     5,
     200000,
   );
+  readonly carCamera = new THREE.PerspectiveCamera(
+    75,
+    innerWidth / innerHeight,
+    0.15,
+    200000,
+  );
+  carCameraMode: "external" | "onboard" | "back" = "external";
+  private readonly carCameraButton = document.createElement("button");
+  private get cameraFollowedCar(): Car3d | null {
+    if (this.phase !== "running" || this.helicopterCamera !== null) return null;
+    return this.playerDrive ? (this.player ?? null) : this.getFollowedCar();
+  }
+  cycleCarCamera() {
+    const modes = ["external", "onboard", "back"] as const;
+    this.carCameraMode =
+      modes[(modes.indexOf(this.carCameraMode) + 1) % modes.length];
+  }
   readonly renderer = new THREE.WebGLRenderer({
     antialias: true,
     logarithmicDepthBuffer: true,
@@ -47,6 +65,13 @@ export default class Game3d extends Game<Car3d, Track3d> {
   private readonly orbitRay = new THREE.Ray();
   private readonly orbitHit = new THREE.Vector3();
   private renderedTrack: Track3d | null = null;
+  private terrainMap: Heightmap | null | undefined;
+  private terrainMesh: THREE.Mesh<
+    THREE.PlaneGeometry,
+    THREE.MeshStandardMaterial
+  > | null = null;
+  private readonly groundHeight = (x: number, y: number) =>
+    this.track.getWorldHeight(x, y);
   private editorSource: unknown = null;
   private editorZoom = 0;
   private pointerStart: {
@@ -73,6 +98,8 @@ export default class Game3d extends Game<Car3d, Track3d> {
       this.helicopterCamera !== null
     )
       return this.helicopters[this.helicopterCamera]?.camera ?? this.camera;
+    if (this.cameraFollowedCar && this.carCameraMode !== "external")
+      return this.carCamera;
     return this.camera;
   }
   private abort = new AbortController();
@@ -105,6 +132,29 @@ export default class Game3d extends Game<Car3d, Track3d> {
       pointerEvents: "none",
     });
     document.body.append(this.overlay);
+    this.carCameraButton.id = "car-camera-toggle";
+    this.carCameraButton.hidden = true;
+    Object.assign(this.carCameraButton.style, {
+      position: "fixed",
+      bottom: "1rem",
+      left: "50%",
+      transform: "translateX(-50%)",
+      zIndex: "20",
+      padding: ".6rem 1rem",
+      border: "1px solid #58718d",
+      borderRadius: ".5rem",
+      background: "#17283ce6",
+      color: "#fff",
+      cursor: "pointer",
+    });
+    this.carCameraButton.title =
+      "Cycle followed-car camera: external, onboard, back camera.";
+    this.carCameraButton.addEventListener(
+      "click",
+      () => this.cycleCarCamera(),
+      { signal: this.abort.signal },
+    );
+    document.body.append(this.carCameraButton);
     this.surface = new CanvasSurface(this.overlay);
     this.hud = new GameHUD(this, this.surface);
     this.scene.background = new THREE.Color(0x9abbd2);
@@ -171,6 +221,8 @@ export default class Game3d extends Game<Car3d, Track3d> {
   private resize = () => {
     this.camera.aspect = innerWidth / innerHeight;
     this.camera.updateProjectionMatrix();
+    this.carCamera.aspect = this.camera.aspect;
+    this.carCamera.updateProjectionMatrix();
     this.renderer.setSize(innerWidth, innerHeight);
     this.overlay.width = innerWidth;
     this.overlay.height = innerHeight;
@@ -195,13 +247,43 @@ export default class Game3d extends Game<Car3d, Track3d> {
     }
   };
 
+  private updateCarCamera(car: Car3d | null) {
+    this.carCameraButton.hidden = !car;
+    const labels = {
+      external: "External",
+      onboard: "Onboard",
+      back: "Back camera",
+    };
+    this.carCameraButton.textContent = `Camera: ${labels[this.carCameraMode]}`;
+    if (!car || this.carCameraMode === "external") return;
+    const mountX = car.modelKey === "formula1" ? -1.5 : 2;
+    const eyeHeight = car.modelKey === "uno" ? 13 : 10.5;
+    const cos = Math.cos(car.direction),
+      sin = Math.sin(car.direction),
+      sign = this.carCameraMode === "back" ? -1 : 1;
+    const x = car.pos.x + mountX * cos,
+      y = car.pos.y + mountX * sin;
+    this.carCamera.position.set(
+      x,
+      this.groundHeight(car.pos.x, car.pos.y) + eyeHeight,
+      y,
+    );
+    const targetX = x + cos * 200 * sign,
+      targetY = y + sin * 200 * sign;
+    this.carCamera.lookAt(
+      targetX,
+      this.groundHeight(targetX, targetY) + eyeHeight,
+      targetY,
+    );
+  }
+
   private fitCamera() {
     this.track.render(this.scene);
     const box = new THREE.Box3().setFromObject(this.track.object);
     if (box.isEmpty()) return;
     const center = box.getCenter(new THREE.Vector3()),
       size = box.getSize(new THREE.Vector3());
-    center.y = 0;
+    if (!this.track.heightmap) center.y = 0;
     const distance = Math.max(
       500,
       Math.max(size.x / this.camera.aspect, size.z) * 1.4,
@@ -226,6 +308,17 @@ export default class Game3d extends Game<Car3d, Track3d> {
       this.groundPlane,
       new THREE.Vector3(),
     );
+    // Follow the height field when editing an elevated map, keeping x/y edits in 2D.
+    if (hit && this.track.heightmap && this.raycaster.ray.direction.y < -1e-6) {
+      for (let i = 0; i < 12; i++) {
+        const height = this.groundHeight(hit.x, hit.z);
+        const distance =
+          (height - this.raycaster.ray.origin.y) /
+          this.raycaster.ray.direction.y;
+        if (distance < 0) break;
+        this.raycaster.ray.at(distance, hit);
+      }
+    }
     return hit ? new Vector(hit.x, hit.z) : null;
   }
 
@@ -411,6 +504,8 @@ export default class Game3d extends Game<Car3d, Track3d> {
       URL.revokeObjectURL(url);
     }
     this.removeReference();
+    this.track.setHeightmap(null);
+    this.terrainMap = undefined;
     texture.colorSpace = THREE.SRGBColorSpace;
     const image = texture.image as HTMLImageElement,
       height = heightMeters * 10;
@@ -446,6 +541,80 @@ export default class Game3d extends Game<Car3d, Track3d> {
     this.reference = null;
   }
 
+  private updateTerrain() {
+    const heightmap = this.track.heightmap;
+    if (this.terrainMap === heightmap) return;
+    this.terrainMap = heightmap;
+    if (this.terrainMesh) {
+      this.terrainMesh.removeFromParent();
+      this.terrainMesh.geometry.dispose();
+      this.terrainMesh.material.map?.dispose();
+      this.terrainMesh.material.dispose();
+      this.terrainMesh = null;
+    }
+    if (!heightmap) return;
+    const { widthMeters, heightMeters, width, height, originX, originY } =
+      heightmap.data;
+    const columns = Math.min(512, width),
+      rows = Math.min(512, height);
+    const geometry = new THREE.PlaneGeometry(
+      widthMeters * 10,
+      heightMeters * 10,
+      columns + 1,
+      rows + 1,
+    );
+    const positions = geometry.getAttribute("position");
+    // DEM samples represent pixel centers, not map corners. Include the half-pixel
+    // border so low-resolution fields do not slope across their clamped edges.
+    for (let row = 0; row < rows + 2; row++)
+      for (let column = 0; column < columns + 2; column++) {
+        const x =
+          (column === 0
+            ? -0.5
+            : column === columns + 1
+              ? 0.5
+              : (column - 0.5) / columns - 0.5) *
+          widthMeters *
+          10;
+        const y =
+          (row === 0
+            ? -0.5
+            : row === rows + 1
+              ? 0.5
+              : (row - 0.5) / rows - 0.5) *
+          heightMeters *
+          10;
+        positions.setXYZ(
+          row * (columns + 2) + column,
+          x,
+          -y,
+          heightmap.worldHeight(x + originX, y + originY),
+        );
+      }
+    positions.needsUpdate = true;
+    geometry.computeVertexNormals();
+    const texture = this.grassTexture.clone();
+    texture.repeat.set((widthMeters * 10) / 250, (heightMeters * 10) / 250);
+    this.terrainMesh = new THREE.Mesh(
+      geometry,
+      new THREE.MeshStandardMaterial({
+        map: texture,
+        roughness: 1,
+        side: THREE.DoubleSide,
+      }),
+    );
+    this.terrainMesh.name = "heightmap-terrain";
+    this.terrainMesh.rotation.x = -Math.PI / 2;
+    this.terrainMesh.position.set(originX, -1.5, originY);
+    this.terrainMesh.receiveShadow = true;
+    this.scene.add(this.terrainMesh);
+    if (this.reference) {
+      this.reference.geometry.dispose();
+      this.reference.geometry = geometry.clone();
+      this.reference.position.set(originX, -1, originY);
+    }
+  }
+
   private drawEditor() {
     const editing = this.phase === "buildTrack";
     this.editorGroup.visible = editing;
@@ -466,7 +635,7 @@ export default class Game3d extends Game<Car3d, Track3d> {
         piece.control1,
         piece.end,
         piece.control2,
-      ].flatMap((p) => [p.x, 3, p.y]);
+      ].flatMap((p) => [p.x, this.groundHeight(p.x, p.y) + 3, p.y]);
       this.editorGroup.add(
         new THREE.LineSegments(
           new THREE.BufferGeometry().setAttribute(
@@ -488,7 +657,11 @@ export default class Game3d extends Game<Car3d, Track3d> {
             color: index < 2 ? 0xffffff : 0x55bfff,
           }),
         );
-        marker.position.set(point.x, 4, point.y);
+        marker.position.set(
+          point.x,
+          this.groundHeight(point.x, point.y) + 4,
+          point.y,
+        );
         this.editorGroup.add(marker);
       }
     }
@@ -502,7 +675,7 @@ export default class Game3d extends Game<Car3d, Track3d> {
       );
       marker.position.set(
         first.start.x,
-        4,
+        this.groundHeight(first.start.x, first.start.y) + 4,
         first.start.y - first.width / 2 - 24 / this.zoom,
       );
       this.editorGroup.add(marker);
@@ -537,7 +710,11 @@ export default class Game3d extends Game<Car3d, Track3d> {
             depthWrite: false,
           }),
         );
-        object.position.set(effect.x, 8, effect.y);
+        object.position.set(
+          effect.x,
+          this.groundHeight(effect.x, effect.y) + 8,
+          effect.y,
+        );
         this.scene.add(object);
         this.explosions.set(effect, object);
       }
@@ -569,7 +746,11 @@ export default class Game3d extends Game<Car3d, Track3d> {
         this.population.length > 0 &&
         (this.phase === "running" || this.phase === "breeding");
       if (heli.object.visible)
-        heli.update(this.effects.helicopters[i], innerWidth / innerHeight);
+        heli.update(
+          this.effects.helicopters[i],
+          innerWidth / innerHeight,
+          this.groundHeight,
+        );
     });
   }
 
@@ -589,6 +770,7 @@ export default class Game3d extends Game<Car3d, Track3d> {
       this.renderedTrack = this.track;
     }
     this.track.render(this.scene);
+    this.updateTerrain();
     const racers =
       this.phase === "running" || this.phase === "breeding"
         ? this.playerDrive && this.player
@@ -622,6 +804,9 @@ export default class Game3d extends Game<Car3d, Track3d> {
       (a, b) => (!a || b.neuralNet.fitness > a.neuralNet.fitness ? b : a),
       null,
     );
+    const cameraCar = this.cameraFollowedCar;
+    const interior = cameraCar !== null && this.carCameraMode !== "external";
+    this.updateCarCamera(cameraCar);
     for (const car of racers) {
       const tint = this.showClustering ? this.getClusterTint(car) : undefined;
       const inputs =
@@ -629,13 +814,23 @@ export default class Game3d extends Game<Car3d, Track3d> {
         (this.showInputs === "best" && car === best) ||
         (this.showInputs === "bestActive" && car === activeBest) ||
         (this.showInputs === "none" && car === hovered);
-      car.render(this.scene, tint, inputs);
+      car.render(this.scene, tint, inputs, this.groundHeight);
+      const nearby =
+        interior &&
+        car !== cameraCar &&
+        Math.hypot(car.pos.x - cameraCar.pos.x, car.pos.y - cameraCar.pos.y) <
+          150;
+      car.setViewOpacity(nearby ? 0.25 : 1);
+      // The procedural models have no cabin interior; hide the host body around the lens.
+      car.object.visible = !(interior && car === cameraCar);
       this.renderedCars.add(car);
     }
     if (followed && this.phase === "running") {
-      const delta = new THREE.Vector3(followed.pos.x, 0, followed.pos.y).sub(
-        this.controls.target,
-      );
+      const delta = new THREE.Vector3(
+        followed.pos.x,
+        this.groundHeight(followed.pos.x, followed.pos.y),
+        followed.pos.y,
+      ).sub(this.controls.target);
       this.controls.target.add(delta);
       this.camera.position.add(delta);
     }
@@ -652,7 +847,7 @@ export default class Game3d extends Game<Car3d, Track3d> {
     if (hovered) {
       const screen = new THREE.Vector3(
         hovered.pos.x,
-        10,
+        this.groundHeight(hovered.pos.x, hovered.pos.y) + 10,
         hovered.pos.y,
       ).project(this.activeCamera);
       tooltip(
@@ -688,9 +883,15 @@ export default class Game3d extends Game<Car3d, Track3d> {
     this.abort.abort();
     this.controls.dispose();
     this.gameMenu?.remove();
+    this.carCameraButton.remove();
     for (const car of this.renderedCars) car.dispose();
     this.track.dispose();
     this.removeReference();
+    if (this.terrainMesh) {
+      this.terrainMesh.geometry.dispose();
+      this.terrainMesh.material.map?.dispose();
+      this.terrainMesh.material.dispose();
+    }
     this.grassTexture.dispose();
     for (const object of this.explosions.values()) {
       object.geometry.dispose();

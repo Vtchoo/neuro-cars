@@ -6,6 +6,7 @@ const {heightmapPNG,addPNGMetadata}=require('../src/maps/png.ts');
 const {createNcMap,readNcMap}=require('../src/maps/ncmap.ts');
 const {unzipSync,zipSync,strToU8}=require('fflate');
 const {mapboxErrorMessage}=require('../src/maps/mapboxErrors.ts');
+const {Heightmap}=require('../src/maps/Heightmap.ts');
 
 function chunks(buffer) {
     const result=[];
@@ -63,6 +64,12 @@ function chunks(buffer) {
     assert.deepEqual(restored.data,data);
     assert.deepEqual(Buffer.from(await restored.map.arrayBuffer()),Buffer.from(await tagged.arrayBuffer()));
     assert.deepEqual(Buffer.from(await restored.heightmap.arrayBuffer()),Buffer.from(await output.blob.arrayBuffer()),'ZIP preserves original 16-bit height data');
+    const field=await Heightmap.fromNcMap(restored),halfPixelWorld=data.map.widthMeters*10/4;
+    assert.equal(field.worldHeight(-halfPixelWorld,-halfPixelWorld),0,'The lowest map pixel is displayed at world Y=0');
+    assert.equal(field.worldHeight(halfPixelWorld,halfPixelWorld),2100,'Elevation differences use ten units per meter');
+    assert.ok(Math.abs(field.sampleMeters(0,0)-72.5)<.005,'16-bit heights are decoded before bilinear interpolation');
+    assert.ok(field.sampleMeters(-halfPixelWorld,halfPixelWorld)>field.sampleMeters(-halfPixelWorld,-halfPixelWorld),'North-up PNG rows map to increasing world y southward');
+    assert.deepEqual(Heightmap.fromData(field.toData()).toData(),field.toData());
     await assert.rejects(()=>readNcMap(new Blob([strToU8('not a ZIP')])),/ZIP archive/);
     await assert.rejects(()=>readNcMap(new Blob([zipSync({'data.json':strToU8('{}')})])),/must contain/);
     await assert.rejects(()=>createNcMap({map:tagged,heightmap:output.blob,data:{...data,version:2}}),/Unsupported/);
